@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: speto-postgres
+    environment:
+      POSTGRES_DB: speto
+      POSTGRES_USER: speto
+      POSTGRES_PASSWORD: speto
+    ports:
+      - "55432:5432"
+    volumes:
+      - speto-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: speto-redis
+    ports:
+      - "6380:6379"
+
+volumes:
+  speto-postgres-data:

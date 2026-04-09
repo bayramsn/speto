@@ -1,0 +1,322 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+  SUPPORT
+  VENDOR
+}
+
+enum FulfillmentMode {
+  PICKUP
+}
+
+enum OrderStatus {
+  CREATED
+  ACCEPTED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum SupportStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum InventoryMovementType {
+  SALE
+  MANUAL_ADJUSTMENT
+  RESTOCK
+  POS_SYNC
+  RESERVATION
+  RELEASE
+}
+
+enum IntegrationType {
+  POS
+  ERP
+}
+
+enum IntegrationHealth {
+  HEALTHY
+  WARNING
+  FAILED
+}
+
+enum SyncRunStatus {
+  IDLE
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+model User {
+  id                String                @id @default(cuid())
+  email             String                @unique
+  password          String
+  displayName       String
+  phone             String?
+  role              Role                  @default(CUSTOMER)
+  vendorId          String?
+  studentVerifiedAt DateTime?
+  notificationsEnabled Boolean            @default(true)
+  avatarUrl         String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  favorites         Favorite[]
+  addresses         SavedPlace[]
+  orders            Order[]
+  paymentMethods    PaymentMethod[]
+  tickets           Ticket[]
+  walletEntries     WalletLedgerEntry[]
+  supportTickets    SupportTicket[]
+  vendor            Vendor?               @relation("VendorOperators", fields: [vendorId], references: [id])
+}
+
+model SavedPlace {
+  id         String   @id @default(cuid())
+  userId     String
+  label      String
+  address    String
+  iconKey    String   @default("location")
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PaymentMethod {
+  id               String   @id @default(cuid())
+  userId           String
+  provider         String
+  providerToken    String   @unique
+  brand            String
+  last4            String
+  expiryMonth      Int
+  expiryYear       Int
+  holderName       String
+  isDefault        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders           Order[]
+}
+
+model Vendor {
+  id            String       @id @default(cuid())
+  name          String
+  slug          String       @unique
+  category      String
+  pickupPoints  PickupPoint[]
+  products      Product[]
+  events        Event[]
+  orders        Order[]
+  inventory     InventoryStock[]
+  movements     InventoryMovement[]
+  integrations  IntegrationConnection[]
+  operators     User[]       @relation("VendorOperators")
+}
+
+model PickupPoint {
+  id         String   @id @default(cuid())
+  vendorId   String
+  label      String
+  address    String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  vendor     Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  orders     Order[]
+}
+
+model Product {
+  id           String   @id @default(cuid())
+  vendorId     String
+  title        String
+  description  String?
+  unitPrice    Decimal  @db.Decimal(10, 2)
+  imageUrl     String?
+  kind         String
+  sku          String   @unique
+  barcode      String?
+  externalCode String?
+  trackStock   Boolean  @default(true)
+  reorderLevel Int      @default(0)
+  isArchived   Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  vendor       Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  orderItems    OrderItem[]
+  inventory     InventoryStock[]
+  movements     InventoryMovement[]
+}
+
+model Event {
+  id             String      @id @default(cuid())
+  vendorId       String
+  title          String
+  venue          String
+  district       String?
+  imageUrl       String?
+  startsAt       DateTime
+  pointsCost     Int
+  capacity       Int
+  remainingCount Int
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  vendor         Vendor      @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  tickets        Ticket[]
+}
+
+model Order {
+  id                String            @id @default(cuid())
+  userId            String
+  vendorId          String
+  pickupPointId     String
+  fulfillmentMode   FulfillmentMode   @default(PICKUP)
+  status            OrderStatus       @default(CREATED)
+  pickupCode        String
+  etaLabel          String            @default("12 dk")
+  subtotal          Decimal           @db.Decimal(10, 2)
+  discountAmount    Decimal           @default(0) @db.Decimal(10, 2)
+  totalAmount       Decimal           @db.Decimal(10, 2)
+  promoCode         String?
+  paymentMethodId   String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  items             OrderItem[]
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vendor            Vendor            @relation(fields: [vendorId], references: [id])
+  pickupPoint       PickupPoint       @relation(fields: [pickupPointId], references: [id])
+  paymentMethod     PaymentMethod?    @relation(fields: [paymentMethodId], references: [id])
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  productId  String
+  title      String
+  quantity   Int
+  unitPrice  Decimal  @db.Decimal(10, 2)
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+}
+
+model WalletLedgerEntry {
+  id          String   @id @default(cuid())
+  userId      String
+  delta       Int
+  reason      String
+  referenceId String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Ticket {
+  id          String   @id @default(cuid())
+  userId      String
+  eventId     String
+  qrCode      String   @unique
+  zone        String?
+  seat        String?
+  gate        String?
+  redeemedAt  DateTime?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model SupportTicket {
+  id          String        @id @default(cuid())
+  userId      String
+  subject     String
+  message     String
+  channel     String
+  status      SupportStatus @default(OPEN)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Favorite {
+  id          String   @id @default(cuid())
+  userId      String
+  entityType  String
+  entityId    String
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entityType, entityId])
+}
+
+model InventoryStock {
+  id            String   @id @default(cuid())
+  productId      String
+  vendorId       String
+  locationId     String
+  locationLabel  String
+  onHand         Int      @default(0)
+  reserved       Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  vendor         Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, locationId])
+}
+
+model InventoryMovement {
+  id               String                @id @default(cuid())
+  productId         String
+  vendorId          String
+  type              InventoryMovementType
+  quantityDelta     Int
+  previousOnHand    Int
+  nextOnHand        Int
+  previousReserved  Int
+  nextReserved      Int
+  orderId           String?
+  note              String?
+  createdAt         DateTime             @default(now())
+  product           Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  vendor            Vendor               @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+}
+
+model IntegrationConnection {
+  id          String              @id @default(cuid())
+  vendorId    String
+  name        String
+  provider    String
+  type        IntegrationType
+  baseUrl     String
+  locationId  String
+  health      IntegrationHealth   @default(HEALTHY)
+  skuMappings Json
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  vendor      Vendor              @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  syncRuns    IntegrationSyncRun[]
+}
+
+model IntegrationSyncRun {
+  id             String         @id @default(cuid())
+  connectionId   String
+  status         SyncRunStatus  @default(IDLE)
+  processedCount Int            @default(0)
+  errorMessage   String?
+  startedAt      DateTime       @default(now())
+  completedAt    DateTime?
+  connection     IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+}

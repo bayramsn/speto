@@ -1,0 +1,514 @@
+import 'package:flutter/material.dart';
+import '../../src/core/models.dart';
+import '../constants/app_images.dart';
+import '../theme/palette.dart';
+import '../state/app_state.dart';
+import '../navigation/screen_enum.dart';
+import '../navigation/navigator.dart';
+import '../../features/restaurant/restaurant_data.dart';
+// TODO: SpetoToast import will be added after it is extracted from speto_app.dart.
+// import '../../shared/widgets/speto_toast.dart';
+
+SpetoScreen screenForNav(NavSection section) {
+  switch (section) {
+    case NavSection.explore:
+      return SpetoScreen.home;
+    case NavSection.orders:
+      return SpetoScreen.orderHistory;
+    case NavSection.basket:
+      return SpetoScreen.happyHourCheckout;
+    case NavSection.points:
+      return SpetoScreen.proPoints;
+    case NavSection.profile:
+      return SpetoScreen.accountSettings;
+  }
+}
+
+const SpetoCartItem happyHourBurgerTemplate = SpetoCartItem(
+  id: 'mega-burger-menu',
+  vendor: 'Burger King Kadıköy',
+  title: 'Mega Burger Menü',
+  image: AppImages.burgerHero,
+  unitPrice: 85,
+);
+
+const SpetoCartItem pepperoniPizzaTemplate = SpetoCartItem(
+  id: 'pepperoni-pizza-slice',
+  vendor: 'Pizza Bulls',
+  title: 'Pepperonili Pizza Dilimi',
+  image: AppImages.pizza,
+  unitPrice: 100,
+);
+
+SpetoCartItem megaBurgerCartItem({int quantity = 1}) =>
+    happyHourBurgerTemplate.copyWith(quantity: quantity);
+
+SpetoCartItem pepperoniPizzaCartItem({int quantity = 1}) =>
+    pepperoniPizzaTemplate.copyWith(quantity: quantity);
+
+SpetoCommerceSnapshot initialCommerceSnapshot(SpetoCommerceSnapshot? snapshot) {
+  return normalizeCommerceSnapshot(snapshot ?? defaultCommerceSnapshot());
+}
+
+SpetoCommerceSnapshot normalizeCommerceSnapshot(
+  SpetoCommerceSnapshot snapshot,
+) {
+  return SpetoCommerceSnapshot(
+    cartItems: snapshot.cartItems.map(_normalizeCartItem).toList(),
+    activeOrders: snapshot.activeOrders.map(_normalizeOrder).toList(),
+    historyOrders: snapshot.historyOrders.map(_normalizeOrder).toList(),
+    selectedOrderId: snapshot.selectedOrderId,
+    proPointsBalance: snapshot.proPointsBalance,
+    ownedTickets: snapshot.ownedTickets.map(_normalizeTicket).toList(),
+    selectedTicketId: snapshot.selectedTicketId,
+    addresses: snapshot.addresses.map(_normalizeAddress).toList(),
+    paymentCards: snapshot.paymentCards.map(_normalizePaymentCard).toList(),
+    supportTickets: snapshot.supportTickets
+        .map(_normalizeSupportTicket)
+        .toList(),
+    favoriteRestaurantIds: List<String>.of(snapshot.favoriteRestaurantIds),
+    favoriteEventIds: List<String>.of(snapshot.favoriteEventIds),
+    followedOrganizerIds: List<String>.of(snapshot.followedOrganizerIds),
+    orderRatings: Map<String, int>.of(snapshot.orderRatings),
+    profileDisplayName: _translateUserFacingText(snapshot.profileDisplayName),
+    profilePhone: snapshot.profilePhone,
+    profileAvatarUrl: snapshot.profileAvatarUrl,
+    profileNotificationsEnabled: snapshot.profileNotificationsEnabled,
+  );
+}
+
+SpetoCartItem _normalizeCartItem(SpetoCartItem item) {
+  return SpetoCartItem(
+    id: item.id,
+    vendor: _translateUserFacingText(item.vendor),
+    title: _translateUserFacingText(item.title),
+    image: item.image,
+    unitPrice: item.unitPrice,
+    quantity: item.quantity,
+  );
+}
+
+SpetoOrder _normalizeOrder(SpetoOrder order) {
+  return SpetoOrder(
+    id: order.id,
+    vendor: _translateUserFacingText(order.vendor),
+    image: order.image,
+    items: order.items.map(_normalizeCartItem).toList(),
+    placedAtLabel: _translateUserFacingText(order.placedAtLabel),
+    etaLabel: _translateUserFacingText(order.etaLabel),
+    status: order.status,
+    actionLabel: _translateUserFacingText(order.actionLabel),
+    pickupCode: order.pickupCode,
+    rewardPoints: order.rewardPoints,
+    deliveryMode: _translateUserFacingText(order.deliveryMode),
+    deliveryAddress: _translateUserFacingText(order.deliveryAddress),
+    paymentMethod: _translateUserFacingText(order.paymentMethod),
+    promoCode: _translateUserFacingText(order.promoCode),
+    deliveryFee: order.deliveryFee,
+    discountAmount: order.discountAmount,
+  );
+}
+
+SpetoEventTicket _normalizeTicket(SpetoEventTicket ticket) {
+  return SpetoEventTicket(
+    id: ticket.id,
+    title: _translateUserFacingText(ticket.title),
+    venue: _translateUserFacingText(ticket.venue),
+    dateLabel: ticket.dateLabel,
+    timeLabel: ticket.timeLabel,
+    zone: _translateUserFacingText(ticket.zone),
+    seat: ticket.seat,
+    gate: ticket.gate,
+    code: ticket.code,
+    image: ticket.image,
+    pointsCost: ticket.pointsCost,
+  );
+}
+
+SpetoAddress _normalizeAddress(SpetoAddress address) {
+  return address.copyWith(
+    label: _translateUserFacingText(address.label),
+    address: _translateUserFacingText(address.address),
+  );
+}
+
+SpetoPaymentCard _normalizePaymentCard(SpetoPaymentCard card) {
+  return card.copyWith(
+    brand: _translateUserFacingText(card.brand),
+    holderName: _translateUserFacingText(card.holderName),
+  );
+}
+
+SpetoSupportTicket _normalizeSupportTicket(SpetoSupportTicket ticket) {
+  return ticket.copyWith(
+    subject: _translateUserFacingText(ticket.subject),
+    message: _translateUserFacingText(ticket.message),
+    channel: _translateUserFacingText(ticket.channel),
+    createdAtLabel: _translateUserFacingText(ticket.createdAtLabel),
+    status: _translateUserFacingText(ticket.status),
+  );
+}
+
+String _translateUserFacingText(String text) {
+  const List<MapEntry<String, String>> replacements =
+      <MapEntry<String, String>>[
+        MapEntry('Fırsat Saati Marketi', 'Happy Hour Market'),
+        MapEntry('Fırsat Saati', 'Happy Hour'),
+        MapEntry('Jazz Night at Galata', "Galata'da Caz Gecesi"),
+        MapEntry('Galata Jazz Night', "Galata'da Caz Gecesi"),
+        MapEntry('Burger King Kadikoy', 'Burger King Kadıköy'),
+        MapEntry('Happy Hour Market', 'Happy Hour Market'),
+        MapEntry('Market Firsat Paketi', 'Market Happy Hour Paketi'),
+        MapEntry('Double Cheeseburger', 'Çifte Peynirli Burger'),
+        MapEntry('Mega Burger Menu', 'Mega Burger Menü'),
+        MapEntry('Double Whopper Menu', 'Double Whopper Menü'),
+        MapEntry('Pepperoni Pizza Slice', 'Pepperonili Pizza Dilimi'),
+        MapEntry('Pepperoni Slice Combo', 'Pepperonili Dilim Menü'),
+        MapEntry('BBQ Platter', 'Barbekü Tabağı'),
+        MapEntry('Sushi Box', 'Suşi Kutusu'),
+        MapEntry('Lounge', 'Salon'),
+        MapEntry('Bugun', 'Bugün'),
+        MapEntry('Takibi Gor', 'Takibi Gör'),
+        MapEntry('Detaylari Gor', 'Detayları Gör'),
+        MapEntry('Gel-Al Kodunu Gor', 'Gel-Al Kodunu Gör'),
+        MapEntry('Hazirlaniyor', 'Hazırlanıyor'),
+        MapEntry('Tamamlandi', 'Tamamlandı'),
+        MapEntry('Iptal', 'İptal'),
+      ];
+
+  String translated = text;
+  for (final MapEntry<String, String> entry in replacements) {
+    translated = translated.replaceAll(entry.key, entry.value);
+  }
+  return translated;
+}
+
+SpetoCommerceSnapshot defaultCommerceSnapshot() {
+  const List<SpetoOrder> activeOrders = <SpetoOrder>[
+    SpetoOrder(
+      id: 'active-market',
+      vendor: 'Happy Hour Market',
+      image: AppImages.market,
+      items: <SpetoCartItem>[
+        SpetoCartItem(
+          id: 'market-bundle',
+          vendor: 'Happy Hour Market',
+          title: 'Market Happy Hour Paketi',
+          image: AppImages.market,
+          unitPrice: 164,
+        ),
+      ],
+      placedAtLabel: 'Bugün • 18:20',
+      etaLabel: '18 dk',
+      status: SpetoOrderStatus.active,
+      actionLabel: 'Takibi Gör',
+      pickupCode: 'M4P7',
+      rewardPoints: 40,
+    ),
+    SpetoOrder(
+      id: 'active-burger',
+      vendor: 'Burger King Kadıköy',
+      image: AppImages.burger,
+      items: <SpetoCartItem>[
+        SpetoCartItem(
+          id: 'double-whopper-menu',
+          vendor: 'Burger King Kadıköy',
+          title: 'Double Whopper Menü',
+          image: AppImages.burger,
+          unitPrice: 240,
+        ),
+      ],
+      placedAtLabel: 'Bugün • 17:55',
+      etaLabel: '12 dk',
+      status: SpetoOrderStatus.active,
+      actionLabel: 'Gel-Al Kodunu Gör',
+      pickupCode: 'BK12',
+      rewardPoints: 65,
+    ),
+  ];
+
+  const List<SpetoOrder> historyOrders = <SpetoOrder>[
+    SpetoOrder(
+      id: 'history-migros',
+      vendor: 'Migros Hemen',
+      image: AppImages.market,
+      items: <SpetoCartItem>[
+        SpetoCartItem(
+          id: 'migros-history',
+          vendor: 'Migros Hemen',
+          title: 'Market Sepeti',
+          image: AppImages.market,
+          unitPrice: 164,
+        ),
+      ],
+      placedAtLabel: '24 Eki 2026 • 18:20',
+      etaLabel: '18 dk',
+      status: SpetoOrderStatus.completed,
+      actionLabel: 'Detayları Gör',
+      pickupCode: 'MG24',
+      rewardPoints: 24,
+    ),
+    SpetoOrder(
+      id: 'history-pizza',
+      vendor: 'Pizza Bulls',
+      image: AppImages.pizza,
+      items: <SpetoCartItem>[
+        SpetoCartItem(
+          id: 'pizza-history',
+          vendor: 'Pizza Bulls',
+          title: 'Pepperonili Dilim Menü',
+          image: AppImages.pizza,
+          unitPrice: 198,
+        ),
+      ],
+      placedAtLabel: '22 Eki 2026 • 20:05',
+      etaLabel: '22 dk',
+      status: SpetoOrderStatus.completed,
+      actionLabel: 'Detayları Gör',
+      pickupCode: 'PZ88',
+      rewardPoints: 32,
+    ),
+    SpetoOrder(
+      id: 'history-bbq',
+      vendor: 'BBQ House',
+      image: AppImages.nightlife,
+      items: <SpetoCartItem>[
+        SpetoCartItem(
+          id: 'bbq-history',
+          vendor: 'BBQ House',
+          title: 'Barbekü Tabağı',
+          image: AppImages.nightlife,
+          unitPrice: 145,
+        ),
+      ],
+      placedAtLabel: '21 Eki 2026 • 19:10',
+      etaLabel: 'İptal',
+      status: SpetoOrderStatus.cancelled,
+      actionLabel: 'Detayları Gör',
+      pickupCode: 'BBQ5',
+      rewardPoints: 0,
+    ),
+    SpetoOrder(
+      id: 'history-sushi',
+      vendor: 'Sushi Co',
+      image: AppImages.sushi,
+      items: <SpetoCartItem>[
+        SpetoCartItem(
+          id: 'sushi-history',
+          vendor: 'Sushi Co',
+          title: 'Suşi Kutusu',
+          image: AppImages.sushi,
+          unitPrice: 210,
+        ),
+      ],
+      placedAtLabel: '19 Eki 2026 • 18:45',
+      etaLabel: '31 dk',
+      status: SpetoOrderStatus.completed,
+      actionLabel: 'Detayları Gör',
+      pickupCode: 'SH10',
+      rewardPoints: 28,
+    ),
+  ];
+
+  return SpetoCommerceSnapshot(
+    cartItems: <SpetoCartItem>[megaBurgerCartItem(), pepperoniPizzaCartItem()],
+    activeOrders: activeOrders,
+    historyOrders: historyOrders,
+    selectedOrderId: activeOrders.first.id,
+    proPointsBalance: 1420,
+    ownedTickets: const <SpetoEventTicket>[],
+    selectedTicketId: null,
+    addresses: const <SpetoAddress>[
+      SpetoAddress(
+        id: 'address-home',
+        label: 'Ev',
+        address: 'Cumhuriyet Mah. Çınar Sok. No:5, D:12, Kadıköy/İstanbul',
+        iconKey: 'home',
+        isPrimary: true,
+      ),
+      SpetoAddress(
+        id: 'address-work',
+        label: 'İş',
+        address: 'Maslak Mah. Büyükdere Cad. Plaza No:10, Sarıyer/İstanbul',
+        iconKey: 'work',
+      ),
+      SpetoAddress(
+        id: 'address-school',
+        label: 'Okul',
+        address: 'Beşiktaş Kampüsü, Yıldız Mah., Beşiktaş/İstanbul',
+        iconKey: 'school',
+      ),
+    ],
+    paymentCards: const <SpetoPaymentCard>[
+      SpetoPaymentCard(
+        id: 'card-visa-4242',
+        brand: 'VISA',
+        last4: '4242',
+        expiry: '12/25',
+        holderName: 'Bayram Senbay',
+        isDefault: true,
+      ),
+      SpetoPaymentCard(
+        id: 'card-master-8899',
+        brand: 'MASTERCARD',
+        last4: '8899',
+        expiry: '09/24',
+        holderName: 'Bayram Senbay',
+      ),
+    ],
+    supportTickets: const <SpetoSupportTicket>[
+      SpetoSupportTicket(
+        id: 'support-sepet-001',
+        subject: 'Gel-al hazırlık süresi hakkında bilgi',
+        message:
+            'Gel-al siparişim için güncel hazırlık durumunu görmek istiyorum.',
+        channel: 'Canlı Destek',
+        createdAtLabel: '24.10.2026 • 18:42',
+      ),
+    ],
+    favoriteRestaurantIds: const <String>[],
+    favoriteEventIds: const <String>[],
+    followedOrganizerIds: const <String>[],
+    orderRatings: const <String, int>{},
+    profileDisplayName: 'Bayram Senbay',
+    profilePhone: '+90 555 123 45 67',
+    profileAvatarUrl: AppImages.profile,
+    profileNotificationsEnabled: true,
+  );
+}
+
+String formatPrice(double price) {
+  final bool whole = price == price.roundToDouble();
+  return '${whole ? price.toStringAsFixed(0) : price.toStringAsFixed(2)} TL';
+}
+
+String formatPointValue(num value) {
+  final double normalized = value.toDouble();
+  final bool whole = normalized == normalized.roundToDouble();
+  return whole ? normalized.toStringAsFixed(0) : normalized.toStringAsFixed(2);
+}
+
+String formatPoints(num value) => '${formatPointValue(value)} Pro';
+
+String orderStatusLabel(SpetoOrderStatus status) {
+  switch (status) {
+    case SpetoOrderStatus.active:
+      return 'Hazırlanıyor';
+    case SpetoOrderStatus.completed:
+      return 'Tamamlandı';
+    case SpetoOrderStatus.cancelled:
+      return 'İptal';
+  }
+}
+
+Color orderStatusColor(SpetoOrderStatus status) {
+  switch (status) {
+    case SpetoOrderStatus.active:
+      return Palette.orange;
+    case SpetoOrderStatus.completed:
+      return Palette.green;
+    case SpetoOrderStatus.cancelled:
+      return Palette.crimson;
+  }
+}
+
+void addCartItemAndOpenCheckout(
+  BuildContext context,
+  SpetoCartItem item, {
+  String? notice,
+}) {
+  final SpetoAppState appState = SpetoAppScope.of(context);
+  final bool added = appState.addToCart(item);
+  if (!added) {
+    return;
+  }
+  // TODO: Uncomment after SpetoToast is extracted from speto_app.dart.
+  // SpetoToast.show(
+  //   context,
+  //   message: notice ?? '${item.title} sepete eklendi.',
+  //   icon: Icons.shopping_cart_outlined,
+  // );
+  openScreen(context, SpetoScreen.happyHourCheckout);
+}
+
+double menuBasePrice(String priceLabel) {
+  return double.tryParse(priceLabel.replaceAll(' TL', '').trim()) ?? 0;
+}
+
+List<MapEntry<String, IconData>> menuHighlightsFor(MenuListItem item) {
+  final String searchable = '${item.title} ${item.description}'.toLowerCase();
+  if (searchable.contains('çay') || searchable.contains('kola')) {
+    return const <MapEntry<String, IconData>>[
+      MapEntry<String, IconData>('Serin servis', Icons.ac_unit_rounded),
+      MapEntry<String, IconData>('Günlük hazırlık', Icons.local_drink_outlined),
+      MapEntry<String, IconData>('Gel-Al uyumlu', Icons.storefront_outlined),
+    ];
+  }
+  if (searchable.contains('sundae') ||
+      searchable.contains('kurabiye') ||
+      searchable.contains('çikolata')) {
+    return const <MapEntry<String, IconData>>[
+      MapEntry<String, IconData>('Tatlı molası', Icons.icecream_outlined),
+      MapEntry<String, IconData>('Paylaşılabilir', Icons.groups_rounded),
+      MapEntry<String, IconData>('Hızlı servis', Icons.timer_outlined),
+    ];
+  }
+  return const <MapEntry<String, IconData>>[
+    MapEntry<String, IconData>('Taze hazırlanır', Icons.restaurant_outlined),
+    MapEntry<String, IconData>('Şubede servis', Icons.storefront_outlined),
+    MapEntry<String, IconData>('Gel-Al uyumlu', Icons.bolt_rounded),
+  ];
+}
+
+String slugify(String value) {
+  return value
+      .toLowerCase()
+      .replaceAll('ı', 'i')
+      .replaceAll('ğ', 'g')
+      .replaceAll('ü', 'u')
+      .replaceAll('ş', 's')
+      .replaceAll('ö', 'o')
+      .replaceAll('ç', 'c')
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^-|-$'), '');
+}
+
+String displayNameFromEmail(String email) {
+  final String localPart = email.split('@').first.trim();
+  if (localPart.isEmpty) {
+    return 'Speto Kullanıcısı';
+  }
+  final List<String> words = localPart
+      .split(RegExp(r'[._-]+'))
+      .where((String part) => part.isNotEmpty)
+      .toList();
+  if (words.isEmpty) {
+    return 'Speto Kullanıcısı';
+  }
+  return words
+      .map(
+        (String part) =>
+            '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}',
+      )
+      .join(' ');
+}
+
+String maskEmailAddress(String email) {
+  final List<String> parts = email.split('@');
+  if (parts.length != 2) {
+    return email;
+  }
+  final String local = parts.first.trim();
+  final String domain = parts.last.trim();
+  if (local.isEmpty) {
+    return '***@$domain';
+  }
+  if (local.length <= 2) {
+    return '${local[0]}***@$domain';
+  }
+  final String visibleTail = local.length > 4
+      ? local.substring(local.length - 2)
+      : '';
+  return '${local.substring(0, 2)}***$visibleTail@$domain';
+}
