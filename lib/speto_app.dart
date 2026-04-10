@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
@@ -7,6 +9,7 @@ import 'core/theme/palette.dart';
 import 'core/navigation/app_router.dart';
 import 'core/providers/providers.dart';
 import 'core/state/app_state.dart';
+import 'features/events/event_data.dart';
 import 'src/core/bootstrap.dart';
 
 class SpetoApp extends ConsumerStatefulWidget {
@@ -19,7 +22,46 @@ class SpetoApp extends ConsumerStatefulWidget {
   ConsumerState<SpetoApp> createState() => _SpetoAppState();
 }
 
-class _SpetoAppState extends ConsumerState<SpetoApp> {
+class _SpetoAppState extends ConsumerState<SpetoApp>
+    with WidgetsBindingObserver {
+  bool _runtimeRefreshInFlight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_refreshRuntimeData());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshRuntimeData());
+    }
+  }
+
+  Future<void> _refreshRuntimeData() async {
+    if (_runtimeRefreshInFlight) {
+      return;
+    }
+    _runtimeRefreshInFlight = true;
+    try {
+      await initializeSpetoCatalog();
+      await ref.read(appStateProvider).refreshDomainState();
+      if (mounted) {
+        setState(() {});
+      }
+    } finally {
+      _runtimeRefreshInFlight = false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = ref.watch(appStateProvider);

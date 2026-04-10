@@ -29,7 +29,9 @@ class MarketStoreDetailScreenState extends State<MarketStoreDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedSection = widget.store.sections.keys.first;
+    _selectedSection = widget.store.sections.keys.isNotEmpty
+        ? widget.store.sections.keys.first
+        : 'Tümü';
   }
 
   void _addMarketItem(
@@ -40,12 +42,14 @@ class MarketStoreDetailScreenState extends State<MarketStoreDetailScreen> {
     required double price,
     required String notice,
   }) {
+    final MarketStoreData currentStore =
+        marketStoreById(widget.store.id) ?? widget.store;
     final SpetoAppState appState = SpetoAppScope.of(context);
     HapticFeedback.lightImpact();
     final bool added = appState.addToCart(
       SpetoCartItem(
         id: id,
-        vendor: widget.store.title,
+        vendor: currentStore.title,
         title: title,
         image: image,
         unitPrice: price,
@@ -69,10 +73,13 @@ class MarketStoreDetailScreenState extends State<MarketStoreDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final SpetoAppState appState = SpetoAppScope.of(context);
-    final MarketStoreData store = widget.store;
+    final MarketStoreData store = marketStoreById(widget.store.id) ?? widget.store;
     final List<String> sectionLabels = store.sections.keys.toList();
+    final String effectiveSelectedSection = sectionLabels.contains(_selectedSection)
+        ? _selectedSection
+        : (sectionLabels.isNotEmpty ? sectionLabels.first : 'Tümü');
     final List<MenuListItem> selectedItems =
-        store.sections[_selectedSection] ?? const <MenuListItem>[];
+        store.sections[effectiveSelectedSection] ?? const <MenuListItem>[];
     return Scaffold(
       backgroundColor: Palette.aubergine,
       body: Stack(
@@ -315,7 +322,8 @@ class MarketStoreDetailScreenState extends State<MarketStoreDetailScreen> {
                                       const SizedBox(width: 12),
                               itemBuilder: (BuildContext context, int index) {
                                 final String label = sectionLabels[index];
-                                final bool active = label == _selectedSection;
+                                final bool active =
+                                    label == effectiveSelectedSection;
                                 return GestureDetector(
                                   onTap: () =>
                                       setState(() => _selectedSection = label),
@@ -362,7 +370,7 @@ class MarketStoreDetailScreenState extends State<MarketStoreDetailScreen> {
                           ),
                           const SizedBox(height: 18),
                           Text(
-                            '$_selectedSection kategorisi • ${selectedItems.length} ürün',
+                            '$effectiveSelectedSection kategorisi • ${selectedItems.length} ürün',
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(color: Palette.soft),
                           ),

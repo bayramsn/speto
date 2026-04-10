@@ -53,6 +53,146 @@ class SpetoRemoteDomainApi {
     }
   }
 
+  Future<SpetoCatalogBootstrap> fetchCatalogBootstrap() async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.get('catalog/bootstrap'),
+    );
+    return SpetoCatalogBootstrap.fromJson(json);
+  }
+
+  Future<SpetoCatalogVendor> fetchCatalogVendor(String vendorId) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.get('catalog/vendors/${Uri.encodeComponent(vendorId)}'),
+    );
+    return SpetoCatalogVendor.fromJson(json);
+  }
+
+  Future<List<SpetoCatalogVendor>> fetchCatalogAdminVendors({
+    String? vendorId,
+  }) async {
+    final Object? response = await _apiClient.get(
+      'catalog/admin/vendors',
+      queryParameters: <String, String?>{'vendorId': vendorId},
+    );
+    return _mapList(response, SpetoCatalogVendor.fromJson);
+  }
+
+  Future<SpetoCatalogVendor> createCatalogVendor(
+    Map<String, Object?> payload,
+  ) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.post('catalog/admin/vendors', body: payload),
+    );
+    return SpetoCatalogVendor.fromJson(json);
+  }
+
+  Future<SpetoCatalogVendor> updateCatalogVendor(
+    String vendorId,
+    Map<String, Object?> payload,
+  ) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.patch(
+        'catalog/admin/vendors/${Uri.encodeComponent(vendorId)}',
+        body: payload,
+      ),
+    );
+    return SpetoCatalogVendor.fromJson(json);
+  }
+
+  Future<List<SpetoCatalogSection>> updateCatalogSection(
+    String sectionId,
+    Map<String, Object?> payload,
+  ) async {
+    final Object? response = await _apiClient.patch(
+      'catalog/admin/sections/${Uri.encodeComponent(sectionId)}',
+      body: payload,
+    );
+    return _mapList(response, SpetoCatalogSection.fromJson);
+  }
+
+  Future<List<SpetoCatalogSection>> createCatalogSection(
+    Map<String, Object?> payload,
+  ) async {
+    final Object? response = await _apiClient.post(
+      'catalog/admin/sections',
+      body: payload,
+    );
+    return _mapList(response, SpetoCatalogSection.fromJson);
+  }
+
+  Future<List<SpetoCatalogProduct>> fetchCatalogAdminProducts({
+    String? vendorId,
+  }) async {
+    final Object? response = await _apiClient.get(
+      'catalog/admin/products',
+      queryParameters: <String, String?>{'vendorId': vendorId},
+    );
+    return _mapList(response, SpetoCatalogProduct.fromJson);
+  }
+
+  Future<SpetoCatalogVendor> createCatalogProduct(
+    Map<String, Object?> payload,
+  ) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.post('catalog/admin/products', body: payload),
+    );
+    return SpetoCatalogVendor.fromJson(json);
+  }
+
+  Future<SpetoCatalogVendor> updateCatalogProduct(
+    String productId,
+    Map<String, Object?> payload,
+  ) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.patch(
+        'catalog/admin/products/${Uri.encodeComponent(productId)}',
+        body: payload,
+      ),
+    );
+    return SpetoCatalogVendor.fromJson(json);
+  }
+
+  Future<List<SpetoCatalogEvent>> fetchCatalogAdminEvents() async {
+    final Object? response = await _apiClient.get('catalog/admin/events');
+    return _mapList(response, SpetoCatalogEvent.fromJson);
+  }
+
+  Future<SpetoCatalogEvent> updateCatalogEvent(
+    String eventId,
+    Map<String, Object?> payload,
+  ) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.patch(
+        'catalog/admin/events/${Uri.encodeComponent(eventId)}',
+        body: payload,
+      ),
+    );
+    return SpetoCatalogEvent.fromJson(json);
+  }
+
+  Future<List<SpetoCatalogContentBlock>> fetchCatalogContentBlocks({
+    SpetoContentBlockType? type,
+  }) async {
+    final Object? response = await _apiClient.get(
+      'catalog/admin/content-blocks',
+      queryParameters: <String, String?>{
+        'type': type == null ? null : _contentBlockTypeApiName(type),
+      },
+    );
+    return _mapList(response, SpetoCatalogContentBlock.fromJson);
+  }
+
+  Future<List<SpetoCatalogContentBlock>> updateCatalogContentBlock(
+    String blockId,
+    Map<String, Object?> payload,
+  ) async {
+    final Object? response = await _apiClient.patch(
+      'catalog/admin/content-blocks/${Uri.encodeComponent(blockId)}',
+      body: payload,
+    );
+    return _mapList(response, SpetoCatalogContentBlock.fromJson);
+  }
+
   void clearSession() {
     _apiClient.clearAccessToken();
   }
@@ -61,6 +201,16 @@ class SpetoRemoteDomainApi {
     final Map<String, Object?> json = _asJsonMap(
       await _apiClient.post(
         'auth/password/request',
+        body: <String, Object?>{'email': email},
+      ),
+    );
+    return json['exists'] == true;
+  }
+
+  Future<bool> hasAccountForEmail(String email) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.post(
+        'auth/account-exists',
         body: <String, Object?>{'email': email},
       ),
     );
@@ -78,6 +228,31 @@ class SpetoRemoteDomainApi {
       ),
     );
     return json['success'] == true;
+  }
+
+  Future<bool> verifyPasswordResetOtp({
+    required String email,
+    required String code,
+  }) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.post(
+        'auth/password/verify-otp',
+        body: <String, Object?>{'email': email, 'code': code},
+      ),
+    );
+    return json['verified'] == true;
+  }
+
+  Future<List<SpetoHappyHourOffer>> fetchHappyHourOffers() async {
+    final Object? response = await _apiClient.get('offers/happy-hour');
+    return _mapList(response, SpetoHappyHourOffer.fromJson);
+  }
+
+  Future<SpetoHappyHourOffer> fetchHappyHourOffer(String offerId) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.get('offers/happy-hour/${Uri.encodeComponent(offerId)}'),
+    );
+    return SpetoHappyHourOffer.fromJson(json);
   }
 
   Future<SpetoRemoteSnapshot> fetchSnapshot() async {
@@ -98,6 +273,11 @@ class SpetoRemoteDomainApi {
       ),
       ownedTickets: _mapList(wallet['ownedTickets'], SpetoEventTicket.fromJson),
       proPointsBalance: (wallet['balance'] as num?)?.toDouble() ?? 0,
+      favoriteRestaurantIds: _stringList(wallet['favoriteRestaurantIds']),
+      favoriteEventIds: _stringList(wallet['favoriteEventIds']),
+      favoriteMarketIds: _stringList(wallet['favoriteMarketIds']),
+      followedOrganizerIds: _stringList(wallet['followedOrganizerIds']),
+      orderRatings: _stringIntMap(wallet['orderRatings']),
     );
   }
 
@@ -167,6 +347,21 @@ class SpetoRemoteDomainApi {
     return SpetoSupportTicket.fromJson(json);
   }
 
+  Future<void> updatePreference({
+    required String entityType,
+    required String entityId,
+    required bool enabled,
+  }) async {
+    await _apiClient.post(
+      'me/preferences',
+      body: <String, Object?>{
+        'entityType': entityType,
+        'entityId': entityId,
+        'enabled': enabled,
+      },
+    );
+  }
+
   Future<SpetoOrder> checkout({
     required List<SpetoCartItem> cartItems,
     required String pickupPointLabel,
@@ -206,6 +401,13 @@ class SpetoRemoteDomainApi {
       await _apiClient.post('orders/${Uri.encodeComponent(orderId)}/complete'),
     );
     return SpetoOrder.fromJson(json);
+  }
+
+  Future<void> rateOrder({required String orderId, required int stars}) async {
+    await _apiClient.post(
+      'orders/${Uri.encodeComponent(orderId)}/rating',
+      body: <String, Object?>{'stars': stars},
+    );
   }
 
   Future<SpetoEventTicket> redeemEventTicket({
@@ -417,6 +619,14 @@ T _enumByApiName<T extends Enum>(
   return fallback;
 }
 
+String _contentBlockTypeApiName(SpetoContentBlockType type) {
+  return switch (type) {
+    SpetoContentBlockType.homeHero => 'HOME_HERO',
+    SpetoContentBlockType.quickFilter => 'QUICK_FILTER',
+    SpetoContentBlockType.discoveryFilter => 'DISCOVERY_FILTER',
+  };
+}
+
 Map<String, Object?> _asJsonMap(Object? value) {
   if (value is Map<String, Object?>) {
     return value;
@@ -436,6 +646,20 @@ List<T> _mapList<T>(
   return list
       .map((Object? item) => fromJson(_asJsonMap(item)))
       .toList(growable: false);
+}
+
+List<String> _stringList(Object? value) {
+  return ((value as List<Object?>?) ?? const <Object?>[])
+      .map((Object? item) => item! as String)
+      .toList(growable: false);
+}
+
+Map<String, int> _stringIntMap(Object? value) {
+  return ((value as Map<Object?, Object?>?) ?? const <Object?, Object?>{})
+      .map<String, int>(
+        (Object? key, Object? item) =>
+            MapEntry<String, int>(key! as String, (item! as num).toInt()),
+      );
 }
 
 Object? _unwrapData(Object? response) {

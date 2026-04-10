@@ -6,7 +6,6 @@ import '../../core/constants/app_images.dart';
 import '../../core/navigation/screen_enum.dart';
 import '../../core/navigation/navigator.dart';
 import '../../core/state/app_state.dart';
-import '../../core/data/default_data.dart';
 import '../../shared/widgets/widgets.dart';
 import 'market_store_screen.dart';
 
@@ -19,43 +18,28 @@ class MarketListScreen extends StatefulWidget {
 
 class _MarketListScreenState extends State<MarketListScreen> {
   late final PageController _campaignController;
-  final Set<String> _favoriteMarketIds = <String>{};
   int _campaignIndex = 0;
 
-  List<MarketCampaignData> get _campaigns => <MarketCampaignData>[
-    MarketCampaignData(
-      store: marketStores[0],
-      title: 'Kahvaltılık ve Manav Raflarında Yeni Haftalık Fırsatlar',
-      subtitle:
-          'Migros Jet tarafında süt, taze sebze ve hazır tüketim seçkisi bu hafta önde.',
-      badge: 'Bu Gece',
-      image: MarketImages.freshProduceBanner,
-    ),
-    MarketCampaignData(
-      store: marketStores[1],
-      title: 'Premium Şarküteri ve Kahvaltılık Seçkiler',
-      subtitle:
-          'Macrocenter Express tarafında peynir, meze ve taze reyon akışı öne çıkıyor.',
-      badge: 'Sabah Rotası',
-      image: MarketImages.breakfastBanner,
-    ),
-    MarketCampaignData(
-      store: marketStores[2],
-      title: 'Ekonomik Market Haftası',
-      subtitle:
-          'File Market günlük ihtiyaçları daha sade ve uygun fiyatlı topluyor.',
-      badge: 'Öğrenci Seçkisi',
-      image: MarketImages.discountBanner,
-    ),
-    MarketCampaignData(
-      store: marketStores[3],
-      title: 'Taze Manav ve Mahalle Alışverişi',
-      subtitle:
-          'CarrefourSA Mini için manav, kahvaltılık ve hazır gıda seçkisi öne çıkıyor.',
-      badge: 'Günlük İhtiyaç',
-      image: MarketImages.groceryAisleBanner,
-    ),
-  ];
+  List<MarketCampaignData> get _campaigns => marketStores
+      .take(4)
+      .map(
+        (MarketStoreData store) => MarketCampaignData(
+          store: store,
+          title: store.bundleTitle.isNotEmpty
+              ? store.bundleTitle
+              : store.heroTitle,
+          subtitle: store.bundleDescription.isNotEmpty
+              ? store.bundleDescription
+              : (store.heroSubtitle.isNotEmpty
+                    ? store.heroSubtitle
+                    : store.promoLabel),
+          badge: store.badge.isNotEmpty
+              ? store.badge
+              : (store.rewardLabel.isNotEmpty ? store.rewardLabel : 'Market'),
+          image: store.image,
+        ),
+      )
+      .toList(growable: false);
 
   @override
   void initState() {
@@ -73,15 +57,9 @@ class _MarketListScreenState extends State<MarketListScreen> {
     Navigator.of(context).push(spetoRoute(MarketStoreScreen(store: store)));
   }
 
-  void _toggleFavorite(String storeId) {
+  void _toggleFavorite(BuildContext context, String storeId) {
     HapticFeedback.selectionClick();
-    setState(() {
-      if (_favoriteMarketIds.contains(storeId)) {
-        _favoriteMarketIds.remove(storeId);
-      } else {
-        _favoriteMarketIds.add(storeId);
-      }
-    });
+    SpetoAppScope.of(context).toggleMarketFavorite(storeId);
   }
 
   Widget _storeAvatar(String image, {double size = 52}) {
@@ -283,7 +261,7 @@ class _MarketListScreenState extends State<MarketListScreen> {
   }
 
   Widget _marketSelectionCard(BuildContext context, MarketStoreData store) {
-    final bool favorite = _favoriteMarketIds.contains(store.id);
+    final bool favorite = SpetoAppScope.of(context).isMarketFavorite(store.id);
     return GestureDetector(
       onTap: () => _openStore(context, store),
       child: Container(
@@ -320,7 +298,7 @@ class _MarketListScreenState extends State<MarketListScreen> {
                 const SizedBox(width: 10),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => _toggleFavorite(store.id),
+                  onTap: () => _toggleFavorite(context, store.id),
                   child: Container(
                     width: 36,
                     height: 36,
@@ -373,6 +351,9 @@ class _MarketListScreenState extends State<MarketListScreen> {
   @override
   Widget build(BuildContext context) {
     final List<MarketCampaignData> campaigns = _campaigns;
+    final int activeCampaignIndex = campaigns.isEmpty
+        ? 0
+        : _campaignIndex.clamp(0, campaigns.length - 1);
     return SpetoScreenScaffold(
       showBack: false,
       showBottomNav: true,
@@ -407,43 +388,70 @@ class _MarketListScreenState extends State<MarketListScreen> {
               ).textTheme.bodyMedium?.copyWith(color: Palette.soft),
             ),
             const SizedBox(height: 20),
-            SizedBox(
-              height: 184,
-              child: PageView.builder(
-                controller: _campaignController,
-                itemCount: campaigns.length,
-                onPageChanged: (int index) {
-                  setState(() => _campaignIndex = index);
-                },
-                itemBuilder: (BuildContext context, int index) {
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      right: index == campaigns.length - 1 ? 0 : 12,
+            if (campaigns.isEmpty)
+              SpetoCard(
+                radius: 28,
+                color: Palette.cardWarm,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Kampanya bulunamadı',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                    child: _campaignCard(context, campaigns[index]),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 14),
-            Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: List<Widget>.generate(campaigns.length, (int index) {
-                  final bool active = index == _campaignIndex;
-                  return AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    width: active ? 26 : 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: active ? Palette.red : Palette.border,
-                      borderRadius: BorderRadius.circular(999),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Backend tarafında market kampanya alanı güncellendiğinde burada otomatik görünür.',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: Palette.soft),
                     ),
-                  );
-                }),
+                  ],
+                ),
+              )
+            else ...<Widget>[
+              SizedBox(
+                height: 184,
+                child: PageView.builder(
+                  controller: _campaignController,
+                  itemCount: campaigns.length,
+                  onPageChanged: (int index) {
+                    setState(() => _campaignIndex = index);
+                  },
+                  itemBuilder: (BuildContext context, int index) {
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        right: index == campaigns.length - 1 ? 0 : 12,
+                      ),
+                      child: _campaignCard(context, campaigns[index]),
+                    );
+                  },
+                ),
               ),
-            ),
+              const SizedBox(height: 14),
+              Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List<Widget>.generate(campaigns.length, (
+                    int index,
+                  ) {
+                    final bool active = index == activeCampaignIndex;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      width: active ? 26 : 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: active ? Palette.red : Palette.border,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             ListView.separated(
               shrinkWrap: true,
@@ -477,4 +485,3 @@ class MarketCampaignData {
   final String badge;
   final String image;
 }
-

@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../../core/navigation/screen_enum.dart';
 import '../../src/core/models.dart';
+import '../../src/core/domain_api.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/palette.dart';
 import '../../shared/widgets/widgets.dart';
@@ -146,17 +149,45 @@ Future<void> showAddressFormSheet(
                               );
                               return;
                             }
-                            await appState.saveAddress(
-                              SpetoAddress(
-                                id:
-                                    address?.id ??
-                                    'address-${DateTime.now().microsecondsSinceEpoch}',
-                                label: label,
-                                address: fullAddress,
-                                iconKey: iconKey,
-                                isPrimary: isPrimary,
-                              ),
-                            );
+                            if (label.length < 2) {
+                              SpetoToast.show(
+                                rootContext,
+                                message: 'Adres başlığı en az 2 karakter olmalı.',
+                                icon: Icons.info_outline_rounded,
+                              );
+                              return;
+                            }
+                            if (fullAddress.length < 5) {
+                              SpetoToast.show(
+                                rootContext,
+                                message: 'Açık adres en az 5 karakter olmalı.',
+                                icon: Icons.info_outline_rounded,
+                              );
+                              return;
+                            }
+                            try {
+                              await appState.saveAddress(
+                                SpetoAddress(
+                                  id:
+                                      address?.id ??
+                                      'address-${DateTime.now().microsecondsSinceEpoch}',
+                                  label: label,
+                                  address: fullAddress,
+                                  iconKey: iconKey,
+                                  isPrimary: isPrimary,
+                                ),
+                              );
+                            } catch (error) {
+                              if (!rootContext.mounted) {
+                                return;
+                              }
+                              SpetoToast.show(
+                                rootContext,
+                                message: _addressSaveErrorMessage(error),
+                                icon: Icons.info_outline_rounded,
+                              );
+                              return;
+                            }
                             if (!rootContext.mounted) {
                               return;
                             }
@@ -183,6 +214,36 @@ Future<void> showAddressFormSheet(
   );
   labelController.dispose();
   addressController.dispose();
+}
+
+String _addressSaveErrorMessage(Object error) {
+  if (error is SpetoRemoteApiException) {
+    final String body = error.body ?? '';
+    if (body.isNotEmpty) {
+      try {
+        final Object? decoded = jsonDecode(body);
+        if (decoded is Map<String, Object?>) {
+          final Object? message = decoded['message'];
+          if (message is List && message.isNotEmpty) {
+            final String first = '${message.first}'.toLowerCase();
+            if (first.contains('address must be longer than or equal to 5')) {
+              return 'Açık adres en az 5 karakter olmalı.';
+            }
+            if (first.contains('label must be longer than or equal to 2')) {
+              return 'Adres başlığı en az 2 karakter olmalı.';
+            }
+            return '${message.first}';
+          }
+          if (message is String && message.trim().isNotEmpty) {
+            return message;
+          }
+        }
+      } catch (_) {
+        // Fall back to a generic localized message.
+      }
+    }
+  }
+  return 'Adres kaydedilemedi. Bilgileri kontrol edip tekrar deneyin.';
 }
 
 class AddressesScreen extends StatelessWidget {

@@ -47,56 +47,68 @@ class HomeQuickFilter {
 // Constant lists
 // ---------------------------------------------------------------------------
 
-const List<HomeHeroData> homeHeroCards = <HomeHeroData>[
-  HomeHeroData(
-    title: "Galata'da Caz Gecesi",
-    subtitle: 'Pro puan ile açılan canlı deneyim',
-    badge: 'Yeni sezon',
-    image: AppImages.concert,
-    actionLabel: 'Etkinliğe Git',
-    screen: SpetoScreen.eventsDiscovery,
-  ),
-  HomeHeroData(
-    title: 'Akşamüstü Happy Hour',
-    subtitle: 'Market ve yeme içme fırsatlarını kaçırma',
-    badge: 'Süreli teklif',
-    image: AppImages.burgerHero,
-    actionLabel: "Happy Hour'a Git",
-    screen: SpetoScreen.happyHourList,
-  ),
-  HomeHeroData(
-    title: 'Özel Gel-Al Menüler',
-    subtitle: 'Hızlı, sıcak ve öğrenci dostu',
-    badge: 'Kadıköy çevresi',
-    image: AppImages.burger,
-    actionLabel: 'Restoranlara Git',
-    screen: SpetoScreen.restaurantList,
-  ),
-];
+List<HomeHeroData> defaultHomeHeroCards() {
+  return const <HomeHeroData>[
+    HomeHeroData(
+      title: "Galata'da Caz Gecesi",
+      subtitle: 'Pro puan ile açılan canlı deneyim',
+      badge: 'Yeni sezon',
+      image: AppImages.concert,
+      actionLabel: 'Etkinliğe Git',
+      screen: SpetoScreen.eventsDiscovery,
+    ),
+    HomeHeroData(
+      title: 'Akşamüstü Happy Hour',
+      subtitle: 'Market ve yeme içme fırsatlarını kaçırma',
+      badge: 'Süreli teklif',
+      image: AppImages.burgerHero,
+      actionLabel: "Happy Hour'a Git",
+      screen: SpetoScreen.happyHourList,
+    ),
+    HomeHeroData(
+      title: 'Özel Gel-Al Menüler',
+      subtitle: 'Hızlı, sıcak ve öğrenci dostu',
+      badge: 'Kadıköy çevresi',
+      image: AppImages.burger,
+      actionLabel: 'Restoranlara Git',
+      screen: SpetoScreen.restaurantList,
+    ),
+  ];
+}
 
-const List<HomeQuickFilter> homeQuickFilters = <HomeQuickFilter>[
-  HomeQuickFilter(
-    label: 'Yakında',
-    icon: Icons.near_me_rounded,
-    screen: SpetoScreen.restaurantList,
-  ),
-  HomeQuickFilter(
-    label: 'Pro ile',
-    icon: Icons.workspace_premium_rounded,
-    screen: SpetoScreen.proPoints,
-    highlight: true,
-  ),
-  HomeQuickFilter(
-    label: 'Gece',
-    icon: Icons.nightlife_rounded,
-    screen: SpetoScreen.eventsDiscovery,
-  ),
-  HomeQuickFilter(
-    label: 'Market',
-    icon: Icons.shopping_basket_rounded,
-    screen: SpetoScreen.marketList,
-  ),
-];
+List<HomeQuickFilter> defaultHomeQuickFilters() {
+  return const <HomeQuickFilter>[
+    HomeQuickFilter(
+      label: 'Yakında',
+      icon: Icons.near_me_rounded,
+      screen: SpetoScreen.restaurantList,
+    ),
+    HomeQuickFilter(
+      label: 'Pro ile',
+      icon: Icons.workspace_premium_rounded,
+      screen: SpetoScreen.proPoints,
+      highlight: true,
+    ),
+    HomeQuickFilter(
+      label: 'Gece',
+      icon: Icons.nightlife_rounded,
+      screen: SpetoScreen.eventsDiscovery,
+    ),
+    HomeQuickFilter(
+      label: 'Market',
+      icon: Icons.shopping_basket_rounded,
+      screen: SpetoScreen.marketList,
+    ),
+  ];
+}
+
+List<HomeHeroData> homeHeroCards = List<HomeHeroData>.of(
+  defaultHomeHeroCards(),
+);
+
+List<HomeQuickFilter> homeQuickFilters = List<HomeQuickFilter>.of(
+  defaultHomeQuickFilters(),
+);
 
 // ---------------------------------------------------------------------------
 // Screen link lists (from the app-map / discovery hub)
@@ -246,4 +258,8 @@ class ScreenLink {
 // Filter chips shared across home / happy-hour
 // ---------------------------------------------------------------------------
 
-const List<String> filterChips = <String>['Hepsi', 'Burger', 'Tatlı', 'Kahve'];
+List<String> defaultFilterChips() {
+  return <String>['Hepsi', 'Burger', 'Tatlı', 'Kahve'];
+}
+
+List<String> filterChips = List<String>.of(defaultFilterChips());

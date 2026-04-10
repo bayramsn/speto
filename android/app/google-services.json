@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "296155447730",
+    "project_id": "speto-4068",
+    "storage_bucket": "speto-4068.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:296155447730:android:95f3e30aaa745810b324ab",
+        "android_client_info": {
+          "package_name": "com.example.speto"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB0go_dDxL39FXZP9LH2aywTOzfCVGHfr8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

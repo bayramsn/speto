@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/palette.dart';
-import '../../core/constants/app_images.dart';
-import '../../core/navigation/screen_enum.dart';
+import '../../core/data/default_data.dart';
 import '../../core/navigation/navigator.dart';
+import '../../core/navigation/screen_enum.dart';
+import '../../core/state/app_state.dart';
+import '../../core/theme/palette.dart';
+import '../../src/core/models.dart';
 import '../../shared/widgets/widgets.dart';
-import '../../features/marketplace/market_store_detail_screen.dart';
 import 'home_data.dart';
 
 class HappyHourListScreen extends StatelessWidget {
@@ -13,29 +14,10 @@ class HappyHourListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<ListingCardData> items = <ListingCardData>[
-      const ListingCardData(
-        title: 'Burger King',
-        subtitle: 'Mega burger menü',
-        meta: '00:45 kaldı',
-        price: '85 TL',
-        image: AppImages.burger,
-      ),
-      const ListingCardData(
-        title: 'Espresso Lab',
-        subtitle: 'Latte + kruvasan',
-        meta: '00:52 kaldı',
-        price: '69 TL',
-        image: AppImages.nightlife,
-      ),
-      const ListingCardData(
-        title: 'Pizza Locale',
-        subtitle: 'Pepperoni dilim menü',
-        meta: '01:10 kaldı',
-        price: '79 TL',
-        image: AppImages.burgerHero,
-      ),
-    ];
+    final SpetoAppState appState = SpetoAppScope.of(context);
+    final List<SpetoHappyHourOffer> items = appState.happyHourOffers.isNotEmpty
+        ? appState.happyHourOffers
+        : defaultHappyHourOffers();
     return SpetoScreenScaffold(
       showBack: false,
       showBottomNav: true,
@@ -92,10 +74,13 @@ class HappyHourListScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             ...items.map(
-              (ListingCardData item) => Padding(
+              (SpetoHappyHourOffer item) => Padding(
                 padding: const EdgeInsets.only(bottom: 20),
                 child: GestureDetector(
-                  onTap: () => openScreen(context, SpetoScreen.happyHourDetail),
+                  onTap: () {
+                    appState.selectHappyHourOffer(item.id);
+                    openScreen(context, SpetoScreen.happyHourDetail);
+                  },
                   child: SpetoCard(
                     padding: EdgeInsets.zero,
                     radius: 24,
@@ -105,10 +90,10 @@ class HappyHourListScreen extends StatelessWidget {
                         Stack(
                           children: <Widget>[
                             SpetoImage(
-                              url: item.image,
+                              url: item.imageUrl,
                               height: 192,
                               borderRadius: 24,
-                              heroTag: item.image,
+                              heroTag: item.id,
                               overlay: DecoratedBox(
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
@@ -134,9 +119,9 @@ class HappyHourListScreen extends StatelessWidget {
                                   color: Palette.red,
                                   borderRadius: BorderRadius.circular(999),
                                 ),
-                                child: const Text(
-                                  '%35 İndirim',
-                                  style: TextStyle(
+                                child: Text(
+                                  '%${item.discountPercent} İndirim',
+                                  style: const TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w800,
                                   ),
@@ -156,7 +141,7 @@ class HappyHourListScreen extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(999),
                                 ),
                                 child: Text(
-                                  '+50 Puan',
+                                  '+${item.rewardPoints} Puan',
                                   style: Theme.of(context).textTheme.labelMedium
                                       ?.copyWith(
                                         color: Palette.orange,
@@ -180,7 +165,7 @@ class HappyHourListScreen extends StatelessWidget {
                                           CrossAxisAlignment.start,
                                       children: <Widget>[
                                         Text(
-                                          item.title,
+                                          item.vendorName,
                                           style: Theme.of(context)
                                               .textTheme
                                               .titleLarge
@@ -190,7 +175,7 @@ class HappyHourListScreen extends StatelessWidget {
                                         ),
                                         const SizedBox(height: 6),
                                         Text(
-                                          item.subtitle,
+                                          item.title,
                                           style: Theme.of(context)
                                               .textTheme
                                               .bodyMedium
@@ -219,7 +204,7 @@ class HappyHourListScreen extends StatelessWidget {
                                         ),
                                         const SizedBox(width: 6),
                                         Text(
-                                          item.meta,
+                                          _expiryLabel(item.expiresInMinutes),
                                           style: Theme.of(context)
                                               .textTheme
                                               .labelMedium
@@ -239,21 +224,24 @@ class HappyHourListScreen extends StatelessWidget {
                                   const CircleAvatar(
                                     radius: 14,
                                     backgroundImage: NetworkImage(
-                                      AppImages.profile,
+                                      'https://i.pravatar.cc/150?img=12',
                                     ),
                                   ),
                                   const SizedBox(width: 10),
                                   Text(
-                                    '24 kişi bugün aldı',
+                                    '${item.claimCount} kişi bugün aldı',
                                     style: Theme.of(context).textTheme.bodySmall
                                         ?.copyWith(color: Palette.soft),
                                   ),
                                   const Spacer(),
                                   TextButton.icon(
-                                    onPressed: () => openScreen(
-                                      context,
-                                      SpetoScreen.happyHourDetail,
-                                    ),
+                                    onPressed: () {
+                                      appState.selectHappyHourOffer(item.id);
+                                      openScreen(
+                                        context,
+                                        SpetoScreen.happyHourDetail,
+                                      );
+                                    },
                                     icon: const Icon(
                                       Icons.shopping_bag_outlined,
                                       size: 14,
@@ -263,7 +251,7 @@ class HappyHourListScreen extends StatelessWidget {
                                 ],
                               ),
                               Text(
-                                item.price,
+                                item.discountedPriceText,
                                 style: Theme.of(context).textTheme.headlineSmall
                                     ?.copyWith(
                                       color: Palette.red,
@@ -284,5 +272,13 @@ class HappyHourListScreen extends StatelessWidget {
       ),
     );
   }
-}
 
+  String _expiryLabel(int expiresInMinutes) {
+    final int hours = expiresInMinutes ~/ 60;
+    final int minutes = expiresInMinutes % 60;
+    if (hours <= 0) {
+      return '00:${minutes.toString().padLeft(2, '0')} kaldı';
+    }
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')} kaldı';
+  }
+}

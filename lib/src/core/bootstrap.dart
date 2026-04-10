@@ -144,7 +144,12 @@ class RemoteSpetoAuthRepository implements SpetoAuthRepository {
 
   @override
   Future<SpetoSession?> readSession() async {
-    return _readJsonObject('client-state/session', SpetoSession.fromJson);
+    final SpetoSession? session = await _readJsonObject(
+      'client-state/session',
+      SpetoSession.fromJson,
+    );
+    _apiClient.setAccessToken(session?.authToken);
+    return session;
   }
 
   @override
@@ -185,9 +190,11 @@ class RemoteSpetoAuthRepository implements SpetoAuthRepository {
   @override
   Future<void> writeSession(SpetoSession? session) async {
     if (session == null) {
+      _apiClient.clearAccessToken();
       await _apiClient.delete('client-state/session');
       return;
     }
+    _apiClient.setAccessToken(session.authToken);
     await _apiClient.put('client-state/session', body: session.toJson());
   }
 

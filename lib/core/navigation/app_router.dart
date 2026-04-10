@@ -7,6 +7,8 @@ import '../../features/auth/login_screen.dart';
 import '../../features/auth/register_screen.dart';
 import '../../features/auth/student_register_screen.dart';
 import '../../features/auth/forgot_password_screen.dart';
+import '../../features/auth/email_link_pending_screen.dart';
+import '../../features/auth/email_link_complete_screen.dart';
 import '../../features/auth/otp_verification_screen.dart';
 import '../../features/auth/reset_password_screen.dart';
 import '../../features/auth/password_success_screen.dart';
@@ -41,6 +43,8 @@ class AppRoutes {
   static const String register = '/register';
   static const String studentRegister = '/student-register';
   static const String forgotPassword = '/forgot-password';
+  static const String emailLinkPending = '/email-link-pending';
+  static const String emailLinkComplete = '/auth/email-link';
   static const String otpVerification = '/otp-verification';
   static const String resetPassword = '/reset-password';
   static const String passwordSuccess = '/password-success';
@@ -88,6 +92,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
       GoRoute(path: '/student-register', builder: (_, __) => const StudentEmailRegisterScreen()),
       GoRoute(path: '/forgot-password', builder: (_, __) => const ForgotPasswordScreen()),
+      GoRoute(path: '/email-link-pending', builder: (_, __) => const EmailLinkPendingScreen()),
+      GoRoute(
+        path: '/auth/email-link',
+        builder: (_, state) => EmailLinkCompleteScreen(
+          initialLink: state.uri.queryParameters.containsKey('oobCode')
+              ? state.uri.toString()
+              : null,
+        ),
+      ),
       GoRoute(path: '/otp-verification', builder: (_, __) => const OtpVerificationScreen()),
       GoRoute(path: '/reset-password', builder: (_, __) => const ResetPasswordScreen()),
       GoRoute(path: '/password-success', builder: (_, __) => const PasswordSuccessScreen()),

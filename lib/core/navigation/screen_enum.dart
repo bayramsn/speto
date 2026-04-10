@@ -8,6 +8,8 @@ enum SpetoScreen {
   register,
   studentRegister,
   forgotPassword,
+  emailLinkPending,
+  emailLinkComplete,
   otpVerification,
   resetPassword,
   passwordSuccess,

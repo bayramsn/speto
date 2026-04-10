@@ -91,6 +91,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!mounted) {
       return;
     }
+    if (appState.supportsFirebaseEmailLink) {
+      final bool sent = await appState.sendRegistrationEmailLink();
+      if (!mounted) {
+        return;
+      }
+      if (!sent) {
+        SpetoToast.show(
+          context,
+          message:
+              'Mail linki şu an gönderilemedi. Doğrulamaya kod ekranı ile devam ediliyor.',
+          icon: Icons.info_outline_rounded,
+        );
+        openScreen(context, SpetoScreen.otpVerification);
+        return;
+      }
+      openScreen(context, SpetoScreen.emailLinkPending);
+      return;
+    }
     openScreen(context, SpetoScreen.otpVerification);
   }
 

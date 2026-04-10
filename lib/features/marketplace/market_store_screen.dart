@@ -23,7 +23,6 @@ class MarketStoreScreen extends StatefulWidget {
 
 class MarketStoreScreenState extends State<MarketStoreScreen> {
   late final TextEditingController _searchController;
-  late final Map<String, List<MenuListItem>> _sections;
   late String _selectedSection;
   String _searchQuery = '';
 
@@ -40,8 +39,10 @@ class MarketStoreScreenState extends State<MarketStoreScreen> {
           _searchQuery = nextValue;
         });
       });
-    _sections = _normalizedMarketSections(widget.store);
-    _selectedSection = _sections.keys.first;
+    final Map<String, List<MenuListItem>> sections = _normalizedMarketSections(
+      widget.store,
+    );
+    _selectedSection = sections.keys.isNotEmpty ? sections.keys.first : 'Tümü';
   }
 
   @override
@@ -84,13 +85,20 @@ class MarketStoreScreenState extends State<MarketStoreScreen> {
     );
   }
 
-  List<MenuListItem> _visibleProducts() {
+  MarketStoreData _resolveStore() {
+    return marketStoreById(widget.store.id) ?? widget.store;
+  }
+
+  List<MenuListItem> _visibleProducts(
+    Map<String, List<MenuListItem>> sections,
+    String selectedSection,
+  ) {
     final String query = _searchQuery.trim().toLowerCase();
     if (query.isEmpty) {
-      return _sections[_selectedSection] ?? const <MenuListItem>[];
+      return sections[selectedSection] ?? const <MenuListItem>[];
     }
     return dedupeMarketItems(
-      _sections.entries
+      sections.entries
           .where((MapEntry<String, List<MenuListItem>> entry) {
             return entry.key != 'Tümü';
           })
@@ -246,9 +254,18 @@ class MarketStoreScreenState extends State<MarketStoreScreen> {
   @override
   Widget build(BuildContext context) {
     final SpetoAppState appState = SpetoAppScope.of(context);
-    final MarketStoreData store = widget.store;
-    final List<String> sectionLabels = _sections.keys.toList();
-    final List<MenuListItem> visibleProducts = _visibleProducts();
+    final MarketStoreData store = _resolveStore();
+    final Map<String, List<MenuListItem>> sections = _normalizedMarketSections(
+      store,
+    );
+    final List<String> sectionLabels = sections.keys.toList();
+    final String effectiveSelectedSection = sectionLabels.contains(_selectedSection)
+        ? _selectedSection
+        : (sectionLabels.isNotEmpty ? sectionLabels.first : 'Tümü');
+    final List<MenuListItem> visibleProducts = _visibleProducts(
+      sections,
+      effectiveSelectedSection,
+    );
     return SpetoScreenScaffold(
       showBack: false,
       showBottomNav: true,
@@ -422,7 +439,7 @@ class MarketStoreScreenState extends State<MarketStoreScreen> {
                     const SizedBox(width: 22),
                 itemBuilder: (BuildContext context, int index) {
                   final String section = sectionLabels[index];
-                  final bool active = section == _selectedSection;
+                  final bool active = section == effectiveSelectedSection;
                   return GestureDetector(
                     onTap: () => setState(() => _selectedSection = section),
                     child: Column(
@@ -462,7 +479,9 @@ class MarketStoreScreenState extends State<MarketStoreScreen> {
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
-                _searchQuery.isEmpty ? _selectedSection : 'Arama Sonuçları',
+                _searchQuery.isEmpty
+                    ? effectiveSelectedSection
+                    : 'Arama Sonuçları',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: Palette.orange,
                   fontWeight: FontWeight.w800,
@@ -556,7 +575,9 @@ class MarketStoreScreenState extends State<MarketStoreScreen> {
                                 onTap: () => _addMarketItem(
                                   context,
                                   store,
-                                  id: 'market-product-${store.id}-${slugify(item.title)}',
+                                  id: item.id.isNotEmpty
+                                      ? item.id
+                                      : 'market-product-${store.id}-${slugify(item.title)}',
                                   title: item.title,
                                   image: item.image,
                                   price: menuBasePrice(item.price),
@@ -1072,6 +1093,15 @@ final Map<String, MenuListItem> _marketProductCatalog = <String, MenuListItem>{
 
 List<MenuListItem> marketProducts(List<String> titles) {
   return titles.map((title) => _marketProductCatalog[title]!).toList();
+}
+
+MarketStoreData? marketStoreById(String id) {
+  for (final MarketStoreData store in marketStores) {
+    if (store.id == id) {
+      return store;
+    }
+  }
+  return null;
 }
 
 final List<MarketStoreData> marketStores = <MarketStoreData>[

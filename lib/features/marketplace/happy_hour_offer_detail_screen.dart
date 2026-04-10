@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/palette.dart';
-import '../../core/constants/app_images.dart';
-import '../../core/navigation/navigator.dart';
-import '../../core/state/app_state.dart';
 import '../../core/data/default_data.dart';
+import '../../core/state/app_state.dart';
+import '../../core/theme/palette.dart';
+import '../../src/core/models.dart';
 import '../../shared/widgets/widgets.dart';
-import '../../features/restaurant/restaurant_detail_screen.dart';
+import '../restaurant/restaurant_detail_screen.dart';
 
 class HappyHourOfferDetailScreen extends StatelessWidget {
   const HappyHourOfferDetailScreen({super.key});
@@ -14,22 +13,32 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final SpetoAppState appState = SpetoAppScope.of(context);
+    final SpetoHappyHourOffer offer =
+        appState.selectedHappyHourOffer ??
+        (appState.happyHourOffers.isNotEmpty
+            ? appState.happyHourOffers.first
+            : defaultHappyHourOffers().first);
+    final bool canPurchase = appState.canPurchaseProduct(offer.productId);
+    final String? stockWarning = appState.stockWarningForProduct(offer.productId);
+    final int hours = offer.expiresInMinutes ~/ 60;
+    final int minutes = offer.expiresInMinutes % 60;
+
     return Scaffold(
       backgroundColor: Palette.aubergine,
       body: Stack(
         children: <Widget>[
           SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 110),
+            padding: const EdgeInsets.only(bottom: 132),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Stack(
                   children: <Widget>[
                     SpetoImage(
-                      url: AppImages.burgerHero,
+                      url: offer.imageUrl,
                       height: 320,
                       borderRadius: 0,
-                      heroTag: AppImages.burgerHero,
+                      heroTag: offer.id,
                       overlay: DecoratedBox(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
@@ -59,9 +68,9 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
                               icon: Icons.share_outlined,
                               onTap: () => copyShareLinkToClipboard(
                                 context,
-                                path: 'offers/firsat-saati-burger',
+                                path: 'offers/happy-hour/${offer.id}',
                                 successMessage:
-                                    'Fırsat bağlantısı panoya kopyalandı.',
+                                    'Happy Hour fırsat bağlantısı panoya kopyalandı.',
                               ),
                             ),
                           ],
@@ -71,8 +80,8 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
                     Positioned(
                       right: 16,
                       bottom: 24,
-                      child: const LabelChip(
-                        label: 'Happy Hour Özel',
+                      child: LabelChip(
+                        label: offer.badge,
                         color: Palette.crimson,
                       ),
                     ),
@@ -109,11 +118,20 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: <Widget>[
-                                  _timeBox(context, '01', 'Saat'),
+                                  _timeBox(
+                                    context,
+                                    hours.toString().padLeft(2, '0'),
+                                    'Saat',
+                                  ),
                                   _separator(context),
-                                  _timeBox(context, '45', 'Dak', active: true),
+                                  _timeBox(
+                                    context,
+                                    minutes.toString().padLeft(2, '0'),
+                                    'Dak',
+                                    active: true,
+                                  ),
                                   _separator(context),
-                                  _timeBox(context, '22', 'Sn'),
+                                  _timeBox(context, '00', 'Sn'),
                                 ],
                               ),
                             ],
@@ -121,7 +139,7 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 24),
                         Text(
-                          'Mega Burger\nMenüsü',
+                          offer.title,
                           style: Theme.of(context).textTheme.headlineMedium
                               ?.copyWith(
                                 fontWeight: FontWeight.w900,
@@ -129,10 +147,16 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
                               ),
                         ),
                         const SizedBox(height: 8),
+                        Text(
+                          offer.subtitle,
+                          style: Theme.of(context).textTheme.bodyLarge
+                              ?.copyWith(color: Palette.soft, height: 1.6),
+                        ),
+                        const SizedBox(height: 12),
                         Row(
                           children: <Widget>[
                             Text(
-                              '85 TL',
+                              offer.discountedPriceText,
                               style: Theme.of(context).textTheme.headlineMedium
                                   ?.copyWith(
                                     fontWeight: FontWeight.w900,
@@ -141,7 +165,7 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
                             ),
                             const SizedBox(width: 12),
                             Text(
-                              '120 TL',
+                              offer.originalPriceText,
                               style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(
                                     color: Palette.faint,
@@ -159,7 +183,7 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(999),
                               ),
                               child: Text(
-                                '+50 Puan',
+                                '+${offer.rewardPoints} Puan',
                                 style: Theme.of(context).textTheme.labelLarge
                                     ?.copyWith(
                                       color: Palette.orange,
@@ -170,6 +194,37 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
                           ],
                         ),
                         const Divider(height: 30, color: Color(0x22FFFFFF)),
+                        if (stockWarning != null) ...<Widget>[
+                          SpetoCard(
+                            radius: 16,
+                            color: offer.stockStatus.isInStock
+                                ? Palette.cardWarm
+                                : Palette.card,
+                            child: Row(
+                              children: <Widget>[
+                                Icon(
+                                  offer.stockStatus.isInStock
+                                      ? Icons.warning_amber_rounded
+                                      : Icons.remove_shopping_cart_outlined,
+                                  color: offer.stockStatus.isInStock
+                                      ? Palette.orange
+                                      : Palette.crimson,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    stockWarning,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(height: 1.5),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                        ],
                         Text(
                           'AÇIKLAMA',
                           style: Theme.of(context).textTheme.labelLarge
@@ -181,18 +236,9 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'Tam kıvamında ızgaralanmış çift dana köftesi, erimiş cheddar peyniri, karamelize soğan, taze marul ve özel SepetPro sosuyla hazırlanır. Çıtır patates ve soğuk içecek ile servis edilir.',
+                          offer.description,
                           style: Theme.of(context).textTheme.bodyLarge
                               ?.copyWith(color: Palette.soft, height: 1.8),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Devamını oku',
-                          style: Theme.of(context).textTheme.bodyLarge
-                              ?.copyWith(
-                                color: Palette.crimson,
-                                fontWeight: FontWeight.w800,
-                              ),
                         ),
                         const SizedBox(height: 22),
                         SpetoCard(
@@ -223,7 +269,7 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
                                           CrossAxisAlignment.start,
                                       children: <Widget>[
                                         Text(
-                                          'Kadıköy Merkez Şubesi',
+                                          offer.locationTitle,
                                           style: Theme.of(context)
                                               .textTheme
                                               .bodyLarge
@@ -233,7 +279,7 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          '0,4 km uzaklıkta • 23:00\'a kadar açık',
+                                          offer.locationSubtitle,
                                           style: Theme.of(context)
                                               .textTheme
                                               .bodySmall
@@ -242,84 +288,48 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
                                       ],
                                     ),
                                   ),
-                                  Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.06,
-                                      ),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.navigation_outlined,
-                                      size: 16,
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: <Widget>[
+                                  const Icon(
+                                    Icons.local_fire_department_outlined,
+                                    color: Palette.orange,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      '${offer.claimCount} kişi bugün bu fırsatı kullandı.',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(color: Palette.soft),
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 16),
-                              SpetoImage(
-                                url:
-                                    'https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&w=1000&q=80',
-                                height: 96,
-                                borderRadius: 12,
-                                overlay: Center(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Palette.red,
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: <Widget>[
-                                        const Icon(
-                                          Icons.location_pin,
-                                          color: Colors.white,
-                                          size: 12,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          'Gel-Al',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelMedium
-                                              ?.copyWith(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                        ),
-                                      ],
+                              const SizedBox(height: 12),
+                              Row(
+                                children: <Widget>[
+                                  const Icon(
+                                    Icons.category_outlined,
+                                    color: Palette.red,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      '${offer.vendorName} • ${offer.sectionLabel}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(color: Palette.soft),
                                     ),
                                   ),
-                                ),
+                                ],
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 18),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: <Widget>[
-                            const Icon(
-                              Icons.local_fire_department_rounded,
-                              size: 16,
-                              color: Palette.orange,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Bu fiyattan yalnızca 5 adet kaldı!',
-                              style: Theme.of(context).textTheme.bodyLarge
-                                  ?.copyWith(
-                                    color: Palette.orange,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                            ),
-                          ],
                         ),
                       ],
                     ),
@@ -355,7 +365,7 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
                               ?.copyWith(color: Palette.muted),
                         ),
                         Text(
-                          '85 TL',
+                          offer.discountedPriceText,
                           style: Theme.of(context).textTheme.headlineSmall
                               ?.copyWith(fontWeight: FontWeight.w900),
                         ),
@@ -368,11 +378,29 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
                             ? 'Sepete Ekle ve Devam Et'
                             : 'Hemen Al',
                         icon: Icons.arrow_forward_rounded,
-                        onTap: () => addCartItemAndOpenCheckout(
-                          context,
-                          megaBurgerCartItem(),
-                          notice: 'Mega Burger Menü sepete eklendi.',
-                        ),
+                        onTap: () {
+                          if (!canPurchase) {
+                            SpetoToast.show(
+                              context,
+                              message:
+                                  stockWarning ??
+                                  '${offer.title} şu anda satın alınamıyor.',
+                              icon: Icons.info_outline_rounded,
+                            );
+                            return;
+                          }
+                          addCartItemAndOpenCheckout(
+                            context,
+                            SpetoCartItem(
+                              id: offer.productId,
+                              vendor: offer.vendorName,
+                              title: offer.title,
+                              image: offer.imageUrl,
+                              unitPrice: offer.discountedPrice,
+                            ),
+                            notice: '${offer.title} sepete eklendi.',
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -434,4 +462,3 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
     );
   }
 }
-

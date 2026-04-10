@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../firebase/firebase_email_link_service.dart';
 import '../../src/core/models.dart';
 import '../../src/core/bootstrap.dart';
 import '../../src/core/domain_api.dart';
@@ -8,6 +9,10 @@ import '../data/default_data.dart';
 
 const int jazzNightPointsCost = 650;
 const int potteryWorkshopPointsCost = 420;
+
+enum SpetoEmailLinkCompletionFlow { registration, passwordReset }
+
+const String spetoTestOtpCode = '12345';
 
 class SpetoAppState extends ChangeNotifier {
   SpetoAppState({
@@ -60,12 +65,19 @@ class SpetoAppState extends ChangeNotifier {
        _favoriteEventIds = Set<String>.of(
          initialCommerceSnapshot(commerceSnapshot).favoriteEventIds,
        ),
+       _favoriteMarketIds = Set<String>.of(
+         initialCommerceSnapshot(commerceSnapshot).favoriteMarketIds,
+       ),
        _followedOrganizerIds = Set<String>.of(
          initialCommerceSnapshot(commerceSnapshot).followedOrganizerIds,
        ),
        _orderRatings = Map<String, int>.of(
          initialCommerceSnapshot(commerceSnapshot).orderRatings,
-       );
+       ) {
+    if (_domainApi != null) {
+      unawaited(refreshDomainState(notify: false));
+    }
+  }
 
   final SpetoAuthRepository _authRepository;
   final SpetoCommerceRepository _commerceRepository;
@@ -82,14 +94,18 @@ class SpetoAppState extends ChangeNotifier {
   final List<SpetoSupportTicket> _supportTickets;
   final Set<String> _favoriteRestaurantIds;
   final Set<String> _favoriteEventIds;
+  final Set<String> _favoriteMarketIds;
   final Set<String> _followedOrganizerIds;
   final Map<String, int> _orderRatings;
   final Map<String, SpetoInventoryItem> _inventoryByProductId =
       <String, SpetoInventoryItem>{};
+  final List<SpetoHappyHourOffer> _happyHourOffers =
+      List<SpetoHappyHourOffer>.of(defaultHappyHourOffers());
   SpetoSession? _session;
   SpetoRegistrationDraft? _pendingRegistration;
   String? _passwordResetEmail;
   bool _passwordResetOtpVerified = false;
+  String? _selectedHappyHourOfferId;
   ThemeMode _themeMode = ThemeMode.dark;
 
   List<SpetoCartItem> get cartItems =>
@@ -115,6 +131,10 @@ class SpetoAppState extends ChangeNotifier {
   SpetoRegistrationDraft? get pendingRegistration => _pendingRegistration;
   String? get pendingPasswordResetEmail => _passwordResetEmail;
   bool get isPasswordResetOtpVerified => _passwordResetOtpVerified;
+  bool get supportsFirebaseEmailLink =>
+      SpetoFirebaseEmailLinkService.instance.isReady;
+  bool get usesTestOtpMode => !supportsFirebaseEmailLink;
+  String get testOtpCode => spetoTestOtpCode;
   String get displayName => _session?.displayName ?? 'Speto Kullanıcısı';
   String get avatarUrl => _session?.avatarUrl.isNotEmpty == true
       ? _session!.avatarUrl
@@ -129,12 +149,48 @@ class SpetoAppState extends ChangeNotifier {
       List<SpetoSupportTicket>.unmodifiable(_supportTickets);
   List<SpetoInventoryItem> get inventoryItems =>
       List<SpetoInventoryItem>.unmodifiable(_inventoryByProductId.values);
+  List<SpetoHappyHourOffer> get happyHourOffers =>
+      List<SpetoHappyHourOffer>.unmodifiable(_happyHourOffers);
   bool isRestaurantFavorite(String id) => _favoriteRestaurantIds.contains(id);
   bool isEventFavorite(String id) => _favoriteEventIds.contains(id);
+  bool isMarketFavorite(String id) => _favoriteMarketIds.contains(id);
   bool isOrganizerFollowed(String id) => _followedOrganizerIds.contains(id);
   int? ratingForOrder(String id) => _orderRatings[id];
   SpetoInventoryItem? inventoryForProduct(String productId) =>
       _inventoryByProductId[productId];
+  SpetoHappyHourOffer? get selectedHappyHourOffer {
+    final String? selectedId = _selectedHappyHourOfferId;
+    if (selectedId != null) {
+      for (final SpetoHappyHourOffer offer in _happyHourOffers) {
+        if (offer.id == selectedId) {
+          return offer;
+        }
+      }
+    }
+    return _happyHourOffers.isEmpty ? null : _happyHourOffers.first;
+  }
+
+  Future<void> refreshDomainState({bool notify = true}) async {
+    final SpetoRemoteDomainApi? domainApi = _domainApi;
+    if (domainApi == null) {
+      return;
+    }
+    try {
+      await _refreshHappyHourOffersFromBackend();
+      if (_session != null) {
+        await _syncDomainStateFromBackend();
+        await _persistCommerceSnapshot();
+      } else {
+        await _refreshInventoryFromBackend();
+      }
+      if (notify) {
+        notifyListeners();
+      }
+    } catch (_) {
+      // Keep the current in-memory snapshot when the backend is temporarily
+      // unavailable instead of regressing the browsing flow to empty data.
+    }
+  }
 
   SpetoStockStatus? stockStatusForProduct(String productId) =>
       inventoryForProduct(productId)?.stockStatus;
@@ -164,6 +220,7 @@ class SpetoAppState extends ChangeNotifier {
     }
     return null;
   }
+
   List<SpetoEventTicket> get ownedTickets =>
       List<SpetoEventTicket>.unmodifiable(_ownedTickets);
   SpetoAddress? get primaryAddress {
@@ -273,6 +330,14 @@ class SpetoAppState extends ChangeNotifier {
     if (normalizedEmail.isEmpty) {
       return false;
     }
+    final SpetoRemoteDomainApi? domainApi = _domainApi;
+    if (domainApi != null) {
+      try {
+        return await domainApi.hasAccountForEmail(normalizedEmail);
+      } catch (_) {
+        // Fall through to local mirrored credentials if backend lookup fails.
+      }
+    }
     final String? storedPassword = await _authRepository.readAccountPassword(
       normalizedEmail,
     );
@@ -292,6 +357,9 @@ class SpetoAppState extends ChangeNotifier {
     required String phone,
     required String password,
   }) async {
+    _passwordResetEmail = null;
+    _passwordResetOtpVerified = false;
+    await _authRepository.clearPasswordResetEmail();
     _pendingRegistration = SpetoRegistrationDraft(
       fullName: fullName.trim(),
       email: email.trim(),
@@ -302,32 +370,161 @@ class SpetoAppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> verifyOtpCode(String code) async {
+  Future<bool> verifyOtpCode(String code) async {
+    final SpetoRegistrationDraft? draft = _pendingRegistration;
+    if (draft == null) {
+      return false;
+    }
+    if (code.trim() != spetoTestOtpCode) {
+      return false;
+    }
+    try {
+      await _completePendingRegistration(verificationToken: code);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> sendRegistrationEmailLink() async {
+    final SpetoRegistrationDraft? draft = _pendingRegistration;
+    if (draft == null || !supportsFirebaseEmailLink) {
+      return false;
+    }
+    try {
+      await SpetoFirebaseEmailLinkService.instance.sendEmailLink(
+        email: draft.email,
+        purpose: SpetoEmailLinkPurpose.registration,
+      );
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> sendPasswordResetEmailLink(String email) async {
+    final String normalizedEmail = email.trim();
+    if (normalizedEmail.isEmpty || !supportsFirebaseEmailLink) {
+      return false;
+    }
+    _pendingRegistration = null;
+    await _authRepository.writeRegistrationDraft(null);
+    final bool hasAccount = await hasAccountForEmail(normalizedEmail);
+    if (!hasAccount) {
+      _passwordResetEmail = null;
+      _passwordResetOtpVerified = false;
+      await _authRepository.clearPasswordResetEmail();
+      notifyListeners();
+      return false;
+    }
+    try {
+      await SpetoFirebaseEmailLinkService.instance.sendEmailLink(
+        email: normalizedEmail,
+        purpose: SpetoEmailLinkPurpose.passwordReset,
+      );
+      _passwordResetEmail = normalizedEmail;
+      _passwordResetOtpVerified = false;
+      await _authRepository.rememberPasswordResetEmail(normalizedEmail);
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<SpetoEmailLinkCompletionFlow?> completeFirebaseEmailLink(
+    String emailLink,
+  ) async {
+    final String normalizedLink = emailLink.trim();
+    final SpetoFirebaseEmailLinkService emailLinkService =
+        SpetoFirebaseEmailLinkService.instance;
+    if (!emailLinkService.isReady || !emailLinkService.isEmailLink(normalizedLink)) {
+      return null;
+    }
+
+    final SpetoRegistrationDraft? draft = _pendingRegistration;
+    final String? resetEmail =
+        _passwordResetEmail ?? await _authRepository.readPasswordResetEmail();
+
+    try {
+      if (draft != null) {
+        await emailLinkService.consumeEmailLink(
+          email: draft.email,
+          emailLink: normalizedLink,
+        );
+        await _completePendingRegistration(verificationToken: 'firebase-email-link');
+        await emailLinkService.clearSession();
+        return SpetoEmailLinkCompletionFlow.registration;
+      }
+
+      if (resetEmail != null && resetEmail.trim().isNotEmpty) {
+        _passwordResetEmail = resetEmail;
+        await emailLinkService.consumeEmailLink(
+          email: resetEmail,
+          emailLink: normalizedLink,
+        );
+        _passwordResetOtpVerified = true;
+        await emailLinkService.clearSession();
+        notifyListeners();
+        return SpetoEmailLinkCompletionFlow.passwordReset;
+      }
+    } finally {
+      await emailLinkService.clearSession();
+    }
+    return null;
+  }
+
+  Future<void> _completePendingRegistration({
+    required String verificationToken,
+  }) async {
     final SpetoRegistrationDraft? draft = _pendingRegistration;
     if (draft == null) {
       return;
     }
     final SpetoRemoteDomainApi? domainApi = _domainApi;
+    bool completedViaExistingSession = false;
     if (domainApi != null) {
-      _session = await domainApi.register(
-        email: draft.email,
-        displayName: draft.fullName,
-        phone: draft.phone,
-        password: draft.password,
-        studentEmail: _studentEmailFor(draft.email),
-      );
+      try {
+        _session = await domainApi.register(
+          email: draft.email,
+          displayName: draft.fullName,
+          phone: draft.phone,
+          password: draft.password,
+          studentEmail: _studentEmailFor(draft.email),
+        );
+      } on SpetoRemoteApiException catch (error) {
+        final String body = (error.body ?? '').toLowerCase();
+        if (!body.contains('email already registered')) {
+          rethrow;
+        }
+        final bool signedIn = await signIn(
+          email: draft.email,
+          password: draft.password,
+          displayName: draft.fullName,
+          phone: draft.phone,
+        );
+        if (!signedIn) {
+          rethrow;
+        }
+        completedViaExistingSession = true;
+      }
     } else {
       final DateTime now = DateTime.now();
       _session = SpetoSession(
         email: draft.email,
         displayName: draft.fullName,
         phone: draft.phone,
-        authToken: 'otp-$code-${now.millisecondsSinceEpoch}',
+        authToken: 'otp-$verificationToken-${now.millisecondsSinceEpoch}',
         lastLoginIso: now.toIso8601String(),
       );
     }
     _pendingRegistration = null;
     await _authRepository.writeRegistrationDraft(null);
+    if (completedViaExistingSession) {
+      notifyListeners();
+      return;
+    }
     await _authRepository.writeAccountPassword(draft.email, draft.password);
     await _authRepository.writeSession(_session);
     await _loadSnapshotForSession(_session);
@@ -339,6 +536,8 @@ class SpetoAppState extends ChangeNotifier {
     String email = 'ornek@sepetpro.com',
   }) async {
     final String normalizedEmail = email.trim();
+    _pendingRegistration = null;
+    await _authRepository.writeRegistrationDraft(null);
     final SpetoRemoteDomainApi? domainApi = _domainApi;
     final bool hasAccount = domainApi != null
         ? await domainApi.requestPasswordReset(normalizedEmail)
@@ -368,6 +567,18 @@ class SpetoAppState extends ChangeNotifier {
       return false;
     }
     _passwordResetEmail = resetEmail;
+    final SpetoRemoteDomainApi? domainApi = _domainApi;
+    final bool verified = domainApi != null
+        ? await domainApi.verifyPasswordResetOtp(
+            email: resetEmail,
+            code: normalizedCode,
+          )
+        : true;
+    if (!verified) {
+      _passwordResetOtpVerified = false;
+      notifyListeners();
+      return false;
+    }
     _passwordResetOtpVerified = true;
     notifyListeners();
     return true;
@@ -443,6 +654,7 @@ class SpetoAppState extends ChangeNotifier {
     _pendingRegistration = null;
     _passwordResetEmail = null;
     _passwordResetOtpVerified = false;
+    _selectedHappyHourOfferId = null;
     await _authRepository.writeSession(null);
     await _authRepository.clearPasswordResetEmail();
     notifyListeners();
@@ -500,35 +712,66 @@ class SpetoAppState extends ChangeNotifier {
   }
 
   void toggleRestaurantFavorite(String id) {
-    if (_favoriteRestaurantIds.contains(id)) {
-      _favoriteRestaurantIds.remove(id);
-    } else {
-      _favoriteRestaurantIds.add(id);
-    }
+    final bool enabled = !_favoriteRestaurantIds.contains(id);
+    _toggleSetItem(_favoriteRestaurantIds, id, enabled);
     _commitCommerce();
+    unawaited(
+      _syncPreferenceChange(
+        entityType: 'RESTAURANT',
+        entityId: id,
+        enabled: enabled,
+      ),
+    );
   }
 
   void toggleEventFavorite(String id) {
-    if (_favoriteEventIds.contains(id)) {
-      _favoriteEventIds.remove(id);
-    } else {
-      _favoriteEventIds.add(id);
-    }
+    final bool enabled = !_favoriteEventIds.contains(id);
+    _toggleSetItem(_favoriteEventIds, id, enabled);
     _commitCommerce();
+    unawaited(
+      _syncPreferenceChange(
+        entityType: 'EVENT',
+        entityId: id,
+        enabled: enabled,
+      ),
+    );
+  }
+
+  void toggleMarketFavorite(String id) {
+    final bool enabled = !_favoriteMarketIds.contains(id);
+    _toggleSetItem(_favoriteMarketIds, id, enabled);
+    _commitCommerce();
+    unawaited(
+      _syncPreferenceChange(
+        entityType: 'MARKET',
+        entityId: id,
+        enabled: enabled,
+      ),
+    );
   }
 
   void toggleOrganizerFollow(String organizerId) {
-    if (_followedOrganizerIds.contains(organizerId)) {
-      _followedOrganizerIds.remove(organizerId);
-    } else {
-      _followedOrganizerIds.add(organizerId);
-    }
+    final bool enabled = !_followedOrganizerIds.contains(organizerId);
+    _toggleSetItem(_followedOrganizerIds, organizerId, enabled);
     _commitCommerce();
+    unawaited(
+      _syncPreferenceChange(
+        entityType: 'ORGANIZER',
+        entityId: organizerId,
+        enabled: enabled,
+      ),
+    );
+  }
+
+  void selectHappyHourOffer(String offerId) {
+    _selectedHappyHourOfferId = offerId;
+    notifyListeners();
   }
 
   void rateOrder(String orderId, int stars) {
     _orderRatings[orderId] = stars;
     _commitCommerce();
+    unawaited(_syncOrderRating(orderId: orderId, stars: stars));
   }
 
   Future<void> setNotificationsEnabled(bool value) async {
@@ -968,6 +1211,9 @@ class SpetoAppState extends ChangeNotifier {
     _favoriteEventIds
       ..clear()
       ..addAll(snapshot.favoriteEventIds);
+    _favoriteMarketIds
+      ..clear()
+      ..addAll(snapshot.favoriteMarketIds);
     _followedOrganizerIds
       ..clear()
       ..addAll(snapshot.followedOrganizerIds);
@@ -1023,6 +1269,21 @@ class SpetoAppState extends ChangeNotifier {
     _paymentCards
       ..clear()
       ..addAll(snapshot.paymentCards);
+    _favoriteRestaurantIds
+      ..clear()
+      ..addAll(snapshot.favoriteRestaurantIds);
+    _favoriteEventIds
+      ..clear()
+      ..addAll(snapshot.favoriteEventIds);
+    _favoriteMarketIds
+      ..clear()
+      ..addAll(snapshot.favoriteMarketIds);
+    _followedOrganizerIds
+      ..clear()
+      ..addAll(snapshot.followedOrganizerIds);
+    _orderRatings
+      ..clear()
+      ..addAll(snapshot.orderRatings);
     _activeOrders
       ..clear()
       ..addAll(snapshot.activeOrders);
@@ -1059,7 +1320,8 @@ class SpetoAppState extends ChangeNotifier {
       _inventoryByProductId.clear();
       return;
     }
-    final List<SpetoInventoryItem> items = await domainApi.fetchInventoryItems();
+    final List<SpetoInventoryItem> items = await domainApi
+        .fetchInventoryItems();
     _inventoryByProductId
       ..clear()
       ..addEntries(
@@ -1068,6 +1330,79 @@ class SpetoAppState extends ChangeNotifier {
               MapEntry<String, SpetoInventoryItem>(item.id, item),
         ),
       );
+  }
+
+  Future<void> _refreshHappyHourOffersFromBackend() async {
+    final SpetoRemoteDomainApi? domainApi = _domainApi;
+    if (domainApi == null) {
+      return;
+    }
+    final List<SpetoHappyHourOffer> offers = await domainApi
+        .fetchHappyHourOffers();
+    if (offers.isEmpty) {
+      return;
+    }
+    _happyHourOffers
+      ..clear()
+      ..addAll(offers);
+    if (_selectedHappyHourOfferId != null &&
+        !_happyHourOffers.any(
+          (SpetoHappyHourOffer offer) => offer.id == _selectedHappyHourOfferId,
+        )) {
+      _selectedHappyHourOfferId = _happyHourOffers.first.id;
+    }
+    _selectedHappyHourOfferId ??= _happyHourOffers.first.id;
+  }
+
+  Future<void> _syncPreferenceChange({
+    required String entityType,
+    required String entityId,
+    required bool enabled,
+  }) async {
+    final SpetoRemoteDomainApi? domainApi = _domainApi;
+    final SpetoSession? currentSession = _session;
+    if (domainApi == null || currentSession == null) {
+      return;
+    }
+    try {
+      await domainApi.updatePreference(
+        entityType: entityType,
+        entityId: entityId,
+        enabled: enabled,
+      );
+      await _syncDomainStateFromBackend();
+      await _persistCommerceSnapshot();
+      notifyListeners();
+    } catch (_) {
+      // Keep the last known local preference state and resync later if needed.
+    }
+  }
+
+  Future<void> _syncOrderRating({
+    required String orderId,
+    required int stars,
+  }) async {
+    final SpetoRemoteDomainApi? domainApi = _domainApi;
+    final SpetoSession? currentSession = _session;
+    if (domainApi == null || currentSession == null) {
+      return;
+    }
+    try {
+      await domainApi.rateOrder(orderId: orderId, stars: stars);
+      await _syncDomainStateFromBackend();
+      await _persistCommerceSnapshot();
+      notifyListeners();
+    } catch (_) {
+      // Keep the optimistic rating locally if the backend is temporarily unavailable.
+    }
+  }
+
+  void _toggleSetItem(Set<String> target, String value, bool enabled) {
+    if (enabled) {
+      target.add(value);
+      return;
+    }
+    target.remove(value);
   }
 
   SpetoSession _sessionFromRemoteProfile(
@@ -1208,6 +1543,7 @@ class SpetoAppState extends ChangeNotifier {
           .toList(),
       favoriteRestaurantIds: _favoriteRestaurantIds.toList(),
       favoriteEventIds: _favoriteEventIds.toList(),
+      favoriteMarketIds: _favoriteMarketIds.toList(),
       followedOrganizerIds: _followedOrganizerIds.toList(),
       orderRatings: Map<String, int>.of(_orderRatings),
       profileDisplayName: _session?.displayName ?? '',

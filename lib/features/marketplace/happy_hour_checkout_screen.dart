@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import '../../core/navigation/navigator.dart';
 import '../../core/navigation/screen_enum.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/palette.dart';
+import '../../src/core/domain_api.dart';
 import '../../src/core/models.dart';
 import '../../features/restaurant/restaurant_detail_screen.dart';
 import '../../shared/widgets/widgets.dart';
@@ -417,11 +419,83 @@ class _HappyHourCheckoutScreenState extends State<HappyHourCheckoutScreen> {
     );
   }
 
+  String _pickupPointLabel(
+    SpetoAppState appState,
+    SpetoAddress? primaryAddress,
+  ) {
+    final List<SpetoCartItem> cartItems = appState.cartItems;
+    if (cartItems.isEmpty) {
+      return primaryAddress?.label ?? 'Gel-Al noktası';
+    }
+
+    final SpetoCartItem firstCartItem = cartItems.first;
+    for (final SpetoHappyHourOffer offer in appState.happyHourOffers) {
+      if ((offer.productId == firstCartItem.id ||
+              offer.id == firstCartItem.id) &&
+          offer.locationTitle.trim().isNotEmpty) {
+        return offer.locationTitle;
+      }
+    }
+
+    final String normalizedVendor = firstCartItem.vendor.trim().toLowerCase();
+    for (final SpetoHappyHourOffer offer in appState.happyHourOffers) {
+      if (offer.vendorName.trim().toLowerCase() == normalizedVendor &&
+          offer.locationTitle.trim().isNotEmpty) {
+        return offer.locationTitle;
+      }
+    }
+
+    return primaryAddress?.label ?? 'Gel-Al noktası';
+  }
+
+  String _checkoutErrorMessage(Object error) {
+    if (error is SpetoRemoteApiException) {
+      final String backendMessage = _backendMessage(error);
+      if (backendMessage.startsWith('Insufficient stock for ')) {
+        return 'Stok yetersiz. Lütfen sepetini yeniden kontrol et.';
+      }
+      if (backendMessage.contains('Pickup point')) {
+        return 'Gel-al noktası doğrulanamadı. Lütfen tekrar dene.';
+      }
+      if (backendMessage.startsWith('Product ')) {
+        return 'Ürün doğrulanamadı. Lütfen sepeti yenileyip tekrar dene.';
+      }
+    }
+    return 'Ödeme tamamlanamadı. Lütfen tekrar dene.';
+  }
+
+  String _backendMessage(SpetoRemoteApiException error) {
+    final String body = error.body?.trim() ?? '';
+    if (body.isEmpty) {
+      return error.message;
+    }
+    try {
+      final Object? decoded = jsonDecode(body);
+      if (decoded is Map<String, Object?>) {
+        final Object? message = decoded['message'];
+        if (message is String && message.trim().isNotEmpty) {
+          return message.trim();
+        }
+        if (message is List<Object?>) {
+          for (final Object? item in message) {
+            if (item is String && item.trim().isNotEmpty) {
+              return item.trim();
+            }
+          }
+        }
+      }
+    } catch (_) {
+      return error.message;
+    }
+    return error.message;
+  }
+
   @override
   Widget build(BuildContext context) {
     final SpetoAppState appState = SpetoAppScope.of(context);
     final List<SpetoCartItem> cartItems = appState.cartItems;
     final SpetoAddress? primaryAddress = appState.primaryAddress;
+    final String pickupPointLabel = _pickupPointLabel(appState, primaryAddress);
     final bool hasCart = cartItems.isNotEmpty;
     final double subtotal = appState.cartSubtotal;
     final double deliveryFee = _deliveryFee();
@@ -499,7 +573,7 @@ class _HappyHourCheckoutScreenState extends State<HappyHourCheckoutScreen> {
                   try {
                     await appState.checkout(
                       deliveryMode: 'Gel-Al',
-                      deliveryAddress: primaryAddress?.label ?? 'Gel-Al noktası',
+                      deliveryAddress: pickupPointLabel,
                       paymentMethod: _selectedPaymentLabel(appState),
                       promoCode: _appliedPromoCode ?? '',
                       deliveryFee: deliveryFee,
@@ -511,7 +585,7 @@ class _HappyHourCheckoutScreenState extends State<HappyHourCheckoutScreen> {
                     }
                     SpetoToast.show(
                       context,
-                      message: 'Stok güncellendi. Lütfen sepeti yeniden kontrol et.',
+                      message: _checkoutErrorMessage(error),
                       icon: Icons.error_outline_rounded,
                     );
                     return;
@@ -674,7 +748,7 @@ class _HappyHourCheckoutScreenState extends State<HappyHourCheckoutScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  '${primaryAddress?.label ?? 'Şube seçimi'} • Gel-Al noktası',
+                                  '$pickupPointLabel • Gel-Al noktası',
                                   style: Theme.of(context).textTheme.bodySmall
                                       ?.copyWith(color: Palette.soft),
                                 ),

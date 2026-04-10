@@ -20,8 +20,16 @@ export class AuthService {
     return this.appDataService.requestPasswordReset(email);
   }
 
+  accountExists(email: string) {
+    return this.appDataService.accountExists(email);
+  }
+
   updatePassword(email: string, password: string) {
     return this.appDataService.updatePassword(email, password);
+  }
+
+  verifyPasswordResetOtp(email: string, code: string) {
+    return this.appDataService.verifyPasswordResetOtp(email, code);
   }
 
   capabilities() {

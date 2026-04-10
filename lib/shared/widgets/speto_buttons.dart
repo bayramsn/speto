@@ -70,10 +70,12 @@ class SpetoSecondaryButton extends StatelessWidget {
     super.key,
     required this.label,
     required this.onTap,
+    this.height = 40,
   });
 
   final String label;
   final VoidCallback onTap;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -82,12 +84,14 @@ class SpetoSecondaryButton extends StatelessWidget {
       button: true,
       label: label,
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: () {
           HapticFeedback.lightImpact();
           onTap();
         },
         child: Container(
-          height: 40,
+          width: double.infinity,
+          height: height,
           alignment: Alignment.center,
           child: Text(
             label,

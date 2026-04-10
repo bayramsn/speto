@@ -14,6 +14,7 @@ import { HealthModule } from './health/health.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { OpsModule } from './ops/ops.module';
+import { OffersModule } from './offers/offers.module';
 import { OrdersModule } from './orders/orders.module';
 import { ProfileModule } from './profile/profile.module';
 import { SupportModule } from './support/support.module';
@@ -28,6 +29,7 @@ import { WalletModule } from './wallet/wallet.module';
     ClientStateModule,
     InventoryModule,
     OpsModule,
+    OffersModule,
     IntegrationsModule,
     OrdersModule,
     ProfileModule,

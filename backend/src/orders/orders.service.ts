@@ -32,4 +32,8 @@ export class OrdersService {
   complete(orderId: string) {
     return this.appDataService.completeOrder(orderId);
   }
+
+  rate(orderId: string, stars: number) {
+    return this.appDataService.rateOrder(orderId, stars);
+  }
 }

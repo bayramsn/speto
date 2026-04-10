@@ -701,7 +701,9 @@ Future<void> showMenuCustomizerSheet(
                             onTap: () {
                               final SpetoCartItem
                               configuredItem = SpetoCartItem(
-                                id: '${item.title.toLowerCase().replaceAll(' ', '-')}-${selectedSize.toLowerCase()}',
+                                id: item.id.isNotEmpty
+                                    ? item.id
+                                    : '${item.title.toLowerCase().replaceAll(' ', '-')}-${selectedSize.toLowerCase()}',
                                 vendor: vendor,
                                 title:
                                     '${item.title} • $selectedSize ${selectedExtras.isEmpty ? '' : '• ${selectedExtras.join(', ')}'}',
@@ -716,9 +718,9 @@ Future<void> showMenuCustomizerSheet(
                                   rootContext,
                                   message:
                                       appState.stockWarningForProduct(
-                                            configuredItem.id,
-                                          ) ??
-                                          'Ürün stokta yok.',
+                                        configuredItem.id,
+                                      ) ??
+                                      'Ürün stokta yok.',
                                   icon: Icons.inventory_2_outlined,
                                 );
                                 return;

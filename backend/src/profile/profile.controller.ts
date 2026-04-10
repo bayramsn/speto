@@ -5,6 +5,7 @@ import { AppDataService } from '../app-data/app-data.service';
 import { CreateAddressDto } from './dto/create-address.dto';
 import { CreatePaymentMethodDto } from './dto/create-payment-method.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UpdatePreferenceDto } from './dto/update-preference.dto';
 
 @ApiTags('profile')
 @Controller('me')
@@ -51,6 +52,11 @@ export class ProfileController {
     return this.appDataService.listPaymentMethods();
   }
 
+  @Get('preferences')
+  getPreferences() {
+    return this.appDataService.getPreferences();
+  }
+
   @Post('payment-methods')
   savePaymentMethod(@Body() payload: CreatePaymentMethodDto) {
     return this.appDataService.savePaymentMethod(payload);
@@ -59,5 +65,14 @@ export class ProfileController {
   @Delete('payment-methods/:id')
   deletePaymentMethod(@Param('id') id: string) {
     return this.appDataService.deletePaymentMethod(id);
+  }
+
+  @Post('preferences')
+  updatePreference(@Body() payload: UpdatePreferenceDto) {
+    return this.appDataService.updatePreference(
+      payload.entityType,
+      payload.entityId,
+      payload.enabled,
+    );
   }
 }

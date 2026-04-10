@@ -28,6 +28,22 @@ Swagger çıktısı `http://localhost:4000/docs` altında yayınlanır.
 
 `DATABASE_URL` için örnek değer [backend/.env.example](/Users/bayramsenbay/Downloads/speto/backend/.env.example) içinde bulunur. Varsayılan local portlar çakışmayı önlemek için `55432` (Postgres) ve `6380` (Redis) olarak ayarlanmıştır. Backend ilk başarılı bağlantıda demo vendor, ürün, stok, sipariş ve entegrasyon verilerini Postgres'e seed eder.
 
+## OTP / E-posta ayarları
+
+Şifre sıfırlama OTP akışı Resend ile e-posta gönderebilir. Local geliştirme için `.env` içine şu alanlar eklenir:
+
+```env
+OTP_TEST_MODE=true
+OTP_TEST_CODE=12345
+RESEND_API_BASE_URL=https://api.resend.com
+RESEND_API_KEY=your_resend_key
+RESEND_FROM_EMAIL="Speto <onboarding@resend.dev>"
+```
+
+- `OTP_TEST_MODE=true`: OTP mail göndermez, test kodunu backend içinde sabit üretir.
+- `OTP_TEST_MODE=false`: backend Resend API ile gerçek e-posta gönderir.
+- `RESEND_FROM_EMAIL`: domain doğrulaması yapılmadıysa `onboarding@resend.dev` ile test edilebilir.
+
 ## Demo operasyon hesapları
 
 - `admin@speto.app / admin123`

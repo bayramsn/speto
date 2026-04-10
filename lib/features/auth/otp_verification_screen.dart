@@ -31,13 +31,25 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     setState(() => _code = _code.substring(0, _code.length - 1));
   }
 
-  void _resendCode({required bool isPasswordResetFlow}) {
+  Future<void> _resendCode({
+    required bool isPasswordResetFlow,
+    required SpetoAppState appState,
+  }) async {
     setState(() => _code = '');
+    if (isPasswordResetFlow) {
+      final String? resetEmail = appState.pendingPasswordResetEmail;
+      if (resetEmail != null && resetEmail.trim().isNotEmpty) {
+        await appState.requestPasswordReset(email: resetEmail);
+      }
+    }
+    if (!mounted) {
+      return;
+    }
     SpetoToast.show(
       context,
       message: isPasswordResetFlow
-          ? 'Yeni e-posta doğrulama kodu gönderildi.'
-          : 'Yeni doğrulama kodu gönderildi.',
+          ? 'Yeni test doğrulama kodu gönderildi. Kod: ${appState.testOtpCode}'
+          : 'Yeni test doğrulama kodu gönderildi. Kod: ${appState.testOtpCode}',
       icon: isPasswordResetFlow
           ? Icons.mark_email_read_outlined
           : Icons.sms_outlined,
@@ -101,8 +113,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         const SizedBox(height: 10),
                         Text(
                           isPasswordResetFlow
-                              ? '${maskEmailAddress(resetEmail)} adresine gönderdiğimiz 5 haneli kodu girerek yeni şifre oluştur.'
-                              : 'Telefonunuza gönderdiğimiz doğrulama kodunu girerek hesabınızı tamamlayın.',
+                              ? '${maskEmailAddress(resetEmail)} için test doğrulama kodunu girerek yeni şifre oluştur.'
+                              : 'Test doğrulama kodunu girerek hesabınızı tamamlayın.',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(color: Palette.soft, height: 1.6),
@@ -145,6 +157,33 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       height: 1.6,
                     ),
                   ),
+                  if (appState.usesTestOtpMode) ...<Widget>[
+                    const SizedBox(height: 16),
+                    SpetoCard(
+                      radius: 16,
+                      color: Palette.cardWarm,
+                      child: Row(
+                        children: <Widget>[
+                          const Icon(
+                            Icons.bug_report_outlined,
+                            color: Palette.orange,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Test modu aktif. Doğrulama kodu: ${appState.testOtpCode}',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: Palette.soft,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 28),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -197,8 +236,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                   ),
                   const SizedBox(height: 12),
                   GestureDetector(
-                    onTap: () =>
-                        _resendCode(isPasswordResetFlow: isPasswordResetFlow),
+                    onTap: () => _resendCode(
+                      isPasswordResetFlow: isPasswordResetFlow,
+                      appState: appState,
+                    ),
                     child: Text(
                       'Kodu tekrar gönder',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -220,7 +261,19 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         return;
                       }
                       if (appState.pendingRegistration != null) {
-                        await appState.verifyOtpCode(_code);
+                        final bool verified = await appState.verifyOtpCode(_code);
+                        if (!verified) {
+                          if (!context.mounted) {
+                            return;
+                          }
+                          SpetoToast.show(
+                            context,
+                            message:
+                                'Kod doğrulanamadı veya bu e-posta zaten kayıtlı. Test kodu: ${appState.testOtpCode}',
+                            icon: Icons.info_outline_rounded,
+                          );
+                          return;
+                        }
                         if (!context.mounted) {
                           return;
                         }
@@ -236,7 +289,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                           }
                           SpetoToast.show(
                             context,
-                            message: 'Aktif şifre sıfırlama isteği bulunamadı.',
+                            message:
+                                'Kod doğrulanamadı. Yeni kod isteyip tekrar deneyin.',
                             icon: Icons.info_outline_rounded,
                           );
                           return;

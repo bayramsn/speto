@@ -1,0 +1,3190 @@
+{
+  "contentVersion": "2026-04-09",
+  "home": {
+    "heroes": [
+      {
+        "id": "hero-1",
+        "title": "Galata'da Caz Gecesi",
+        "subtitle": "Pro puan ile açılan canlı deneyim",
+        "badge": "Yeni sezon",
+        "image": "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1200&q=80",
+        "actionLabel": "Etkinliğe Git",
+        "screen": "eventsDiscovery",
+        "displayOrder": 1
+      },
+      {
+        "id": "hero-2",
+        "title": "Akşamüstü Happy Hour",
+        "subtitle": "Market ve yeme içme fırsatlarını kaçırma",
+        "badge": "Süreli teklif",
+        "image": "https://images.unsplash.com/photo-1553979459-d2229ba7433b?auto=format&fit=crop&w=1200&q=80",
+        "actionLabel": "Happy Hour'a Git",
+        "screen": "happyHourList",
+        "displayOrder": 2
+      },
+      {
+        "id": "hero-3",
+        "title": "Özel Gel-Al Menüler",
+        "subtitle": "Hızlı, sıcak ve öğrenci dostu",
+        "badge": "Kadıköy çevresi",
+        "image": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=80",
+        "actionLabel": "Restoranlara Git",
+        "screen": "restaurantList",
+        "displayOrder": 3
+      }
+    ],
+    "quickFilters": [
+      {
+        "id": "quick-filter-1",
+        "label": "Yakında",
+        "icon": "near_me_rounded",
+        "screen": "restaurantList",
+        "highlight": false,
+        "displayOrder": 1
+      },
+      {
+        "id": "quick-filter-2",
+        "label": "Pro ile",
+        "icon": "workspace_premium_rounded",
+        "screen": "proPoints",
+        "highlight": true,
+        "displayOrder": 2
+      },
+      {
+        "id": "quick-filter-3",
+        "label": "Gece",
+        "icon": "nightlife_rounded",
+        "screen": "eventsDiscovery",
+        "highlight": false,
+        "displayOrder": 3
+      },
+      {
+        "id": "quick-filter-4",
+        "label": "Market",
+        "icon": "shopping_basket_rounded",
+        "screen": "marketList",
+        "highlight": false,
+        "displayOrder": 4
+      }
+    ],
+    "discoveryFilters": [
+      {
+        "id": "discovery-filter-1",
+        "label": "Hepsi",
+        "displayOrder": 1
+      },
+      {
+        "id": "discovery-filter-2",
+        "label": "Burger",
+        "displayOrder": 2
+      },
+      {
+        "id": "discovery-filter-3",
+        "label": "Tatlı",
+        "displayOrder": 3
+      },
+      {
+        "id": "discovery-filter-4",
+        "label": "Kahve",
+        "displayOrder": 4
+      }
+    ]
+  },
+  "restaurants": [
+    {
+      "id": "restaurant-burger-yiyelim",
+      "vendorId": "vendor-burger-yiyelim",
+      "title": "Burger Yiyelim",
+      "image": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=80",
+      "cuisine": "Burger",
+      "etaMin": 15,
+      "etaMax": 25,
+      "ratingValue": 4.8,
+      "promo": "Öğrenci Dostu",
+      "studentFriendly": true,
+      "displayOrder": 1,
+      "sections": [
+        {
+          "id": "section-restaurant-burger-yiyelim-populer",
+          "key": "populer",
+          "label": "Popüler",
+          "displayOrder": 1,
+          "products": [
+            {
+              "id": "product-restaurant-burger-yiyelim-double-whopper-menu",
+              "title": "Double Whopper Menü",
+              "description": "Alevde ızgaralanmış dana köftesi, taze sebzeler ve çıtır patates ile servis edilir.",
+              "priceText": "179 TL",
+              "unitPrice": 179.0,
+              "image": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-burger-yiyelim-tavuk-royale",
+              "title": "Tavuk Royale",
+              "description": "Çıtır tavuk göğsü, mayonez ve yumuşak briyoş ekmek ile hazırlanır.",
+              "priceText": "149 TL",
+              "unitPrice": 149.0,
+              "image": "https://images.unsplash.com/photo-1553979459-d2229ba7433b?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-burger-yiyelim-burgerler",
+          "key": "burgerler",
+          "label": "Burgerler",
+          "displayOrder": 2,
+          "products": [
+            {
+              "id": "product-restaurant-burger-yiyelim-steakhouse-burger",
+              "title": "Steakhouse Burger",
+              "description": "Özel dana köftesi, füme bacon ve yoğun barbekü sos ile servis edilir.",
+              "priceText": "189 TL",
+              "unitPrice": 189.0,
+              "image": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-burger-yiyelim-cheddar-melt-burger",
+              "title": "Cheddar Melt Burger",
+              "description": "Çift cheddar, karamelize soğan ve burger sos ile hazırlanır.",
+              "priceText": "199 TL",
+              "unitPrice": 199.0,
+              "image": "https://images.unsplash.com/photo-1553979459-d2229ba7433b?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-burger-yiyelim-yan-lezzetler",
+          "key": "yan-lezzetler",
+          "label": "Yan Lezzetler",
+          "displayOrder": 3,
+          "products": [
+            {
+              "id": "product-restaurant-burger-yiyelim-cheddar-patates",
+              "title": "Cheddar Patates",
+              "description": "Erimiş cheddar ve özel baharatla tamamlanan çıtır patates.",
+              "priceText": "79 TL",
+              "unitPrice": 79.0,
+              "image": "https://images.unsplash.com/photo-1553979459-d2229ba7433b?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-burger-yiyelim-sogan-halkasi",
+              "title": "Soğan Halkası",
+              "description": "İnce kaplamalı, çıtır dış yüzeyli sıcak yan ürün.",
+              "priceText": "69 TL",
+              "unitPrice": 69.0,
+              "image": "https://images.unsplash.com/photo-1553979459-d2229ba7433b?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-burger-yiyelim-icecekler",
+          "key": "icecekler",
+          "label": "İçecekler",
+          "displayOrder": 4,
+          "products": [
+            {
+              "id": "product-restaurant-burger-yiyelim-soguk-kola",
+              "title": "Soğuk Kola",
+              "description": "Buz gibi kola, lime ve özel servis dokunuşu ile gelir.",
+              "priceText": "49 TL",
+              "unitPrice": 49.0,
+              "image": "https://images.unsplash.com/photo-1581636625402-29b2a704ef13?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-burger-yiyelim-tropik-buzlu-cay",
+              "title": "Tropik Buzlu Çay",
+              "description": "Şeftali, mango ve limon notalı ev yapımı buzlu çay.",
+              "priceText": "55 TL",
+              "unitPrice": 55.0,
+              "image": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "restaurant-pizza-bulls",
+      "vendorId": "vendor-pizza-bulls",
+      "title": "Pizza Bulls",
+      "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80",
+      "cuisine": "Pizza",
+      "etaMin": 18,
+      "etaMax": 26,
+      "ratingValue": 4.7,
+      "promo": "İnce Hamur",
+      "studentFriendly": true,
+      "displayOrder": 2,
+      "sections": [
+        {
+          "id": "section-restaurant-pizza-bulls-populer",
+          "key": "populer",
+          "label": "Popüler",
+          "displayOrder": 1,
+          "products": [
+            {
+              "id": "product-restaurant-pizza-bulls-margherita-pizza",
+              "title": "Margherita Pizza",
+              "description": "Mozzarella, domates sosu ve taze fesleğen ile hazırlanır.",
+              "priceText": "189 TL",
+              "unitPrice": 189.0,
+              "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-pizza-bulls-pepperoni-pizza",
+              "title": "Pepperoni Pizza",
+              "description": "Bol pepperoni, mozzarella ve fırın kenarlı ince hamur.",
+              "priceText": "219 TL",
+              "unitPrice": 219.0,
+              "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-pizza-bulls-pizzalar",
+          "key": "pizzalar",
+          "label": "Pizzalar",
+          "displayOrder": 2,
+          "products": [
+            {
+              "id": "product-restaurant-pizza-bulls-karisik-pizza",
+              "title": "Karışık Pizza",
+              "description": "Sucuk, mantar, mısır ve zeytin ile dolu aile favorisi.",
+              "priceText": "229 TL",
+              "unitPrice": 229.0,
+              "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-pizza-bulls-4-peynirli-pizza",
+              "title": "4 Peynirli Pizza",
+              "description": "Mozzarella, parmesan, cheddar ve rokfor uyumuyla hazırlanır.",
+              "priceText": "239 TL",
+              "unitPrice": 239.0,
+              "image": "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-pizza-bulls-yan-urunler",
+          "key": "yan-urunler",
+          "label": "Yan Ürünler",
+          "displayOrder": 3,
+          "products": [
+            {
+              "id": "product-restaurant-pizza-bulls-sarimsakli-ekmek",
+              "title": "Sarımsaklı Ekmek",
+              "description": "Fırından sıcak çıkan tereyağlı sarımsak ekmekleri.",
+              "priceText": "69 TL",
+              "unitPrice": 69.0,
+              "image": "https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-pizza-bulls-patates-toplari",
+              "title": "Patates Topları",
+              "description": "Çıtır dış yüzeyli, peynir dolgulu sıcak atıştırmalık.",
+              "priceText": "79 TL",
+              "unitPrice": 79.0,
+              "image": "https://images.unsplash.com/photo-1553979459-d2229ba7433b?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-pizza-bulls-icecekler",
+          "key": "icecekler",
+          "label": "İçecekler",
+          "displayOrder": 4,
+          "products": [
+            {
+              "id": "product-restaurant-pizza-bulls-kutu-kola",
+              "title": "Kutu Kola",
+              "description": "Buz gibi servis edilen klasik içecek.",
+              "priceText": "39 TL",
+              "unitPrice": 39.0,
+              "image": "https://images.unsplash.com/photo-1581636625402-29b2a704ef13?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-pizza-bulls-ev-yapimi-limonata",
+              "title": "Ev Yapımı Limonata",
+              "description": "Taze limonla hazırlanan serinletici içecek.",
+              "priceText": "49 TL",
+              "unitPrice": 49.0,
+              "image": "https://images.unsplash.com/photo-1621263764928-df1444c5e859?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "restaurant-tavuk-pilavci",
+      "vendorId": "vendor-tavuk-pilavci",
+      "title": "Tavuk Pilavcı",
+      "image": "https://images.unsplash.com/photo-1604908177522-0404e1c0a0b3?auto=format&fit=crop&w=1200&q=80",
+      "cuisine": "Tavuk Pilav",
+      "etaMin": 10,
+      "etaMax": 16,
+      "ratingValue": 4.8,
+      "promo": "Gece Açık",
+      "studentFriendly": true,
+      "displayOrder": 3,
+      "sections": [
+        {
+          "id": "section-restaurant-tavuk-pilavci-populer",
+          "key": "populer",
+          "label": "Popüler",
+          "displayOrder": 1,
+          "products": [
+            {
+              "id": "product-restaurant-tavuk-pilavci-klasik-tavuk-pilav",
+              "title": "Klasik Tavuk Pilav",
+              "description": "Bol tavuk, tereyağlı pilav ve nohut ile hazırlanır.",
+              "priceText": "119 TL",
+              "unitPrice": 119.0,
+              "image": "https://images.unsplash.com/photo-1604908177522-0404e1c0a0b3?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-tavuk-pilavci-dubla-tavuk-pilav",
+              "title": "Dubla Tavuk Pilav",
+              "description": "Ekstra tavuk ve büyük porsiyon pilavla servis edilir.",
+              "priceText": "149 TL",
+              "unitPrice": 149.0,
+              "image": "https://images.unsplash.com/photo-1604908177522-0404e1c0a0b3?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-tavuk-pilavci-pilavlar",
+          "key": "pilavlar",
+          "label": "Pilavlar",
+          "displayOrder": 2,
+          "products": [
+            {
+              "id": "product-restaurant-tavuk-pilavci-tereyagli-nohutlu-pilav",
+              "title": "Tereyağlı Nohutlu Pilav",
+              "description": "Tek başına pilav sevenler için klasik eşlikçi.",
+              "priceText": "69 TL",
+              "unitPrice": 69.0,
+              "image": "https://images.unsplash.com/photo-1604908177522-0404e1c0a0b3?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-tavuk-pilavci-acili-tavuk-pilav",
+              "title": "Acılı Tavuk Pilav",
+              "description": "Özel acı soslu tavuk parçalarıyla hazırlanan sıcak tabak.",
+              "priceText": "129 TL",
+              "unitPrice": 129.0,
+              "image": "https://images.unsplash.com/photo-1604908177522-0404e1c0a0b3?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-tavuk-pilavci-corbalar",
+          "key": "corbalar",
+          "label": "Çorbalar",
+          "displayOrder": 3,
+          "products": [
+            {
+              "id": "product-restaurant-tavuk-pilavci-tavuk-suyu-corba",
+              "title": "Tavuk Suyu Çorba",
+              "description": "Limonla tamamlanan sıcak başlangıç çorbası.",
+              "priceText": "49 TL",
+              "unitPrice": 49.0,
+              "image": "https://images.unsplash.com/photo-1604908177522-0404e1c0a0b3?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-tavuk-pilavci-mercimek-corbasi",
+              "title": "Mercimek Çorbası",
+              "description": "Kıvamlı ve baharat dengeli klasik çorba.",
+              "priceText": "45 TL",
+              "unitPrice": 45.0,
+              "image": "https://images.unsplash.com/photo-1604908177522-0404e1c0a0b3?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-tavuk-pilavci-icecekler",
+          "key": "icecekler",
+          "label": "İçecekler",
+          "displayOrder": 4,
+          "products": [
+            {
+              "id": "product-restaurant-tavuk-pilavci-ayran",
+              "title": "Ayran",
+              "description": "Pilav menülerine eşlik eden soğuk ayran.",
+              "priceText": "24 TL",
+              "unitPrice": 24.0,
+              "image": "https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-tavuk-pilavci-salgam",
+              "title": "Şalgam",
+              "description": "Acılı veya acısız tercih edilebilen tamamlayıcı içecek.",
+              "priceText": "29 TL",
+              "unitPrice": 29.0,
+              "image": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "restaurant-halil-usta-kebap",
+      "vendorId": "vendor-halil-usta-kebap",
+      "title": "Halil Usta Kebap",
+      "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=80",
+      "cuisine": "Kebap",
+      "etaMin": 16,
+      "etaMax": 24,
+      "ratingValue": 4.9,
+      "promo": "Izgara Ateşi",
+      "studentFriendly": false,
+      "displayOrder": 4,
+      "sections": [
+        {
+          "id": "section-restaurant-halil-usta-kebap-populer",
+          "key": "populer",
+          "label": "Popüler",
+          "displayOrder": 1,
+          "products": [
+            {
+              "id": "product-restaurant-halil-usta-kebap-adana-kebap",
+              "title": "Adana Kebap",
+              "description": "Közlenmiş biber, lavaş ve sumaklı soğanla servis edilir.",
+              "priceText": "239 TL",
+              "unitPrice": 239.0,
+              "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-halil-usta-kebap-urfa-kebap",
+              "title": "Urfa Kebap",
+              "description": "Baharat dengesi hafif, bol garnitürlü klasik kebap.",
+              "priceText": "239 TL",
+              "unitPrice": 239.0,
+              "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-halil-usta-kebap-kebaplar",
+          "key": "kebaplar",
+          "label": "Kebaplar",
+          "displayOrder": 2,
+          "products": [
+            {
+              "id": "product-restaurant-halil-usta-kebap-patlicanli-kebap",
+              "title": "Patlıcanlı Kebap",
+              "description": "Köz patlıcan ile şişte pişirilen özel yorum.",
+              "priceText": "269 TL",
+              "unitPrice": 269.0,
+              "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-halil-usta-kebap-tavuk-sis",
+              "title": "Tavuk Şiş",
+              "description": "Marine edilmiş tavuk, lavaş ve köz domates ile gelir.",
+              "priceText": "219 TL",
+              "unitPrice": 219.0,
+              "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-halil-usta-kebap-durumler",
+          "key": "durumler",
+          "label": "Dürümler",
+          "displayOrder": 3,
+          "products": [
+            {
+              "id": "product-restaurant-halil-usta-kebap-adana-durum",
+              "title": "Adana Dürüm",
+              "description": "Lavaşta sarılan bol garnitürlü adana dürüm.",
+              "priceText": "179 TL",
+              "unitPrice": 179.0,
+              "image": "https://images.unsplash.com/photo-1628294896516-f65ce4c41a45?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-halil-usta-kebap-tavuk-durum",
+              "title": "Tavuk Dürüm",
+              "description": "Köz tavuk ve özel sosla hazırlanan dürüm.",
+              "priceText": "159 TL",
+              "unitPrice": 159.0,
+              "image": "https://images.unsplash.com/photo-1628294896516-f65ce4c41a45?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-halil-usta-kebap-icecekler",
+          "key": "icecekler",
+          "label": "İçecekler",
+          "displayOrder": 4,
+          "products": [
+            {
+              "id": "product-restaurant-halil-usta-kebap-ayran",
+              "title": "Ayran",
+              "description": "Kebapla klasikleşen köpüklü eşlikçi.",
+              "priceText": "24 TL",
+              "unitPrice": 24.0,
+              "image": "https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-halil-usta-kebap-salgam",
+              "title": "Şalgam",
+              "description": "Kebap sofralarının vazgeçilmez acılı içeceği.",
+              "priceText": "29 TL",
+              "unitPrice": 29.0,
+              "image": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "restaurant-firin-34",
+      "vendorId": "vendor-firin-34",
+      "title": "Fırın 34",
+      "image": "https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?auto=format&fit=crop&w=1200&q=80",
+      "cuisine": "Pide & Lahmacun",
+      "etaMin": 14,
+      "etaMax": 22,
+      "ratingValue": 4.7,
+      "promo": "Fırından Sıcak",
+      "studentFriendly": true,
+      "displayOrder": 5,
+      "sections": [
+        {
+          "id": "section-restaurant-firin-34-populer",
+          "key": "populer",
+          "label": "Popüler",
+          "displayOrder": 1,
+          "products": [
+            {
+              "id": "product-restaurant-firin-34-kiymali-pide",
+              "title": "Kıymalı Pide",
+              "description": "Fırından yeni çıkan ince hamur ve bol iç harçla hazırlanır.",
+              "priceText": "149 TL",
+              "unitPrice": 149.0,
+              "image": "https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-firin-34-kasarli-lahmacun",
+              "title": "Kaşarlı Lahmacun",
+              "description": "Çift pişim taş fırın lahmacun ve ekstra kaşar ile sunulur.",
+              "priceText": "79 TL",
+              "unitPrice": 79.0,
+              "image": "https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-firin-34-pideler",
+          "key": "pideler",
+          "label": "Pideler",
+          "displayOrder": 2,
+          "products": [
+            {
+              "id": "product-restaurant-firin-34-kusbasili-pide",
+              "title": "Kuşbaşılı Pide",
+              "description": "Kuşbaşı et ve fırın kenarlı çıtır hamur uyumuyla hazırlanır.",
+              "priceText": "189 TL",
+              "unitPrice": 189.0,
+              "image": "https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-firin-34-karisik-pide",
+              "title": "Karışık Pide",
+              "description": "Sucuk, kaşar ve kıyma ile hazırlanan dolu dolu fırın lezzeti.",
+              "priceText": "199 TL",
+              "unitPrice": 199.0,
+              "image": "https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-firin-34-lahmacun",
+          "key": "lahmacun",
+          "label": "Lahmacun",
+          "displayOrder": 3,
+          "products": [
+            {
+              "id": "product-restaurant-firin-34-klasik-lahmacun",
+              "title": "Klasik Lahmacun",
+              "description": "Bol maydanoz ve limonla servis edilen ince lahmacun.",
+              "priceText": "59 TL",
+              "unitPrice": 59.0,
+              "image": "https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-firin-34-acili-lahmacun",
+              "title": "Acılı Lahmacun",
+              "description": "Köz aromalı ve acı baharatlı fırın lahmacun.",
+              "priceText": "64 TL",
+              "unitPrice": 64.0,
+              "image": "https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-firin-34-icecekler",
+          "key": "icecekler",
+          "label": "İçecekler",
+          "displayOrder": 4,
+          "products": [
+            {
+              "id": "product-restaurant-firin-34-ayran",
+              "title": "Ayran",
+              "description": "Fırın ürünlerinin klasik içecek eşliği.",
+              "priceText": "24 TL",
+              "unitPrice": 24.0,
+              "image": "https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-firin-34-salgam",
+              "title": "Şalgam",
+              "description": "Baharatlı fırın menülerini dengeleyen soğuk içecek.",
+              "priceText": "29 TL",
+              "unitPrice": 29.0,
+              "image": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "restaurant-durum-point",
+      "vendorId": "vendor-durum-point",
+      "title": "Dürüm Point",
+      "image": "https://images.unsplash.com/photo-1628294896516-f65ce4c41a45?auto=format&fit=crop&w=1200&q=80",
+      "cuisine": "Dürüm",
+      "etaMin": 12,
+      "etaMax": 18,
+      "ratingValue": 4.6,
+      "promo": "Acılı Sos",
+      "studentFriendly": true,
+      "displayOrder": 6,
+      "sections": [
+        {
+          "id": "section-restaurant-durum-point-populer",
+          "key": "populer",
+          "label": "Popüler",
+          "displayOrder": 1,
+          "products": [
+            {
+              "id": "product-restaurant-durum-point-et-durum",
+              "title": "Et Dürüm",
+              "description": "İnce lavaş, bol et ve özel sarımsaklı sosla hazırlanır.",
+              "priceText": "169 TL",
+              "unitPrice": 169.0,
+              "image": "https://images.unsplash.com/photo-1628294896516-f65ce4c41a45?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-durum-point-tavuk-durum",
+              "title": "Tavuk Dürüm",
+              "description": "Marine tavuk, turşu ve köz sebzelerle servis edilir.",
+              "priceText": "149 TL",
+              "unitPrice": 149.0,
+              "image": "https://images.unsplash.com/photo-1628294896516-f65ce4c41a45?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-durum-point-durumler",
+          "key": "durumler",
+          "label": "Dürümler",
+          "displayOrder": 2,
+          "products": [
+            {
+              "id": "product-restaurant-durum-point-atom-durum",
+              "title": "Atom Dürüm",
+              "description": "Ekstra et, cheddar ve acı sosla güçlendirilmiş özel dürüm.",
+              "priceText": "189 TL",
+              "unitPrice": 189.0,
+              "image": "https://images.unsplash.com/photo-1628294896516-f65ce4c41a45?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-durum-point-falafel-durum",
+              "title": "Falafel Dürüm",
+              "description": "Nohut köftesi ve tahinli sosla hazırlanan vejetaryen seçenek.",
+              "priceText": "139 TL",
+              "unitPrice": 139.0,
+              "image": "https://images.unsplash.com/photo-1628294896516-f65ce4c41a45?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-durum-point-tabaklar",
+          "key": "tabaklar",
+          "label": "Tabaklar",
+          "displayOrder": 3,
+          "products": [
+            {
+              "id": "product-restaurant-durum-point-et-tantuni-tabak",
+              "title": "Et Tantuni Tabak",
+              "description": "Tantuni, patates ve salata ile hazırlanan doyurucu tabak.",
+              "priceText": "199 TL",
+              "unitPrice": 199.0,
+              "image": "https://images.unsplash.com/photo-1628294896516-f65ce4c41a45?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-durum-point-tavuk-sis-tabak",
+              "title": "Tavuk Şiş Tabak",
+              "description": "Pilav ve köz biber eşliğinde servis edilen sıcak tabak.",
+              "priceText": "189 TL",
+              "unitPrice": 189.0,
+              "image": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-durum-point-icecekler",
+          "key": "icecekler",
+          "label": "İçecekler",
+          "displayOrder": 4,
+          "products": [
+            {
+              "id": "product-restaurant-durum-point-kutu-kola",
+              "title": "Kutu Kola",
+              "description": "Dürüm menülerine eşlik eden soğuk içecek.",
+              "priceText": "39 TL",
+              "unitPrice": 39.0,
+              "image": "https://images.unsplash.com/photo-1581636625402-29b2a704ef13?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-durum-point-ayran",
+              "title": "Ayran",
+              "description": "Dürüme klasik eşlik eden soğuk ayran.",
+              "priceText": "24 TL",
+              "unitPrice": 24.0,
+              "image": "https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "restaurant-sushi-co",
+      "vendorId": "vendor-sushi-co",
+      "title": "Sushi Co",
+      "image": "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=1200&q=80",
+      "cuisine": "Sushi",
+      "etaMin": 25,
+      "etaMax": 35,
+      "ratingValue": 4.9,
+      "promo": "Yeni Menü",
+      "studentFriendly": false,
+      "displayOrder": 7,
+      "sections": [
+        {
+          "id": "section-restaurant-sushi-co-populer",
+          "key": "populer",
+          "label": "Popüler",
+          "displayOrder": 1,
+          "products": [
+            {
+              "id": "product-restaurant-sushi-co-california-roll",
+              "title": "California Roll",
+              "description": "Yengeç, avokado ve salatalıkla hazırlanan klasik 8 parça roll.",
+              "priceText": "229 TL",
+              "unitPrice": 229.0,
+              "image": "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-sushi-co-philadelphia-roll",
+              "title": "Philadelphia Roll",
+              "description": "Somon, labne ve avokado ile hazırlanan yumuşak içimli roll.",
+              "priceText": "249 TL",
+              "unitPrice": 249.0,
+              "image": "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-sushi-co-roll",
+          "key": "roll",
+          "label": "Roll",
+          "displayOrder": 2,
+          "products": [
+            {
+              "id": "product-restaurant-sushi-co-spicy-tuna-roll",
+              "title": "Spicy Tuna Roll",
+              "description": "Acılı ton balığı dolgulu, susam kaplı özel roll.",
+              "priceText": "259 TL",
+              "unitPrice": 259.0,
+              "image": "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-sushi-co-ebi-tempura-roll",
+              "title": "Ebi Tempura Roll",
+              "description": "Tempura karides ve tatlı sosla hazırlanan sıcak roll.",
+              "priceText": "279 TL",
+              "unitPrice": 279.0,
+              "image": "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-sushi-co-sicaklar",
+          "key": "sicaklar",
+          "label": "Sıcaklar",
+          "displayOrder": 3,
+          "products": [
+            {
+              "id": "product-restaurant-sushi-co-tavuk-gyoza",
+              "title": "Tavuk Gyoza",
+              "description": "Izgara tabanlı, buharda pişmiş Japon mantısı.",
+              "priceText": "109 TL",
+              "unitPrice": 109.0,
+              "image": "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-sushi-co-miso-corbasi",
+              "title": "Miso Çorbası",
+              "description": "Tofu ve taze soğanla hazırlanan hafif başlangıç.",
+              "priceText": "79 TL",
+              "unitPrice": 79.0,
+              "image": "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-sushi-co-icecekler",
+          "key": "icecekler",
+          "label": "İçecekler",
+          "displayOrder": 4,
+          "products": [
+            {
+              "id": "product-restaurant-sushi-co-yesil-cay",
+              "title": "Yeşil Çay",
+              "description": "Japon mutfağıyla uyumlu sıcak çay.",
+              "priceText": "39 TL",
+              "unitPrice": 39.0,
+              "image": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-sushi-co-limonlu-soda",
+              "title": "Limonlu Soda",
+              "description": "Sushi menülerini dengeleyen hafif içecek.",
+              "priceText": "34 TL",
+              "unitPrice": 34.0,
+              "image": "https://images.unsplash.com/photo-1561047029-3000c68339ca?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "restaurant-pasta-sanati",
+      "vendorId": "vendor-pasta-sanati",
+      "title": "Pasta Sanatı",
+      "image": "https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?auto=format&fit=crop&w=1200&q=80",
+      "cuisine": "Tatlı",
+      "etaMin": 9,
+      "etaMax": 14,
+      "ratingValue": 4.8,
+      "promo": "Soğuk Tatlı",
+      "studentFriendly": true,
+      "displayOrder": 8,
+      "sections": [
+        {
+          "id": "section-restaurant-pasta-sanati-populer",
+          "key": "populer",
+          "label": "Popüler",
+          "displayOrder": 1,
+          "products": [
+            {
+              "id": "product-restaurant-pasta-sanati-san-sebastian",
+              "title": "San Sebastian",
+              "description": "Akışkan iç dokulu, yanık yüzeyli özel cheesecake dilimi.",
+              "priceText": "109 TL",
+              "unitPrice": 109.0,
+              "image": "https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-pasta-sanati-cilekli-magnolia",
+              "title": "Çilekli Magnolia",
+              "description": "Hafif krema, bisküvi ve taze çilekle hazırlanır.",
+              "priceText": "99 TL",
+              "unitPrice": 99.0,
+              "image": "https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-pasta-sanati-sutlu-tatli",
+          "key": "sutlu-tatli",
+          "label": "Sütlü Tatlı",
+          "displayOrder": 2,
+          "products": [
+            {
+              "id": "product-restaurant-pasta-sanati-supangle",
+              "title": "Supangle",
+              "description": "Yoğun çikolatalı, soğuk servis edilen klasik sütlü tatlı.",
+              "priceText": "89 TL",
+              "unitPrice": 89.0,
+              "image": "https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-pasta-sanati-tiramisu-cup",
+              "title": "Tiramisu Cup",
+              "description": "Kahveli kremasıyla katmanlı hazırlanmış hafif tatlı.",
+              "priceText": "104 TL",
+              "unitPrice": 104.0,
+              "image": "https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-pasta-sanati-soguk-tatli",
+          "key": "soguk-tatli",
+          "label": "Soğuk Tatlı",
+          "displayOrder": 3,
+          "products": [
+            {
+              "id": "product-restaurant-pasta-sanati-lotuslu-parfe",
+              "title": "Lotuslu Parfe",
+              "description": "Lotus sos ve bisküvi kırıklarıyla soğuk sunulan özel tatlı.",
+              "priceText": "114 TL",
+              "unitPrice": 114.0,
+              "image": "https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-pasta-sanati-profiterol-box",
+              "title": "Profiterol Box",
+              "description": "Bol çikolata soslu mini toplardan oluşan kutu tatlı.",
+              "priceText": "119 TL",
+              "unitPrice": 119.0,
+              "image": "https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?auto=format&fit=crop&w=1200&q=80",
+              "displayOrder": 2
+            }
+          ]
+        },
+        {
+          "id": "section-restaurant-pasta-sanati-icecekler",
+          "key": "icecekler",
+          "label": "İçecekler",
+          "displayOrder": 4,
+          "products": [
+            {
+              "id": "product-restaurant-pasta-sanati-soguk-americano",
+              "title": "Soğuk Americano",
+              "description": "Tatlılarla uyumlu sert içimli kahve.",
+              "priceText": "59 TL",
+              "unitPrice": 59.0,
+              "image": "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "product-restaurant-pasta-sanati-cilekli-milkshake",
+              "title": "Çilekli Milkshake",
+              "description": "Tatlı yanında tercih edilen soğuk içecek.",
+              "priceText": "74 TL",
+              "unitPrice": 74.0,
+              "image": "https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "markets": [
+    {
+      "id": "migros-jet",
+      "vendorId": "vendor-migros-jet",
+      "title": "Migros Jet",
+      "subtitle": "Günlük mahalle marketi seçkisi",
+      "meta": "Gel-Al • 18 dk hazır",
+      "image": "https://images.unsplash.com/photo-1604719312566-8912e9c8a213?auto=format&fit=crop&w=1200&q=80",
+      "badge": "24 Saat",
+      "rewardLabel": "Gel-Al",
+      "ratingLabel": "4.8",
+      "distanceLabel": "0.7 km",
+      "etaLabel": "18 dk",
+      "promoLabel": "Süt, manav ve hazır tüketim",
+      "workingHoursLabel": "08:00-02:00",
+      "minOrderLabel": "Yok",
+      "deliveryWindowLabel": "Hazır olduğunda",
+      "reviewCountLabel": "126",
+      "announcement": "Siparişin kısa raf ömürlü ürünler için öncelikli hazırlanır ve hazır olduğunda bildirim düşer.",
+      "bundleTitle": "Mahalle Kahvaltı Sepeti",
+      "bundleDescription": "Süt, ekmek, yumurta ve günlük tüketim ürünlerinden oluşan pratik sepet.",
+      "bundlePrice": "139 TL",
+      "heroTitle": "Migros Jet ile günlük market alışverişi hızlandı",
+      "heroSubtitle": "Süt, kahvaltılık, manav ve hazır ürünler kısa sürede hazırlanır; mağazadan teslim alınır.",
+      "displayOrder": 1,
+      "highlights": [
+        {
+          "id": "highlight-migros-jet-1",
+          "label": "Günlük süt",
+          "icon": "local_drink_outlined",
+          "displayOrder": 1
+        },
+        {
+          "id": "highlight-migros-jet-2",
+          "label": "Hazır teslim",
+          "icon": "shopping_bag_outlined",
+          "displayOrder": 2
+        },
+        {
+          "id": "highlight-migros-jet-3",
+          "label": "Mahalle şubesi",
+          "icon": "storefront_outlined",
+          "displayOrder": 3
+        }
+      ],
+      "sections": [
+        {
+          "id": "section-migros-jet-sut-ve-kahvaltilik",
+          "key": "sut-ve-kahvaltilik",
+          "label": "Süt & Kahvaltılık",
+          "displayOrder": 1,
+          "products": [
+            {
+              "id": "market-product-migros-jet-gunluk-sut",
+              "title": "Günlük Süt",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "36 TL",
+              "unitPrice": 36.0,
+              "image": "https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-migros-jet-paket-yogurt",
+              "title": "Paket Yoğurt",
+              "description": "Son Tüketim Tarihi: 14.04.2026",
+              "priceText": "44 TL",
+              "unitPrice": 44.0,
+              "image": "https://images.unsplash.com/photo-1514996937319-344454492b37?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-migros-jet-taze-kasar-peyniri",
+              "title": "Taze Kaşar Peyniri",
+              "description": "Son Tüketim Tarihi: 18.04.2026",
+              "priceText": "95 TL",
+              "unitPrice": 95.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-migros-jet-kefir",
+              "title": "Kefir",
+              "description": "Son Tüketim Tarihi: 11.04.2026",
+              "priceText": "39 TL",
+              "unitPrice": 39.0,
+              "image": "https://images.unsplash.com/photo-1559561854-7cf2c4f8ab21?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-migros-jet-ayran",
+              "title": "Ayran",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "18 TL",
+              "unitPrice": 18.0,
+              "image": "https://images.unsplash.com/photo-1559561854-7cf2c4f8ab21?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 5
+            },
+            {
+              "id": "market-product-migros-jet-yumurta",
+              "title": "Yumurta",
+              "description": "Son Tüketim Tarihi: 19.04.2026",
+              "priceText": "84 TL",
+              "unitPrice": 84.0,
+              "image": "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 6
+            }
+          ]
+        },
+        {
+          "id": "section-migros-jet-et-ve-sarkuteri",
+          "key": "et-ve-sarkuteri",
+          "label": "Et & Şarküteri",
+          "displayOrder": 2,
+          "products": [
+            {
+              "id": "market-product-migros-jet-dana-sosis",
+              "title": "Dana Sosis",
+              "description": "Son Tüketim Tarihi: 16.04.2026",
+              "priceText": "87 TL",
+              "unitPrice": 87.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-migros-jet-pilic-sosis",
+              "title": "Piliç Sosis",
+              "description": "Son Tüketim Tarihi: 15.04.2026",
+              "priceText": "74 TL",
+              "unitPrice": 74.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-migros-jet-pilic-nugget",
+              "title": "Piliç Nugget",
+              "description": "Son Tüketim Tarihi: 20.04.2026",
+              "priceText": "96 TL",
+              "unitPrice": 96.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            }
+          ]
+        },
+        {
+          "id": "section-migros-jet-manav",
+          "key": "manav",
+          "label": "Manav",
+          "displayOrder": 3,
+          "products": [
+            {
+              "id": "market-product-migros-jet-domates-salkim",
+              "title": "Domates (Salkım)",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "42 TL",
+              "unitPrice": 42.0,
+              "image": "https://images.unsplash.com/photo-1546094096-0df4bcaaa337?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-migros-jet-salatalik",
+              "title": "Salatalık",
+              "description": "Son Tüketim Tarihi: 09.04.2026",
+              "priceText": "26 TL",
+              "unitPrice": 26.0,
+              "image": "https://images.unsplash.com/photo-1604977046806-87e9d408d8d7?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-migros-jet-cilek",
+              "title": "Çilek",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "59 TL",
+              "unitPrice": 59.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 3
+            }
+          ]
+        },
+        {
+          "id": "section-migros-jet-unlu-mamuller",
+          "key": "unlu-mamuller",
+          "label": "Unlu Mamuller",
+          "displayOrder": 4,
+          "products": [
+            {
+              "id": "market-product-migros-jet-paket-ekmek-tam-bugday-cavdar",
+              "title": "Paket Ekmek (Tam buğday/Çavdar)",
+              "description": "Son Tüketim Tarihi: 11.04.2026",
+              "priceText": "32 TL",
+              "unitPrice": 32.0,
+              "image": "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-migros-jet-hamburger-ekmegi",
+              "title": "Hamburger Ekmeği",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "34 TL",
+              "unitPrice": 34.0,
+              "image": "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-migros-jet-paket-simit",
+              "title": "Paket Simit",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "29 TL",
+              "unitPrice": 29.0,
+              "image": "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-migros-jet-supangle-puding-hazir",
+              "title": "Supangle/Puding (Hazır)",
+              "description": "Son Tüketim Tarihi: 14.04.2026",
+              "priceText": "32 TL",
+              "unitPrice": 32.0,
+              "image": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            }
+          ]
+        },
+        {
+          "id": "section-migros-jet-hazir-gida",
+          "key": "hazir-gida",
+          "label": "Hazır Gıda",
+          "displayOrder": 5,
+          "products": [
+            {
+              "id": "market-product-migros-jet-paketli-humus",
+              "title": "Paketli Humus",
+              "description": "Son Tüketim Tarihi: 14.04.2026",
+              "priceText": "44 TL",
+              "unitPrice": 44.0,
+              "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-migros-jet-hazir-cig-kofte-vakumlu-paket",
+              "title": "Hazır Çiğ Köfte (Vakumlu paket)",
+              "description": "Son Tüketim Tarihi: 12.04.2026",
+              "priceText": "49 TL",
+              "unitPrice": 49.0,
+              "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-migros-jet-soguk-sandvic-ucgen-paket",
+              "title": "Soğuk Sandviç (Üçgen paket)",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "47 TL",
+              "unitPrice": 47.0,
+              "image": "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-migros-jet-taze-makarna-buzdolabi-reyonu",
+              "title": "Taze Makarna (Buzdolabı reyonu)",
+              "description": "Son Tüketim Tarihi: 15.04.2026",
+              "priceText": "69 TL",
+              "unitPrice": 69.0,
+              "image": "https://images.unsplash.com/photo-1551462147-ff29053bfc14?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "macrocenter-express",
+      "vendorId": "vendor-macrocenter-express",
+      "title": "Macrocenter Express",
+      "subtitle": "Premium kahvaltılık ve şarküteri",
+      "meta": "Gel-Al • 22 dk hazır",
+      "image": "https://images.unsplash.com/photo-1516594798947-e65505dbb29d?auto=format&fit=crop&w=1200&q=80",
+      "badge": "Premium",
+      "rewardLabel": "Gel-Al",
+      "ratingLabel": "4.9",
+      "distanceLabel": "1.1 km",
+      "etaLabel": "22 dk",
+      "promoLabel": "Şarküteri, peynir ve taze reyon",
+      "workingHoursLabel": "09:00-23:30",
+      "minOrderLabel": "Yok",
+      "deliveryWindowLabel": "Hazır olduğunda",
+      "reviewCountLabel": "84",
+      "announcement": "Şarküteri ve soğuk zincir ürünler siparişin için ayrı soğuk alanda hazırlanır.",
+      "bundleTitle": "Premium Kahvaltı Sepeti",
+      "bundleDescription": "Peynir, kaymak, taze yufka ve hazır meze ile güçlü bir sabah seçkisi.",
+      "bundlePrice": "229 TL",
+      "heroTitle": "Macrocenter Express ile soğuk reyon seçkisi tek ekranda",
+      "heroSubtitle": "Premium kahvaltılık, et-şarküteri ve hazır soğuk ürünler mağazadan hızlı teslim için hazırlanır.",
+      "displayOrder": 2,
+      "highlights": [
+        {
+          "id": "highlight-macrocenter-express-1",
+          "label": "Premium reyon",
+          "icon": "workspace_premium_rounded",
+          "displayOrder": 1
+        },
+        {
+          "id": "highlight-macrocenter-express-2",
+          "label": "Soğuk zincir",
+          "icon": "ac_unit_rounded",
+          "displayOrder": 2
+        },
+        {
+          "id": "highlight-macrocenter-express-3",
+          "label": "Hazır meze",
+          "icon": "dinner_dining_outlined",
+          "displayOrder": 3
+        }
+      ],
+      "sections": [
+        {
+          "id": "section-macrocenter-express-sut-ve-kahvaltilik",
+          "key": "sut-ve-kahvaltilik",
+          "label": "Süt & Kahvaltılık",
+          "displayOrder": 1,
+          "products": [
+            {
+              "id": "market-product-macrocenter-express-paket-yogurt",
+              "title": "Paket Yoğurt",
+              "description": "Son Tüketim Tarihi: 14.04.2026",
+              "priceText": "44 TL",
+              "unitPrice": 44.0,
+              "image": "https://images.unsplash.com/photo-1514996937319-344454492b37?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-macrocenter-express-lor-peyniri",
+              "title": "Lor Peyniri",
+              "description": "Son Tüketim Tarihi: 12.04.2026",
+              "priceText": "52 TL",
+              "unitPrice": 52.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-macrocenter-express-taze-kasar-peyniri",
+              "title": "Taze Kaşar Peyniri",
+              "description": "Son Tüketim Tarihi: 18.04.2026",
+              "priceText": "95 TL",
+              "unitPrice": 95.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-macrocenter-express-labne-peyniri",
+              "title": "Labne Peyniri",
+              "description": "Son Tüketim Tarihi: 16.04.2026",
+              "priceText": "49 TL",
+              "unitPrice": 49.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-macrocenter-express-kaymak",
+              "title": "Kaymak",
+              "description": "Son Tüketim Tarihi: 09.04.2026",
+              "priceText": "67 TL",
+              "unitPrice": 67.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 5
+            },
+            {
+              "id": "market-product-macrocenter-express-tereyagi",
+              "title": "Tereyağı",
+              "description": "Son Tüketim Tarihi: 24.04.2026",
+              "priceText": "119 TL",
+              "unitPrice": 119.0,
+              "image": "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 6
+            },
+            {
+              "id": "market-product-macrocenter-express-suzme-yogurt",
+              "title": "Süzme Yoğurt",
+              "description": "Son Tüketim Tarihi: 17.04.2026",
+              "priceText": "58 TL",
+              "unitPrice": 58.0,
+              "image": "https://images.unsplash.com/photo-1514996937319-344454492b37?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 7
+            },
+            {
+              "id": "market-product-macrocenter-express-meyveli-yogurt",
+              "title": "Meyveli Yoğurt",
+              "description": "Son Tüketim Tarihi: 13.04.2026",
+              "priceText": "24 TL",
+              "unitPrice": 24.0,
+              "image": "https://images.unsplash.com/photo-1514996937319-344454492b37?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 8
+            },
+            {
+              "id": "market-product-macrocenter-express-krem-peynir",
+              "title": "Krem Peynir",
+              "description": "Son Tüketim Tarihi: 19.04.2026",
+              "priceText": "54 TL",
+              "unitPrice": 54.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 9
+            },
+            {
+              "id": "market-product-macrocenter-express-beyaz-peynir-vakumlu-paket",
+              "title": "Beyaz Peynir (Vakumlu paket)",
+              "description": "Son Tüketim Tarihi: 28.04.2026",
+              "priceText": "109 TL",
+              "unitPrice": 109.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 10
+            },
+            {
+              "id": "market-product-macrocenter-express-cecil-peyniri",
+              "title": "Çeçil Peyniri",
+              "description": "Son Tüketim Tarihi: 21.04.2026",
+              "priceText": "72 TL",
+              "unitPrice": 72.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 11
+            },
+            {
+              "id": "market-product-macrocenter-express-sivi-krema",
+              "title": "Sıvı Krema",
+              "description": "Son Tüketim Tarihi: 26.04.2026",
+              "priceText": "42 TL",
+              "unitPrice": 42.0,
+              "image": "https://images.unsplash.com/photo-1559561854-7cf2c4f8ab21?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 12
+            }
+          ]
+        },
+        {
+          "id": "section-macrocenter-express-et-ve-sarkuteri",
+          "key": "et-ve-sarkuteri",
+          "label": "Et & Şarküteri",
+          "displayOrder": 2,
+          "products": [
+            {
+              "id": "market-product-macrocenter-express-paket-kusbasi-et",
+              "title": "Paket Kuşbaşı Et",
+              "description": "Son Tüketim Tarihi: 08.04.2026",
+              "priceText": "229 TL",
+              "unitPrice": 229.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-macrocenter-express-hindi-fume",
+              "title": "Hindi Füme",
+              "description": "Son Tüketim Tarihi: 18.04.2026",
+              "priceText": "82 TL",
+              "unitPrice": 82.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-macrocenter-express-pastirma",
+              "title": "Pastırma",
+              "description": "Son Tüketim Tarihi: 21.04.2026",
+              "priceText": "169 TL",
+              "unitPrice": 169.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-macrocenter-express-paket-kavurma",
+              "title": "Paket Kavurma",
+              "description": "Son Tüketim Tarihi: 27.04.2026",
+              "priceText": "189 TL",
+              "unitPrice": 189.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-macrocenter-express-pismis-hazir-doner-paketli",
+              "title": "Pişmiş Hazır Döner (Paketli)",
+              "description": "Son Tüketim Tarihi: 12.04.2026",
+              "priceText": "119 TL",
+              "unitPrice": 119.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 5
+            }
+          ]
+        },
+        {
+          "id": "section-macrocenter-express-manav",
+          "key": "manav",
+          "label": "Manav",
+          "displayOrder": 3,
+          "products": [
+            {
+              "id": "market-product-macrocenter-express-kultur-mantari",
+              "title": "Kültür Mantarı",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "39 TL",
+              "unitPrice": 39.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-macrocenter-express-paket-maydanoz",
+              "title": "Paket Maydanoz",
+              "description": "Son Tüketim Tarihi: 06.04.2026",
+              "priceText": "14 TL",
+              "unitPrice": 14.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-macrocenter-express-roka",
+              "title": "Roka",
+              "description": "Son Tüketim Tarihi: 06.04.2026",
+              "priceText": "16 TL",
+              "unitPrice": 16.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-macrocenter-express-cilek",
+              "title": "Çilek",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "59 TL",
+              "unitPrice": 59.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-macrocenter-express-brokoli-strec-film-kapli",
+              "title": "Brokoli (Streç film kaplı)",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "37 TL",
+              "unitPrice": 37.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 5
+            }
+          ]
+        },
+        {
+          "id": "section-macrocenter-express-unlu-mamuller",
+          "key": "unlu-mamuller",
+          "label": "Unlu Mamuller",
+          "displayOrder": 4,
+          "products": [
+            {
+              "id": "market-product-macrocenter-express-taze-yufka",
+              "title": "Taze Yufka",
+              "description": "Son Tüketim Tarihi: 08.04.2026",
+              "priceText": "36 TL",
+              "unitPrice": 36.0,
+              "image": "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-macrocenter-express-lavas-tortilla",
+              "title": "Lavaş/Tortilla",
+              "description": "Son Tüketim Tarihi: 18.04.2026",
+              "priceText": "46 TL",
+              "unitPrice": 46.0,
+              "image": "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-macrocenter-express-kremali-yas-pasta-reyondaki",
+              "title": "Kremalı Yaş Pasta (Reyondaki)",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "159 TL",
+              "unitPrice": 159.0,
+              "image": "https://images.unsplash.com/photo-1519864600265-abb23847ef2c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-macrocenter-express-ekler-paketli",
+              "title": "Ekler (Paketli)",
+              "description": "Son Tüketim Tarihi: 08.04.2026",
+              "priceText": "56 TL",
+              "unitPrice": 56.0,
+              "image": "https://images.unsplash.com/photo-1519864600265-abb23847ef2c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-macrocenter-express-sutlac-paketli-hazir",
+              "title": "Sütlaç (Paketli/Hazır)",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "34 TL",
+              "unitPrice": 34.0,
+              "image": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 5
+            }
+          ]
+        },
+        {
+          "id": "section-macrocenter-express-hazir-gida",
+          "key": "hazir-gida",
+          "label": "Hazır Gıda",
+          "displayOrder": 5,
+          "products": [
+            {
+              "id": "market-product-macrocenter-express-paketli-humus",
+              "title": "Paketli Humus",
+              "description": "Son Tüketim Tarihi: 14.04.2026",
+              "priceText": "44 TL",
+              "unitPrice": 44.0,
+              "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-macrocenter-express-paketli-haydari",
+              "title": "Paketli Haydari",
+              "description": "Son Tüketim Tarihi: 12.04.2026",
+              "priceText": "42 TL",
+              "unitPrice": 42.0,
+              "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-macrocenter-express-amerikan-salatasi-paketli",
+              "title": "Amerikan Salatası (Paketli)",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "39 TL",
+              "unitPrice": 39.0,
+              "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "file-market",
+      "vendorId": "vendor-file-market",
+      "title": "File Market",
+      "subtitle": "Ekonomik günlük temel ürünler",
+      "meta": "Gel-Al • 12 dk hazır",
+      "image": "https://images.unsplash.com/photo-1583258292688-d0213dc5a3a8?auto=format&fit=crop&w=1200&q=80",
+      "badge": "İndirim",
+      "rewardLabel": "Gel-Al",
+      "ratingLabel": "4.7",
+      "distanceLabel": "0.3 km",
+      "etaLabel": "12 dk",
+      "promoLabel": "Bütçe dostu temel stoklar",
+      "workingHoursLabel": "08:30-01:00",
+      "minOrderLabel": "Yok",
+      "deliveryWindowLabel": "Hazır olduğunda",
+      "reviewCountLabel": "214",
+      "announcement": "Günlük tüketim ürünleri hızlı akışta toplanır ve mağaza girişinde teslim edilir.",
+      "bundleTitle": "Ekonomik Temel Sepet",
+      "bundleDescription": "Süt, et ürünleri, ekmek ve manav reyonundan günlük temel ihtiyaç seçkisi.",
+      "bundlePrice": "179 TL",
+      "heroTitle": "File Market ile temel ihtiyaçları sade ve hızlı topla",
+      "heroSubtitle": "Bütçe dostu süt, et, manav ve unlu mamuller aynı market akışında hazırlanır.",
+      "displayOrder": 3,
+      "highlights": [
+        {
+          "id": "highlight-file-market-1",
+          "label": "Ekonomik seri",
+          "icon": "sell_outlined",
+          "displayOrder": 1
+        },
+        {
+          "id": "highlight-file-market-2",
+          "label": "Hızlı raf",
+          "icon": "flash_on_outlined",
+          "displayOrder": 2
+        },
+        {
+          "id": "highlight-file-market-3",
+          "label": "Temel ürün",
+          "icon": "inventory_2_outlined",
+          "displayOrder": 3
+        }
+      ],
+      "sections": [
+        {
+          "id": "section-file-market-sut-ve-kahvaltilik",
+          "key": "sut-ve-kahvaltilik",
+          "label": "Süt & Kahvaltılık",
+          "displayOrder": 1,
+          "products": [
+            {
+              "id": "market-product-file-market-gunluk-sut",
+              "title": "Günlük Süt",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "36 TL",
+              "unitPrice": 36.0,
+              "image": "https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-file-market-suzme-yogurt",
+              "title": "Süzme Yoğurt",
+              "description": "Son Tüketim Tarihi: 17.04.2026",
+              "priceText": "58 TL",
+              "unitPrice": 58.0,
+              "image": "https://images.unsplash.com/photo-1514996937319-344454492b37?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-file-market-kefir",
+              "title": "Kefir",
+              "description": "Son Tüketim Tarihi: 11.04.2026",
+              "priceText": "39 TL",
+              "unitPrice": 39.0,
+              "image": "https://images.unsplash.com/photo-1559561854-7cf2c4f8ab21?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-file-market-ayran",
+              "title": "Ayran",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "18 TL",
+              "unitPrice": 18.0,
+              "image": "https://images.unsplash.com/photo-1559561854-7cf2c4f8ab21?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-file-market-ucgen-peynir",
+              "title": "Üçgen Peynir",
+              "description": "Son Tüketim Tarihi: 22.04.2026",
+              "priceText": "44 TL",
+              "unitPrice": 44.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 5
+            },
+            {
+              "id": "market-product-file-market-yumurta",
+              "title": "Yumurta",
+              "description": "Son Tüketim Tarihi: 19.04.2026",
+              "priceText": "84 TL",
+              "unitPrice": 84.0,
+              "image": "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 6
+            }
+          ]
+        },
+        {
+          "id": "section-file-market-et-ve-sarkuteri",
+          "key": "et-ve-sarkuteri",
+          "label": "Et & Şarküteri",
+          "displayOrder": 2,
+          "products": [
+            {
+              "id": "market-product-file-market-paket-tavuk-gogsu",
+              "title": "Paket Tavuk Göğsü",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "129 TL",
+              "unitPrice": 129.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-file-market-hazir-paket-kiyma",
+              "title": "Hazır Paket Kıyma",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "169 TL",
+              "unitPrice": 169.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-file-market-hazir-sinitzel",
+              "title": "Hazır Şinitzel",
+              "description": "Son Tüketim Tarihi: 14.04.2026",
+              "priceText": "109 TL",
+              "unitPrice": 109.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-file-market-hazir-kofte-kasap-kofte-inegol-kofte",
+              "title": "Hazır Köfte (Kasap köfte/İnegöl köfte)",
+              "description": "Son Tüketim Tarihi: 09.04.2026",
+              "priceText": "134 TL",
+              "unitPrice": 134.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            }
+          ]
+        },
+        {
+          "id": "section-file-market-manav",
+          "key": "manav",
+          "label": "Manav",
+          "displayOrder": 3,
+          "products": [
+            {
+              "id": "market-product-file-market-dereotu",
+              "title": "Dereotu",
+              "description": "Son Tüketim Tarihi: 06.04.2026",
+              "priceText": "14 TL",
+              "unitPrice": 14.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-file-market-taze-nane",
+              "title": "Taze Nane",
+              "description": "Son Tüketim Tarihi: 06.04.2026",
+              "priceText": "15 TL",
+              "unitPrice": 15.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-file-market-yesil-sogan",
+              "title": "Yeşil Soğan",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "18 TL",
+              "unitPrice": 18.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-file-market-ispanak-paketli-yikanmis",
+              "title": "Ispanak (Paketli/Yıkanmış)",
+              "description": "Son Tüketim Tarihi: 08.04.2026",
+              "priceText": "28 TL",
+              "unitPrice": 28.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-file-market-carliston-biber",
+              "title": "Çarliston Biber",
+              "description": "Son Tüketim Tarihi: 09.04.2026",
+              "priceText": "32 TL",
+              "unitPrice": 32.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 5
+            },
+            {
+              "id": "market-product-file-market-sivri-biber",
+              "title": "Sivri Biber",
+              "description": "Son Tüketim Tarihi: 09.04.2026",
+              "priceText": "31 TL",
+              "unitPrice": 31.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 6
+            },
+            {
+              "id": "market-product-file-market-marul-kivircik",
+              "title": "Marul/Kıvırcık",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "29 TL",
+              "unitPrice": 29.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 7
+            },
+            {
+              "id": "market-product-file-market-semizotu",
+              "title": "Semizotu",
+              "description": "Son Tüketim Tarihi: 06.04.2026",
+              "priceText": "18 TL",
+              "unitPrice": 18.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 8
+            }
+          ]
+        },
+        {
+          "id": "section-file-market-unlu-mamuller",
+          "key": "unlu-mamuller",
+          "label": "Unlu Mamuller",
+          "displayOrder": 4,
+          "products": [
+            {
+              "id": "market-product-file-market-paket-ekmek-tam-bugday-cavdar",
+              "title": "Paket Ekmek (Tam buğday/Çavdar)",
+              "description": "Son Tüketim Tarihi: 11.04.2026",
+              "priceText": "32 TL",
+              "unitPrice": 32.0,
+              "image": "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-file-market-sandvic-ekmegi",
+              "title": "Sandviç Ekmeği",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "33 TL",
+              "unitPrice": 33.0,
+              "image": "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-file-market-milfoy-hamuru",
+              "title": "Milföy Hamuru",
+              "description": "Son Tüketim Tarihi: 20.04.2026",
+              "priceText": "42 TL",
+              "unitPrice": 42.0,
+              "image": "https://images.unsplash.com/photo-1555507036-ab794f575c59?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-file-market-hazir-ucgen-yufka",
+              "title": "Hazır Üçgen Yufka",
+              "description": "Son Tüketim Tarihi: 17.04.2026",
+              "priceText": "38 TL",
+              "unitPrice": 38.0,
+              "image": "https://images.unsplash.com/photo-1555507036-ab794f575c59?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            }
+          ]
+        },
+        {
+          "id": "section-file-market-hazir-gida",
+          "key": "hazir-gida",
+          "label": "Hazır Gıda",
+          "displayOrder": 5,
+          "products": [
+            {
+              "id": "market-product-file-market-rus-salatasi-paketli",
+              "title": "Rus Salatası (Paketli)",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "39 TL",
+              "unitPrice": 39.0,
+              "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-file-market-saksuka-hazir-paket",
+              "title": "Şakşuka (Hazır paket)",
+              "description": "Son Tüketim Tarihi: 11.04.2026",
+              "priceText": "41 TL",
+              "unitPrice": 41.0,
+              "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-file-market-soguk-sandvic-ucgen-paket",
+              "title": "Soğuk Sandviç (Üçgen paket)",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "47 TL",
+              "unitPrice": 47.0,
+              "image": "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "carrefoursa-mini",
+      "vendorId": "vendor-carrefoursa-mini",
+      "title": "CarrefourSA Mini",
+      "subtitle": "Taze manav ve geniş reyon seçkisi",
+      "meta": "Gel-Al • 16 dk hazır",
+      "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=80",
+      "badge": "Taze",
+      "rewardLabel": "Gel-Al",
+      "ratingLabel": "4.7",
+      "distanceLabel": "0.9 km",
+      "etaLabel": "16 dk",
+      "promoLabel": "Taze manav ve geniş günlük stok",
+      "workingHoursLabel": "09:00-23:00",
+      "minOrderLabel": "Yok",
+      "deliveryWindowLabel": "Hazır olduğunda",
+      "reviewCountLabel": "93",
+      "announcement": "Taze reyon ve paketli ürünler ayrı toplanır; hazır olduğunda mağazadan alınır.",
+      "bundleTitle": "Günlük Taze Sepet",
+      "bundleDescription": "Manav, şarküteri ve unlu mamullerden dengeli günlük alışveriş paketi.",
+      "bundlePrice": "199 TL",
+      "heroTitle": "CarrefourSA Mini ile taze ürünleri tek seferde topla",
+      "heroSubtitle": "Manav, kahvaltılık, et-şarküteri ve hazır gıda reyonları mağazadan al için hızlı hazırlanır.",
+      "displayOrder": 4,
+      "highlights": [
+        {
+          "id": "highlight-carrefoursa-mini-1",
+          "label": "Taze raf",
+          "icon": "eco_outlined",
+          "displayOrder": 1
+        },
+        {
+          "id": "highlight-carrefoursa-mini-2",
+          "label": "Geniş seçenek",
+          "icon": "grid_view_rounded",
+          "displayOrder": 2
+        },
+        {
+          "id": "highlight-carrefoursa-mini-3",
+          "label": "Hızlı teslim",
+          "icon": "shopping_bag_outlined",
+          "displayOrder": 3
+        }
+      ],
+      "sections": [
+        {
+          "id": "section-carrefoursa-mini-sut-ve-kahvaltilik",
+          "key": "sut-ve-kahvaltilik",
+          "label": "Süt & Kahvaltılık",
+          "displayOrder": 1,
+          "products": [
+            {
+              "id": "market-product-carrefoursa-mini-gunluk-sut",
+              "title": "Günlük Süt",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "36 TL",
+              "unitPrice": 36.0,
+              "image": "https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-carrefoursa-mini-paket-yogurt",
+              "title": "Paket Yoğurt",
+              "description": "Son Tüketim Tarihi: 14.04.2026",
+              "priceText": "44 TL",
+              "unitPrice": 44.0,
+              "image": "https://images.unsplash.com/photo-1514996937319-344454492b37?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-carrefoursa-mini-labne-peyniri",
+              "title": "Labne Peyniri",
+              "description": "Son Tüketim Tarihi: 16.04.2026",
+              "priceText": "49 TL",
+              "unitPrice": 49.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-carrefoursa-mini-krem-peynir",
+              "title": "Krem Peynir",
+              "description": "Son Tüketim Tarihi: 19.04.2026",
+              "priceText": "54 TL",
+              "unitPrice": 54.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-carrefoursa-mini-orgu-peyniri",
+              "title": "Örgü Peyniri",
+              "description": "Son Tüketim Tarihi: 20.04.2026",
+              "priceText": "76 TL",
+              "unitPrice": 76.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 5
+            },
+            {
+              "id": "market-product-carrefoursa-mini-sivi-krema",
+              "title": "Sıvı Krema",
+              "description": "Son Tüketim Tarihi: 26.04.2026",
+              "priceText": "42 TL",
+              "unitPrice": 42.0,
+              "image": "https://images.unsplash.com/photo-1559561854-7cf2c4f8ab21?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 6
+            }
+          ]
+        },
+        {
+          "id": "section-carrefoursa-mini-et-ve-sarkuteri",
+          "key": "et-ve-sarkuteri",
+          "label": "Et & Şarküteri",
+          "displayOrder": 2,
+          "products": [
+            {
+              "id": "market-product-carrefoursa-mini-paket-tavuk-but-baget",
+              "title": "Paket Tavuk But/Baget",
+              "description": "Son Tüketim Tarihi: 08.04.2026",
+              "priceText": "118 TL",
+              "unitPrice": 118.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-carrefoursa-mini-tavuk-kanat",
+              "title": "Tavuk Kanat",
+              "description": "Son Tüketim Tarihi: 08.04.2026",
+              "priceText": "124 TL",
+              "unitPrice": 124.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-carrefoursa-mini-dilimli-salam",
+              "title": "Dilimli Salam",
+              "description": "Son Tüketim Tarihi: 17.04.2026",
+              "priceText": "63 TL",
+              "unitPrice": 63.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-carrefoursa-mini-fistikli-salam",
+              "title": "Fıstıklı Salam",
+              "description": "Son Tüketim Tarihi: 18.04.2026",
+              "priceText": "76 TL",
+              "unitPrice": 76.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-carrefoursa-mini-isil-islem-gormus-sucuk",
+              "title": "Isıl İşlem Görmüş Sucuk",
+              "description": "Son Tüketim Tarihi: 26.04.2026",
+              "priceText": "129 TL",
+              "unitPrice": 129.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 5
+            },
+            {
+              "id": "market-product-carrefoursa-mini-pilic-nugget",
+              "title": "Piliç Nugget",
+              "description": "Son Tüketim Tarihi: 20.04.2026",
+              "priceText": "96 TL",
+              "unitPrice": 96.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 6
+            }
+          ]
+        },
+        {
+          "id": "section-carrefoursa-mini-manav",
+          "key": "manav",
+          "label": "Manav",
+          "displayOrder": 3,
+          "products": [
+            {
+              "id": "market-product-carrefoursa-mini-kultur-mantari",
+              "title": "Kültür Mantarı",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "39 TL",
+              "unitPrice": 39.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-carrefoursa-mini-ispanak-paketli-yikanmis",
+              "title": "Ispanak (Paketli/Yıkanmış)",
+              "description": "Son Tüketim Tarihi: 08.04.2026",
+              "priceText": "28 TL",
+              "unitPrice": 28.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-carrefoursa-mini-carliston-biber",
+              "title": "Çarliston Biber",
+              "description": "Son Tüketim Tarihi: 09.04.2026",
+              "priceText": "32 TL",
+              "unitPrice": 32.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-carrefoursa-mini-domates-salkim",
+              "title": "Domates (Salkım)",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "42 TL",
+              "unitPrice": 42.0,
+              "image": "https://images.unsplash.com/photo-1546094096-0df4bcaaa337?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-carrefoursa-mini-salatalik",
+              "title": "Salatalık",
+              "description": "Son Tüketim Tarihi: 09.04.2026",
+              "priceText": "26 TL",
+              "unitPrice": 26.0,
+              "image": "https://images.unsplash.com/photo-1604977046806-87e9d408d8d7?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 5
+            },
+            {
+              "id": "market-product-carrefoursa-mini-brokoli-strec-film-kapli",
+              "title": "Brokoli (Streç film kaplı)",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "37 TL",
+              "unitPrice": 37.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 6
+            }
+          ]
+        },
+        {
+          "id": "section-carrefoursa-mini-unlu-mamuller",
+          "key": "unlu-mamuller",
+          "label": "Unlu Mamuller",
+          "displayOrder": 4,
+          "products": [
+            {
+              "id": "market-product-carrefoursa-mini-taze-yufka",
+              "title": "Taze Yufka",
+              "description": "Son Tüketim Tarihi: 08.04.2026",
+              "priceText": "36 TL",
+              "unitPrice": 36.0,
+              "image": "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-carrefoursa-mini-paket-ekmek-tam-bugday-cavdar",
+              "title": "Paket Ekmek (Tam buğday/Çavdar)",
+              "description": "Son Tüketim Tarihi: 11.04.2026",
+              "priceText": "32 TL",
+              "unitPrice": 32.0,
+              "image": "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-carrefoursa-mini-lavas-tortilla",
+              "title": "Lavaş/Tortilla",
+              "description": "Son Tüketim Tarihi: 18.04.2026",
+              "priceText": "46 TL",
+              "unitPrice": 46.0,
+              "image": "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-carrefoursa-mini-milfoy-hamuru",
+              "title": "Milföy Hamuru",
+              "description": "Son Tüketim Tarihi: 20.04.2026",
+              "priceText": "42 TL",
+              "unitPrice": 42.0,
+              "image": "https://images.unsplash.com/photo-1555507036-ab794f575c59?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-carrefoursa-mini-ekler-paketli",
+              "title": "Ekler (Paketli)",
+              "description": "Son Tüketim Tarihi: 08.04.2026",
+              "priceText": "56 TL",
+              "unitPrice": 56.0,
+              "image": "https://images.unsplash.com/photo-1519864600265-abb23847ef2c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 5
+            },
+            {
+              "id": "market-product-carrefoursa-mini-sutlac-paketli-hazir",
+              "title": "Sütlaç (Paketli/Hazır)",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "34 TL",
+              "unitPrice": 34.0,
+              "image": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 6
+            }
+          ]
+        },
+        {
+          "id": "section-carrefoursa-mini-hazir-gida",
+          "key": "hazir-gida",
+          "label": "Hazır Gıda",
+          "displayOrder": 5,
+          "products": [
+            {
+              "id": "market-product-carrefoursa-mini-paketli-haydari",
+              "title": "Paketli Haydari",
+              "description": "Son Tüketim Tarihi: 12.04.2026",
+              "priceText": "42 TL",
+              "unitPrice": 42.0,
+              "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-carrefoursa-mini-hazir-cig-kofte-vakumlu-paket",
+              "title": "Hazır Çiğ Köfte (Vakumlu paket)",
+              "description": "Son Tüketim Tarihi: 12.04.2026",
+              "priceText": "49 TL",
+              "unitPrice": 49.0,
+              "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-carrefoursa-mini-taze-makarna-buzdolabi-reyonu",
+              "title": "Taze Makarna (Buzdolabı reyonu)",
+              "description": "Son Tüketim Tarihi: 15.04.2026",
+              "priceText": "69 TL",
+              "unitPrice": 69.0,
+              "image": "https://images.unsplash.com/photo-1551462147-ff29053bfc14?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sok-market",
+      "vendorId": "vendor-sok-market",
+      "title": "ŞOK Market",
+      "subtitle": "Uygun fiyatlı temel ihtiyaç seçkisi",
+      "meta": "Gel-Al • 11 dk hazır",
+      "image": "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?auto=format&fit=crop&w=1200&q=80",
+      "badge": "Avantaj",
+      "rewardLabel": "Gel-Al",
+      "ratingLabel": "4.6",
+      "distanceLabel": "0.5 km",
+      "etaLabel": "11 dk",
+      "promoLabel": "Uygun fiyatlı günlük ürünler",
+      "workingHoursLabel": "08:30-22:30",
+      "minOrderLabel": "Yok",
+      "deliveryWindowLabel": "Hazır olduğunda",
+      "reviewCountLabel": "178",
+      "announcement": "Temel ihtiyaç sepetleri hızlı toplanır; mahalle şubesinden sıra beklemeden teslim alınır.",
+      "bundleTitle": "Mahalle Temel İhtiyaç Sepeti",
+      "bundleDescription": "Süt, ekmek, manav ve hazır ürünlerden uygun fiyatlı günlük kombin.",
+      "bundlePrice": "149 TL",
+      "heroTitle": "ŞOK Market ile mahalle alışverişini hızla tamamla",
+      "heroSubtitle": "Uygun fiyatlı süt, et, manav ve hazır ürünler kısa hazırlık süresiyle mağazada seni bekler.",
+      "displayOrder": 5,
+      "highlights": [
+        {
+          "id": "highlight-sok-market-1",
+          "label": "Avantajlı fiyat",
+          "icon": "local_offer_outlined",
+          "displayOrder": 1
+        },
+        {
+          "id": "highlight-sok-market-2",
+          "label": "Mahalle şubesi",
+          "icon": "store_outlined",
+          "displayOrder": 2
+        },
+        {
+          "id": "highlight-sok-market-3",
+          "label": "Hızlı toplama",
+          "icon": "timer_outlined",
+          "displayOrder": 3
+        }
+      ],
+      "sections": [
+        {
+          "id": "section-sok-market-sut-ve-kahvaltilik",
+          "key": "sut-ve-kahvaltilik",
+          "label": "Süt & Kahvaltılık",
+          "displayOrder": 1,
+          "products": [
+            {
+              "id": "market-product-sok-market-lor-peyniri",
+              "title": "Lor Peyniri",
+              "description": "Son Tüketim Tarihi: 12.04.2026",
+              "priceText": "52 TL",
+              "unitPrice": 52.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-sok-market-taze-kasar-peyniri",
+              "title": "Taze Kaşar Peyniri",
+              "description": "Son Tüketim Tarihi: 18.04.2026",
+              "priceText": "95 TL",
+              "unitPrice": 95.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-sok-market-meyveli-yogurt",
+              "title": "Meyveli Yoğurt",
+              "description": "Son Tüketim Tarihi: 13.04.2026",
+              "priceText": "24 TL",
+              "unitPrice": 24.0,
+              "image": "https://images.unsplash.com/photo-1514996937319-344454492b37?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-sok-market-ucgen-peynir",
+              "title": "Üçgen Peynir",
+              "description": "Son Tüketim Tarihi: 22.04.2026",
+              "priceText": "44 TL",
+              "unitPrice": 44.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-sok-market-yumurta",
+              "title": "Yumurta",
+              "description": "Son Tüketim Tarihi: 19.04.2026",
+              "priceText": "84 TL",
+              "unitPrice": 84.0,
+              "image": "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 5
+            }
+          ]
+        },
+        {
+          "id": "section-sok-market-et-ve-sarkuteri",
+          "key": "et-ve-sarkuteri",
+          "label": "Et & Şarküteri",
+          "displayOrder": 2,
+          "products": [
+            {
+              "id": "market-product-sok-market-dana-sosis",
+              "title": "Dana Sosis",
+              "description": "Son Tüketim Tarihi: 16.04.2026",
+              "priceText": "87 TL",
+              "unitPrice": 87.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-sok-market-pilic-sosis",
+              "title": "Piliç Sosis",
+              "description": "Son Tüketim Tarihi: 15.04.2026",
+              "priceText": "74 TL",
+              "unitPrice": 74.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-sok-market-hazir-sinitzel",
+              "title": "Hazır Şinitzel",
+              "description": "Son Tüketim Tarihi: 14.04.2026",
+              "priceText": "109 TL",
+              "unitPrice": 109.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-sok-market-hazir-kofte-kasap-kofte-inegol-kofte",
+              "title": "Hazır Köfte (Kasap köfte/İnegöl köfte)",
+              "description": "Son Tüketim Tarihi: 09.04.2026",
+              "priceText": "134 TL",
+              "unitPrice": 134.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            }
+          ]
+        },
+        {
+          "id": "section-sok-market-manav",
+          "key": "manav",
+          "label": "Manav",
+          "displayOrder": 3,
+          "products": [
+            {
+              "id": "market-product-sok-market-dereotu",
+              "title": "Dereotu",
+              "description": "Son Tüketim Tarihi: 06.04.2026",
+              "priceText": "14 TL",
+              "unitPrice": 14.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-sok-market-yesil-sogan",
+              "title": "Yeşil Soğan",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "18 TL",
+              "unitPrice": 18.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-sok-market-sivri-biber",
+              "title": "Sivri Biber",
+              "description": "Son Tüketim Tarihi: 09.04.2026",
+              "priceText": "31 TL",
+              "unitPrice": 31.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-sok-market-domates-salkim",
+              "title": "Domates (Salkım)",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "42 TL",
+              "unitPrice": 42.0,
+              "image": "https://images.unsplash.com/photo-1546094096-0df4bcaaa337?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-sok-market-salatalik",
+              "title": "Salatalık",
+              "description": "Son Tüketim Tarihi: 09.04.2026",
+              "priceText": "26 TL",
+              "unitPrice": 26.0,
+              "image": "https://images.unsplash.com/photo-1604977046806-87e9d408d8d7?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 5
+            },
+            {
+              "id": "market-product-sok-market-marul-kivircik",
+              "title": "Marul/Kıvırcık",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "29 TL",
+              "unitPrice": 29.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 6
+            }
+          ]
+        },
+        {
+          "id": "section-sok-market-unlu-mamuller",
+          "key": "unlu-mamuller",
+          "label": "Unlu Mamuller",
+          "displayOrder": 4,
+          "products": [
+            {
+              "id": "market-product-sok-market-hamburger-ekmegi",
+              "title": "Hamburger Ekmeği",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "34 TL",
+              "unitPrice": 34.0,
+              "image": "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-sok-market-sandvic-ekmegi",
+              "title": "Sandviç Ekmeği",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "33 TL",
+              "unitPrice": 33.0,
+              "image": "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-sok-market-hazir-ucgen-yufka",
+              "title": "Hazır Üçgen Yufka",
+              "description": "Son Tüketim Tarihi: 17.04.2026",
+              "priceText": "38 TL",
+              "unitPrice": 38.0,
+              "image": "https://images.unsplash.com/photo-1555507036-ab794f575c59?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-sok-market-paket-simit",
+              "title": "Paket Simit",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "29 TL",
+              "unitPrice": 29.0,
+              "image": "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-sok-market-supangle-puding-hazir",
+              "title": "Supangle/Puding (Hazır)",
+              "description": "Son Tüketim Tarihi: 14.04.2026",
+              "priceText": "32 TL",
+              "unitPrice": 32.0,
+              "image": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 5
+            }
+          ]
+        },
+        {
+          "id": "section-sok-market-hazir-gida",
+          "key": "hazir-gida",
+          "label": "Hazır Gıda",
+          "displayOrder": 5,
+          "products": [
+            {
+              "id": "market-product-sok-market-amerikan-salatasi-paketli",
+              "title": "Amerikan Salatası (Paketli)",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "39 TL",
+              "unitPrice": 39.0,
+              "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-sok-market-rus-salatasi-paketli",
+              "title": "Rus Salatası (Paketli)",
+              "description": "Son Tüketim Tarihi: 10.04.2026",
+              "priceText": "39 TL",
+              "unitPrice": 39.0,
+              "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-sok-market-saksuka-hazir-paket",
+              "title": "Şakşuka (Hazır paket)",
+              "description": "Son Tüketim Tarihi: 11.04.2026",
+              "priceText": "41 TL",
+              "unitPrice": 41.0,
+              "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-sok-market-soguk-sandvic-ucgen-paket",
+              "title": "Soğuk Sandviç (Üçgen paket)",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "47 TL",
+              "unitPrice": 47.0,
+              "image": "https://images.unsplash.com/photo-1506084868230-bb9d95c24759?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "a101-hizli",
+      "vendorId": "vendor-a101-hizli",
+      "title": "A101 Hızlı",
+      "subtitle": "Hızlı temel stok ve günlük soğuk reyon",
+      "meta": "Gel-Al • 14 dk hazır",
+      "image": "https://images.unsplash.com/photo-1579113800032-c38bd7635818?auto=format&fit=crop&w=1200&q=80",
+      "badge": "Pratik",
+      "rewardLabel": "Gel-Al",
+      "ratingLabel": "4.5",
+      "distanceLabel": "1.2 km",
+      "etaLabel": "14 dk",
+      "promoLabel": "Temel stok ve şarküteri odağı",
+      "workingHoursLabel": "09:00-22:00",
+      "minOrderLabel": "Yok",
+      "deliveryWindowLabel": "Hazır olduğunda",
+      "reviewCountLabel": "147",
+      "announcement": "Soğuk reyon ve şarküteri ürünleri mağaza içinde kısa sürede hazırlanır.",
+      "bundleTitle": "Soğuk Reyon Sepeti",
+      "bundleDescription": "Peynir, şarküteri, meze ve taze makarnadan oluşan hızlı akşam sepeti.",
+      "bundlePrice": "189 TL",
+      "heroTitle": "A101 Hızlı ile günlük stok alışverişi tek ekranda",
+      "heroSubtitle": "Şarküteri, kahvaltılık ve hazır gıdalar tek akışta seçilir; mağazadan kolay teslim alınır.",
+      "displayOrder": 6,
+      "highlights": [
+        {
+          "id": "highlight-a101-hizli-1",
+          "label": "Soğuk reyon",
+          "icon": "kitchen_outlined",
+          "displayOrder": 1
+        },
+        {
+          "id": "highlight-a101-hizli-2",
+          "label": "Şarküteri",
+          "icon": "set_meal_outlined",
+          "displayOrder": 2
+        },
+        {
+          "id": "highlight-a101-hizli-3",
+          "label": "Pratik teslim",
+          "icon": "flash_on_outlined",
+          "displayOrder": 3
+        }
+      ],
+      "sections": [
+        {
+          "id": "section-a101-hizli-sut-ve-kahvaltilik",
+          "key": "sut-ve-kahvaltilik",
+          "label": "Süt & Kahvaltılık",
+          "displayOrder": 1,
+          "products": [
+            {
+              "id": "market-product-a101-hizli-kaymak",
+              "title": "Kaymak",
+              "description": "Son Tüketim Tarihi: 09.04.2026",
+              "priceText": "67 TL",
+              "unitPrice": 67.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-a101-hizli-tereyagi",
+              "title": "Tereyağı",
+              "description": "Son Tüketim Tarihi: 24.04.2026",
+              "priceText": "119 TL",
+              "unitPrice": 119.0,
+              "image": "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-a101-hizli-beyaz-peynir-vakumlu-paket",
+              "title": "Beyaz Peynir (Vakumlu paket)",
+              "description": "Son Tüketim Tarihi: 28.04.2026",
+              "priceText": "109 TL",
+              "unitPrice": 109.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-a101-hizli-cecil-peyniri",
+              "title": "Çeçil Peyniri",
+              "description": "Son Tüketim Tarihi: 21.04.2026",
+              "priceText": "72 TL",
+              "unitPrice": 72.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-a101-hizli-orgu-peyniri",
+              "title": "Örgü Peyniri",
+              "description": "Son Tüketim Tarihi: 20.04.2026",
+              "priceText": "76 TL",
+              "unitPrice": 76.0,
+              "image": "https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 5
+            }
+          ]
+        },
+        {
+          "id": "section-a101-hizli-et-ve-sarkuteri",
+          "key": "et-ve-sarkuteri",
+          "label": "Et & Şarküteri",
+          "displayOrder": 2,
+          "products": [
+            {
+              "id": "market-product-a101-hizli-paket-tavuk-gogsu",
+              "title": "Paket Tavuk Göğsü",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "129 TL",
+              "unitPrice": 129.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-a101-hizli-hazir-paket-kiyma",
+              "title": "Hazır Paket Kıyma",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "169 TL",
+              "unitPrice": 169.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-a101-hizli-isil-islem-gormus-sucuk",
+              "title": "Isıl İşlem Görmüş Sucuk",
+              "description": "Son Tüketim Tarihi: 26.04.2026",
+              "priceText": "129 TL",
+              "unitPrice": 129.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-a101-hizli-hindi-fume",
+              "title": "Hindi Füme",
+              "description": "Son Tüketim Tarihi: 18.04.2026",
+              "priceText": "82 TL",
+              "unitPrice": 82.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-a101-hizli-pastirma",
+              "title": "Pastırma",
+              "description": "Son Tüketim Tarihi: 21.04.2026",
+              "priceText": "169 TL",
+              "unitPrice": 169.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 5
+            },
+            {
+              "id": "market-product-a101-hizli-paket-kavurma",
+              "title": "Paket Kavurma",
+              "description": "Son Tüketim Tarihi: 27.04.2026",
+              "priceText": "189 TL",
+              "unitPrice": 189.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 6
+            },
+            {
+              "id": "market-product-a101-hizli-pismis-hazir-doner-paketli",
+              "title": "Pişmiş Hazır Döner (Paketli)",
+              "description": "Son Tüketim Tarihi: 12.04.2026",
+              "priceText": "119 TL",
+              "unitPrice": 119.0,
+              "image": "https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 7
+            }
+          ]
+        },
+        {
+          "id": "section-a101-hizli-manav",
+          "key": "manav",
+          "label": "Manav",
+          "displayOrder": 3,
+          "products": [
+            {
+              "id": "market-product-a101-hizli-paket-maydanoz",
+              "title": "Paket Maydanoz",
+              "description": "Son Tüketim Tarihi: 06.04.2026",
+              "priceText": "14 TL",
+              "unitPrice": 14.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-a101-hizli-roka",
+              "title": "Roka",
+              "description": "Son Tüketim Tarihi: 06.04.2026",
+              "priceText": "16 TL",
+              "unitPrice": 16.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-a101-hizli-taze-nane",
+              "title": "Taze Nane",
+              "description": "Son Tüketim Tarihi: 06.04.2026",
+              "priceText": "15 TL",
+              "unitPrice": 15.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-a101-hizli-cilek",
+              "title": "Çilek",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "59 TL",
+              "unitPrice": 59.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 4
+            },
+            {
+              "id": "market-product-a101-hizli-semizotu",
+              "title": "Semizotu",
+              "description": "Son Tüketim Tarihi: 06.04.2026",
+              "priceText": "18 TL",
+              "unitPrice": 18.0,
+              "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=80",
+              "displayOrder": 5
+            }
+          ]
+        },
+        {
+          "id": "section-a101-hizli-unlu-mamuller",
+          "key": "unlu-mamuller",
+          "label": "Unlu Mamuller",
+          "displayOrder": 4,
+          "products": [
+            {
+              "id": "market-product-a101-hizli-kremali-yas-pasta-reyondaki",
+              "title": "Kremalı Yaş Pasta (Reyondaki)",
+              "description": "Son Tüketim Tarihi: 07.04.2026",
+              "priceText": "159 TL",
+              "unitPrice": 159.0,
+              "image": "https://images.unsplash.com/photo-1519864600265-abb23847ef2c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            }
+          ]
+        },
+        {
+          "id": "section-a101-hizli-hazir-gida",
+          "key": "hazir-gida",
+          "label": "Hazır Gıda",
+          "displayOrder": 5,
+          "products": [
+            {
+              "id": "market-product-a101-hizli-paketli-humus",
+              "title": "Paketli Humus",
+              "description": "Son Tüketim Tarihi: 14.04.2026",
+              "priceText": "44 TL",
+              "unitPrice": 44.0,
+              "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 1
+            },
+            {
+              "id": "market-product-a101-hizli-paketli-haydari",
+              "title": "Paketli Haydari",
+              "description": "Son Tüketim Tarihi: 12.04.2026",
+              "priceText": "42 TL",
+              "unitPrice": 42.0,
+              "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 2
+            },
+            {
+              "id": "market-product-a101-hizli-hazir-cig-kofte-vakumlu-paket",
+              "title": "Hazır Çiğ Köfte (Vakumlu paket)",
+              "description": "Son Tüketim Tarihi: 12.04.2026",
+              "priceText": "49 TL",
+              "unitPrice": 49.0,
+              "image": "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 3
+            },
+            {
+              "id": "market-product-a101-hizli-taze-makarna-buzdolabi-reyonu",
+              "title": "Taze Makarna (Buzdolabı reyonu)",
+              "description": "Son Tüketim Tarihi: 15.04.2026",
+              "priceText": "69 TL",
+              "unitPrice": 69.0,
+              "image": "https://images.unsplash.com/photo-1551462147-ff29053bfc14?auto=format&fit=crop&w=900&q=80",
+              "displayOrder": 4
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "id": "event-galata-jazz",
+      "title": "Galata'da Caz Gecesi",
+      "venue": "Galata Sahnesi",
+      "district": "Beyoğlu, İstanbul",
+      "dateLabel": "24 Eki 2026",
+      "timeLabel": "19:00",
+      "image": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=1200&q=80",
+      "pointsCost": 650,
+      "primaryTag": "Konser",
+      "secondaryTag": "VIP",
+      "description": "Galata Kulesi meydanında unutulmaz bir caz ve gastronomi akşamı. Dünya sahnesinden müzisyenler ve özel menüler aynı gecede buluşuyor.",
+      "organizer": "Jazz Collective",
+      "participantLabel": "120+",
+      "ticketCategory": "VIP",
+      "locationTitle": "Galata Kulesi Meydanı",
+      "locationSubtitle": "Beyoğlu, İstanbul",
+      "displayOrder": 1
+    },
+    {
+      "id": "event-rooftop-akustik",
+      "title": "Rooftop Akustik Gecesi",
+      "venue": "Frankhan Teras",
+      "district": "Karaköy, İstanbul",
+      "dateLabel": "25 Eki 2026",
+      "timeLabel": "20:30",
+      "image": "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1200&q=80",
+      "pointsCost": 520,
+      "primaryTag": "Konser",
+      "secondaryTag": "Akustik",
+      "description": "Şehir ışıklarının üzerinde kurulan teras sahnede akustik performanslar ve sınırlı sayıda ayakta bilet aynı gecede buluşuyor.",
+      "organizer": "Rooftop Sessions",
+      "participantLabel": "90+",
+      "ticketCategory": "Ayakta",
+      "locationTitle": "Frankhan Teras Sahnesi",
+      "locationSubtitle": "Karaköy, İstanbul",
+      "displayOrder": 2
+    },
+    {
+      "id": "event-soho-indie-session",
+      "title": "Soho Indie Session",
+      "venue": "Babylon Foyer",
+      "district": "Beyoğlu, İstanbul",
+      "dateLabel": "27 Eki 2026",
+      "timeLabel": "21:00",
+      "image": "https://images.unsplash.com/photo-1507874457470-272b3c8d8ee2?auto=format&fit=crop&w=1200&q=80",
+      "pointsCost": 480,
+      "primaryTag": "Konser",
+      "secondaryTag": "Ayakta",
+      "description": "Bağımsız müzik sahnesinden üç farklı grup aynı gecede kısa setlerle sahne alıyor. Hızlı giriş ve lounge alanı dahil.",
+      "organizer": "Soho Sounds",
+      "participantLabel": "180+",
+      "ticketCategory": "Genel Katılım",
+      "locationTitle": "Babylon Foyer",
+      "locationSubtitle": "Beyoğlu, İstanbul",
+      "displayOrder": 3
+    },
+    {
+      "id": "event-macbeth-stage",
+      "title": "Macbeth Sahne Uyarlaması",
+      "venue": "Zorlu PSM",
+      "district": "Beşiktaş, İstanbul",
+      "dateLabel": "26 Eki 2026",
+      "timeLabel": "20:00",
+      "image": "https://images.unsplash.com/photo-1503095396549-807759245b35?auto=format&fit=crop&w=1200&q=80",
+      "pointsCost": 540,
+      "primaryTag": "Tiyatro",
+      "secondaryTag": "Prömiyer",
+      "description": "Klasik Macbeth metni çağdaş sahneleme, canlı müzik geçişleri ve güçlü oyuncu kadrosuyla yeniden yorumlanıyor.",
+      "organizer": "PSM Tiyatro",
+      "participantLabel": "220",
+      "ticketCategory": "Orkestra",
+      "locationTitle": "Zorlu PSM Turkcell Sahnesi",
+      "locationSubtitle": "Beşiktaş, İstanbul",
+      "displayOrder": 4
+    },
+    {
+      "id": "event-summer-night-comedy",
+      "title": "Bir Yaz Gecesi Komedisi",
+      "venue": "Moda Sahnesi",
+      "district": "Kadıköy, İstanbul",
+      "dateLabel": "29 Eki 2026",
+      "timeLabel": "19:30",
+      "image": "https://images.unsplash.com/photo-1518998053901-5348d3961a04?auto=format&fit=crop&w=1200&q=80",
+      "pointsCost": 410,
+      "primaryTag": "Tiyatro",
+      "secondaryTag": "Komedi",
+      "description": "Tempolu sahne geçişleri ve canlı anlatımıyla modern bir romantik komedi uyarlaması. Kampüs sonrası ideal akşam planı.",
+      "organizer": "Moda Tiyatro Topluluğu",
+      "participantLabel": "140",
+      "ticketCategory": "Salon",
+      "locationTitle": "Moda Sahnesi",
+      "locationSubtitle": "Kadıköy, İstanbul",
+      "displayOrder": 5
+    },
+    {
+      "id": "event-improv-night",
+      "title": "Doğaçlama Gece Seansı",
+      "venue": "Kadıköy Boa Sahne",
+      "district": "Kadıköy, İstanbul",
+      "dateLabel": "30 Eki 2026",
+      "timeLabel": "21:15",
+      "image": "https://images.unsplash.com/photo-1505236858219-8359eb29e329?auto=format&fit=crop&w=1200&q=80",
+      "pointsCost": 360,
+      "primaryTag": "Tiyatro",
+      "secondaryTag": "İnteraktif",
+      "description": "Seyircinin yön verdiği kısa oyunlar, doğaçlama skeçler ve sahne üstü mini yarışmalarla ilerleyen enerjik gece.",
+      "organizer": "Boa Improv",
+      "participantLabel": "95",
+      "ticketCategory": "Sahne Önü",
+      "locationTitle": "Boa Sahne",
+      "locationSubtitle": "Kadıköy, İstanbul",
+      "displayOrder": 6
+    },
+    {
+      "id": "event-kadikoy-food-fest",
+      "title": "Kadıköy Lezzet Festivali",
+      "venue": "Festival Park",
+      "district": "Kadıköy, İstanbul",
+      "dateLabel": "28 Eki 2026",
+      "timeLabel": "14:00",
+      "image": "https://images.unsplash.com/photo-1528605248644-14dd04022da1?auto=format&fit=crop&w=1200&q=80",
+      "pointsCost": 300,
+      "primaryTag": "Festival",
+      "secondaryTag": "Açık Hava",
+      "description": "Sokak lezzetleri, DJ setleri ve öğrenci dostu tadım alanlarıyla gün boyu süren şehir festivali deneyimi.",
+      "organizer": "City Flavor Week",
+      "participantLabel": "500+",
+      "ticketCategory": "Festival Giriş",
+      "locationTitle": "Kadıköy Festival Park",
+      "locationSubtitle": "Kadıköy, İstanbul",
+      "displayOrder": 7
+    },
+    {
+      "id": "event-vintage-design-fest",
+      "title": "Vintage Tasarım Fest",
+      "venue": "Bomontiada Avlu",
+      "district": "Şişli, İstanbul",
+      "dateLabel": "31 Eki 2026",
+      "timeLabel": "13:00",
+      "image": "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80",
+      "pointsCost": 340,
+      "primaryTag": "Festival",
+      "secondaryTag": "Tasarım",
+      "description": "Bağımsız tasarımcı stantları, plak seçkileri ve mini workshop alanlarıyla gün boyu süren yaratıcı festival.",
+      "organizer": "Design District",
+      "participantLabel": "280+",
+      "ticketCategory": "Festival Pass",
+      "locationTitle": "Bomontiada Avlu",
+      "locationSubtitle": "Şişli, İstanbul",
+      "displayOrder": 8
+    },
+    {
+      "id": "event-bahar-renk-festivali",
+      "title": "Bahar Renk Festivali",
+      "venue": "Life Park",
+      "district": "Sarıyer, İstanbul",
+      "dateLabel": "02 Kas 2026",
+      "timeLabel": "15:00",
+      "image": "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=1200&q=80",
+      "pointsCost": 390,
+      "primaryTag": "Festival",
+      "secondaryTag": "DJ Set",
+      "description": "Açık hava sahnesi, renk temalı deneyim alanları ve gün batımına uzanan DJ performanslarıyla canlı festival akışı.",
+      "organizer": "Color Vibe",
+      "participantLabel": "620+",
+      "ticketCategory": "Genel Katılım",
+      "locationTitle": "Life Park Ana Sahne",
+      "locationSubtitle": "Sarıyer, İstanbul",
+      "displayOrder": 9
+    },
+    {
+      "id": "event-pottery-workshop",
+      "title": "Seramik Atölyesi",
+      "venue": "Bomontiada",
+      "district": "Şişli, İstanbul",
+      "dateLabel": "26 Eki 2026",
+      "timeLabel": "18:30",
+      "image": "https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=1200&q=80",
+      "pointsCost": 420,
+      "primaryTag": "Atölye",
+      "secondaryTag": "Sınırlı Kontenjan",
+      "description": "Seramik sanatçılarıyla iki saatlik uygulamalı workshop. Kendi kupanı şekillendirip fırınlanmak üzere bırakıyorsun.",
+      "organizer": "Clay Studio Istanbul",
+      "participantLabel": "48",
+      "ticketCategory": "Workshop",
+      "locationTitle": "Bomontiada Tasarım Alanı",
+      "locationSubtitle": "Şişli, İstanbul",
+      "displayOrder": 10
+    },
+    {
+      "id": "event-analog-photo-workshop",
+      "title": "Analog Fotoğraf Atölyesi",
+      "venue": "Minoa Pera",
+      "district": "Beyoğlu, İstanbul",
+      "dateLabel": "27 Eki 2026",
+      "timeLabel": "18:00",
+      "image": "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=1200&q=80",
+      "pointsCost": 430,
+      "primaryTag": "Atölye",
+      "secondaryTag": "Uygulamalı",
+      "description": "35mm makineler, film yükleme ve kadraj egzersizleriyle başlayan uygulamalı atölyede çekim pratiği de yapılıyor.",
+      "organizer": "Lab 35mm",
+      "participantLabel": "32",
+      "ticketCategory": "Workshop",
+      "locationTitle": "Minoa Pera Studio",
+      "locationSubtitle": "Beyoğlu, İstanbul",
+      "displayOrder": 11
+    },
+    {
+      "id": "event-cocktail-workshop",
+      "title": "Kokteyl Workshop",
+      "venue": "Feriye",
+      "district": "Ortaköy, İstanbul",
+      "dateLabel": "01 Kas 2026",
+      "timeLabel": "19:00",
+      "image": "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&w=1200&q=80",
+      "pointsCost": 460,
+      "primaryTag": "Atölye",
+      "secondaryTag": "Mixology",
+      "description": "Bar ekibiyle üç imza kokteyl hazırladığın, ölçü ve sunum tekniklerini denediğin akşam workshop deneyimi.",
+      "organizer": "Feriye Lab",
+      "participantLabel": "40",
+      "ticketCategory": "Workshop",
+      "locationTitle": "Feriye Workshop Barı",
+      "locationSubtitle": "Ortaköy, İstanbul",
+      "displayOrder": 12
+    },
+    {
+      "id": "event-open-air-cinema",
+      "title": "Açık Hava Film Gecesi",
+      "venue": "KüçükÇiftlik Park",
+      "district": "Şişli, İstanbul",
+      "dateLabel": "25 Eki 2026",
+      "timeLabel": "21:00",
+      "image": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80",
+      "pointsCost": 260,
+      "primaryTag": "Sinema",
+      "secondaryTag": "Açık Hava",
+      "description": "Battaniye alanı, kulaklıklı sessiz izleme bölümü ve geceye özel atıştırmalık standlarıyla açık hava gösterimi.",
+      "organizer": "Open Screen",
+      "participantLabel": "340+",
+      "ticketCategory": "Film Gecesi",
+      "locationTitle": "KüçükÇiftlik Park",
+      "locationSubtitle": "Şişli, İstanbul",
+      "displayOrder": 13
+    },
+    {
+      "id": "event-midnight-horror",
+      "title": "Gece Yarısı Korku Seansı",
+      "venue": "Atlas 1948",
+      "district": "Beyoğlu, İstanbul",
+      "dateLabel": "30 Eki 2026",
+      "timeLabel": "23:45",
+      "image": "https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?auto=format&fit=crop&w=1200&q=80",
+      "pointsCost": 280,
+      "primaryTag": "Sinema",
+      "secondaryTag": "Gece Seansı",
+      "description": "Özel kurgu korku seçkisi, sürpriz kısa film gösterimi ve gece seansına özel fuaye deneyimi ile ilerliyor.",
+      "organizer": "Midnight Club",
+      "participantLabel": "170",
+      "ticketCategory": "Salon",
+      "locationTitle": "Atlas 1948 Sineması",
+      "locationSubtitle": "Beyoğlu, İstanbul",
+      "displayOrder": 14
+    },
+    {
+      "id": "event-short-film-selection",
+      "title": "Bağımsız Kısa Film Seçkisi",
+      "venue": "Kadıköy Sineması",
+      "district": "Kadıköy, İstanbul",
+      "dateLabel": "03 Kas 2026",
+      "timeLabel": "20:00",
+      "image": "https://images.unsplash.com/photo-1513106580091-1d82408b8cd6?auto=format&fit=crop&w=1200&q=80",
+      "pointsCost": 240,
+      "primaryTag": "Sinema",
+      "secondaryTag": "Seçki",
+      "description": "Yeni dönem yönetmenlerinden oluşan kısa film seçkisi, yönetmen söyleşisi ve fuaye buluşmasıyla tamamlanıyor.",
+      "organizer": "Short Cut Nights",
+      "participantLabel": "130",
+      "ticketCategory": "Seans",
+      "locationTitle": "Kadıköy Sineması",
+      "locationSubtitle": "Kadıköy, İstanbul",
+      "displayOrder": 15
+    }
+  ]
+}

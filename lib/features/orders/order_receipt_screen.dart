@@ -5,12 +5,45 @@ import '../../core/navigation/navigator.dart';
 import '../../core/navigation/screen_enum.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/palette.dart';
+import '../../src/core/domain_api.dart';
 import '../../src/core/models.dart';
 import '../../shared/widgets/widgets.dart';
 import 'order_history_screen.dart';
 
 class OrderReceiptScreen extends StatelessWidget {
   const OrderReceiptScreen({super.key});
+
+  Future<void> _completeOrderAndReturnHome(
+    BuildContext context,
+    SpetoAppState appState,
+    SpetoOrder order,
+  ) async {
+    try {
+      appState.selectOrder(order);
+      if (order.status == SpetoOrderStatus.active) {
+        await appState.completeSelectedOrder();
+      }
+      if (!context.mounted) {
+        return;
+      }
+      openRootScreen(context, SpetoScreen.home);
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      final String message;
+      if (error is SpetoRemoteApiException) {
+        message = 'Sipariş tamamlanamadı. Lütfen tekrar dene.';
+      } else {
+        message = 'Bir sorun oluştu. Lütfen tekrar dene.';
+      }
+      SpetoToast.show(
+        context,
+        message: message,
+        icon: Icons.error_outline_rounded,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,15 +103,9 @@ class OrderReceiptScreen extends StatelessWidget {
               const SizedBox(height: 8),
               SpetoSecondaryButton(
                 label: 'Siparişi tamamla ve ana sayfaya dön',
-                onTap: () async {
-                  if (order.status == SpetoOrderStatus.active) {
-                    await appState.completeSelectedOrder();
-                  }
-                  if (!context.mounted) {
-                    return;
-                  }
-                  openRootScreen(context, SpetoScreen.home);
-                },
+                height: 48,
+                onTap: () =>
+                    _completeOrderAndReturnHome(context, appState, order),
               ),
             ],
           ),

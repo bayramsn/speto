@@ -1,10 +1,16 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/app_images.dart';
+import '../../core/navigation/screen_enum.dart';
 import '../../core/state/app_state.dart';
 import '../../src/core/models.dart';
+import '../../src/core/remote_api.dart';
+import '../../features/home/home_data.dart';
+import '../../features/marketplace/market_store_screen.dart';
 import '../../features/restaurant/restaurant_data.dart';
 
 class EventExperience {
@@ -68,9 +74,11 @@ class EventExperience {
 
 List<EventExperience> eventCatalog = defaultEventCatalog();
 List<RestaurantCardData> restaurantCards = defaultRestaurantCatalog();
+List<String> eventFilters = defaultEventFilters();
 
-EventExperience get featuredEventExperience =>
-    eventById('event-galata-jazz');
+const String _catalogBootstrapCacheKey = 'speto.catalog.bootstrap';
+
+EventExperience get featuredEventExperience => eventById('event-galata-jazz');
 
 SpetoEventTicket get featuredEventTicket {
   final EventExperience e = featuredEventExperience;
@@ -89,14 +97,9 @@ SpetoEventTicket get featuredEventTicket {
   );
 }
 
-const List<String> eventFilters = <String>[
-  'Hepsi',
-  'Konser',
-  'Tiyatro',
-  'Festival',
-  'Atölye',
-  'Sinema',
-];
+List<String> defaultEventFilters() {
+  return <String>['Hepsi', 'Konser', 'Tiyatro', 'Festival', 'Atölye', 'Sinema'];
+}
 
 EventExperience eventById(String id) {
   for (final EventExperience item in eventCatalog) {
@@ -135,6 +138,9 @@ bool isSupportedEventExperience(EventExperience item) {
 }
 
 List<EventExperience> eventsForCategory(String category) {
+  if (category == 'Hepsi') {
+    return eventCatalog;
+  }
   final List<EventExperience> matches = eventCatalog
       .where((EventExperience item) => item.primaryTag == category)
       .toList();
@@ -145,37 +151,310 @@ List<EventExperience> eventsForCategory(String category) {
 }
 
 Future<void> initializeSpetoCatalog() async {
+  final SharedPreferences prefs = await SharedPreferences.getInstance();
+  try {
+    final SpetoRemoteApiClient apiClient = SpetoRemoteApiClient();
+    final Map<String, Object?> bootstrapJson = _asJsonMap(
+      await apiClient.get('catalog/bootstrap'),
+    );
+    await prefs.setString(_catalogBootstrapCacheKey, jsonEncode(bootstrapJson));
+    _applyBootstrap(SpetoCatalogBootstrap.fromJson(bootstrapJson));
+    return;
+  } catch (_) {}
+
+  final String? cachedBootstrap = prefs.getString(_catalogBootstrapCacheKey);
+  if (cachedBootstrap != null) {
+    try {
+      _applyBootstrap(
+        SpetoCatalogBootstrap.fromJson(_asJsonMap(jsonDecode(cachedBootstrap))),
+      );
+      return;
+    } catch (_) {}
+  }
+
   try {
     final String raw = await rootBundle.loadString('assets/data/catalog.json');
-    final Object? decoded = jsonDecode(raw);
-    if (decoded is! Map<String, Object?>) {
-      return;
-    }
-    final List<EventExperience> events =
-        (decoded['events'] as List<Object?>? ?? const <Object?>[])
-            .map(
-              (Object? item) =>
-                  EventExperience.fromJson(item! as Map<String, Object?>),
-            )
-            .where(isSupportedEventExperience)
-            .toList();
-    final List<RestaurantCardData> restaurants =
-        (decoded['restaurants'] as List<Object?>? ?? const <Object?>[])
-            .map(
-              (Object? item) =>
-                  RestaurantCardData.fromJson(item! as Map<String, Object?>),
-            )
-            .toList();
-    if (events.isNotEmpty) {
-      eventCatalog = events;
-    }
-    if (restaurants.isNotEmpty) {
-      restaurantCards = restaurants;
-    }
+    final Map<String, Object?> decoded = _asJsonMap(jsonDecode(raw));
+    _applyAssetFallback(decoded);
   } catch (_) {
-    eventCatalog = defaultEventCatalog();
-    restaurantCards = defaultRestaurantCatalog();
+    _applyDefaultCatalogFallback();
   }
+}
+
+void _applyBootstrap(SpetoCatalogBootstrap bootstrap) {
+  final List<EventExperience> events = bootstrap.events
+      .map(_eventExperienceFromCatalog)
+      .where(isSupportedEventExperience)
+      .toList(growable: false);
+  final List<RestaurantCardData> restaurants = bootstrap.restaurants
+      .map(_restaurantCardFromVendor)
+      .toList(growable: false);
+  final List<MarketStoreData> markets = bootstrap.markets
+      .map(_marketStoreFromVendor)
+      .toList(growable: false);
+  final Map<String, Map<String, List<MenuListItem>>> runtimeMenus =
+      <String, Map<String, List<MenuListItem>>>{
+        for (final SpetoCatalogVendor vendor in bootstrap.restaurants)
+          vendor.id: <String, List<MenuListItem>>{
+            for (final SpetoCatalogSection section in vendor.sections)
+              section.label: section.products
+                  .map(_menuItemFromCatalogProduct)
+                  .toList(growable: false),
+          },
+      };
+
+  if (events.isNotEmpty) {
+    eventCatalog = events;
+  }
+  if (restaurants.isNotEmpty) {
+    restaurantCards = restaurants;
+  }
+  if (markets.isNotEmpty) {
+    marketStores
+      ..clear()
+      ..addAll(markets);
+  }
+  if (runtimeMenus.isNotEmpty) {
+    setRuntimeRestaurantMenuSections(runtimeMenus);
+  }
+  _applyHomeContent(bootstrap.home);
+  eventFilters = _deriveEventFilters(events);
+}
+
+void _applyHomeContent(SpetoCatalogHomeContent home) {
+  final List<HomeHeroData> heroes = home.heroes
+      .where((SpetoCatalogContentBlock block) => block.isActive)
+      .map(_homeHeroFromBlock)
+      .toList(growable: false);
+  final List<HomeQuickFilter> quickFilters = home.quickFilters
+      .where((SpetoCatalogContentBlock block) => block.isActive)
+      .map(_homeQuickFilterFromBlock)
+      .toList(growable: false);
+  final List<String> discoveryFilters = home.discoveryFilters
+      .where((SpetoCatalogContentBlock block) => block.isActive)
+      .map((SpetoCatalogContentBlock block) => block.title)
+      .where((String label) => label.trim().isNotEmpty)
+      .toList(growable: false);
+
+  if (heroes.isNotEmpty) {
+    homeHeroCards
+      ..clear()
+      ..addAll(heroes);
+  }
+  if (quickFilters.isNotEmpty) {
+    homeQuickFilters
+      ..clear()
+      ..addAll(quickFilters);
+  }
+  if (discoveryFilters.isNotEmpty) {
+    filterChips
+      ..clear()
+      ..addAll(discoveryFilters);
+  }
+}
+
+void _applyAssetFallback(Map<String, Object?> decoded) {
+  _applyDefaultCatalogFallback();
+  final List<EventExperience> events =
+      (decoded['events'] as List<Object?>? ?? const <Object?>[])
+          .map(
+            (Object? item) =>
+                EventExperience.fromJson(item! as Map<String, Object?>),
+          )
+          .where(isSupportedEventExperience)
+          .toList(growable: false);
+  final List<RestaurantCardData> restaurants =
+      (decoded['restaurants'] as List<Object?>? ?? const <Object?>[])
+          .map(
+            (Object? item) =>
+                RestaurantCardData.fromJson(item! as Map<String, Object?>),
+          )
+          .toList(growable: false);
+  if (events.isNotEmpty) {
+    eventCatalog = events;
+    eventFilters = _deriveEventFilters(events);
+  }
+  if (restaurants.isNotEmpty) {
+    restaurantCards = restaurants;
+  }
+}
+
+void _applyDefaultCatalogFallback() {
+  eventCatalog = defaultEventCatalog();
+  restaurantCards = defaultRestaurantCatalog();
+  eventFilters = defaultEventFilters();
+  clearRuntimeRestaurantMenuSections();
+  homeHeroCards
+    ..clear()
+    ..addAll(defaultHomeHeroCards());
+  homeQuickFilters
+    ..clear()
+    ..addAll(defaultHomeQuickFilters());
+  filterChips
+    ..clear()
+    ..addAll(defaultFilterChips());
+}
+
+List<String> _deriveEventFilters(List<EventExperience> events) {
+  final Set<String> categories = <String>{};
+  for (final EventExperience event in events) {
+    if (event.primaryTag.trim().isNotEmpty) {
+      categories.add(event.primaryTag.trim());
+    }
+  }
+  if (categories.isEmpty) {
+    return defaultEventFilters();
+  }
+  return <String>['Hepsi', ...categories];
+}
+
+RestaurantCardData _restaurantCardFromVendor(SpetoCatalogVendor vendor) {
+  return RestaurantCardData(
+    id: vendor.id,
+    title: vendor.title,
+    image: vendor.image,
+    cuisine: vendor.cuisine,
+    etaMin: vendor.etaMin,
+    etaMax: vendor.etaMax,
+    ratingValue: vendor.ratingValue,
+    promo: vendor.promoLabel.isNotEmpty ? vendor.promoLabel : vendor.badge,
+    studentFriendly: vendor.studentFriendly,
+  );
+}
+
+EventExperience _eventExperienceFromCatalog(SpetoCatalogEvent event) {
+  return EventExperience(
+    id: event.id,
+    title: event.title,
+    venue: event.venue,
+    district: event.district,
+    dateLabel: event.dateLabel,
+    timeLabel: event.timeLabel,
+    image: event.image,
+    pointsCost: event.pointsCost,
+    primaryTag: event.primaryTag,
+    secondaryTag: event.secondaryTag,
+    description: event.description,
+    organizer: event.organizer,
+    participantLabel: event.participantLabel,
+    ticketCategory: event.ticketCategory,
+    locationTitle: event.locationTitle,
+    locationSubtitle: event.locationSubtitle,
+  );
+}
+
+MarketStoreData _marketStoreFromVendor(SpetoCatalogVendor vendor) {
+  return MarketStoreData(
+    id: vendor.id,
+    title: vendor.title,
+    subtitle: vendor.subtitle,
+    meta: vendor.meta,
+    image: vendor.image,
+    badge: vendor.badge,
+    rewardLabel: vendor.rewardLabel,
+    ratingLabel: vendor.ratingLabel,
+    distanceLabel: vendor.distanceLabel,
+    etaLabel: vendor.etaLabel,
+    promoLabel: vendor.promoLabel,
+    workingHoursLabel: vendor.workingHoursLabel,
+    minOrderLabel: vendor.minOrderLabel,
+    deliveryWindowLabel: vendor.deliveryWindowLabel,
+    reviewCountLabel: vendor.reviewCountLabel,
+    announcement: vendor.announcement,
+    bundleTitle: vendor.bundleTitle,
+    bundleDescription: vendor.bundleDescription,
+    bundlePrice: vendor.bundlePrice,
+    heroTitle: vendor.heroTitle,
+    heroSubtitle: vendor.heroSubtitle,
+    highlights: vendor.highlights
+        .map(_storeHighlightFromVendorHighlight)
+        .toList(growable: false),
+    sections: <String, List<MenuListItem>>{
+      for (final SpetoCatalogSection section in vendor.sections)
+        section.label: section.products
+            .map(_menuItemFromCatalogProduct)
+            .toList(growable: false),
+    },
+  );
+}
+
+StoreHighlightData _storeHighlightFromVendorHighlight(
+  SpetoCatalogVendorHighlight highlight,
+) {
+  return StoreHighlightData(highlight.label, _iconDataForKey(highlight.icon));
+}
+
+MenuListItem _menuItemFromCatalogProduct(SpetoCatalogProduct product) {
+  return MenuListItem(
+    product.title,
+    product.displaySubtitle.isNotEmpty
+        ? product.displaySubtitle
+        : product.description,
+    product.priceText.isNotEmpty
+        ? product.priceText
+        : '${product.unitPrice.toStringAsFixed(0)} TL',
+    product.imageUrl.isNotEmpty ? product.imageUrl : product.image,
+    id: product.id,
+  );
+}
+
+HomeHeroData _homeHeroFromBlock(SpetoCatalogContentBlock block) {
+  return HomeHeroData(
+    title: block.title,
+    subtitle: block.subtitle,
+    badge: block.badge,
+    image: block.imageUrl,
+    actionLabel: block.actionLabel,
+    screen: _screenForName(block.screen),
+  );
+}
+
+HomeQuickFilter _homeQuickFilterFromBlock(SpetoCatalogContentBlock block) {
+  return HomeQuickFilter(
+    label: block.title,
+    icon: _iconDataForKey(block.iconKey),
+    screen: _screenForName(block.screen),
+    highlight: block.highlight,
+  );
+}
+
+SpetoScreen _screenForName(String name) {
+  for (final SpetoScreen screen in SpetoScreen.values) {
+    if (screen.name == name) {
+      return screen;
+    }
+  }
+  return SpetoScreen.home;
+}
+
+IconData _iconDataForKey(String key) {
+  return switch (key) {
+    'near_me_rounded' => Icons.near_me_rounded,
+    'workspace_premium_rounded' => Icons.workspace_premium_rounded,
+    'nightlife_rounded' => Icons.nightlife_rounded,
+    'shopping_basket_rounded' => Icons.shopping_basket_rounded,
+    'local_drink_outlined' => Icons.local_drink_outlined,
+    'shopping_bag_outlined' => Icons.shopping_bag_outlined,
+    'storefront_outlined' => Icons.storefront_outlined,
+    'ac_unit_rounded' => Icons.ac_unit_rounded,
+    'dinner_dining_outlined' => Icons.dinner_dining_outlined,
+    'sell_outlined' => Icons.sell_outlined,
+    'flash_on_outlined' => Icons.flash_on_outlined,
+    'inventory_2_outlined' => Icons.inventory_2_outlined,
+    'eco_outlined' => Icons.eco_outlined,
+    'grid_view_rounded' => Icons.grid_view_rounded,
+    _ => Icons.auto_awesome_outlined,
+  };
+}
+
+Map<String, Object?> _asJsonMap(Object? value) {
+  if (value is Map<String, Object?>) {
+    return value;
+  }
+  if (value is Map) {
+    return value.cast<String, Object?>();
+  }
+  throw const FormatException('Expected JSON object');
 }
 
 List<EventExperience> defaultEventCatalog() {

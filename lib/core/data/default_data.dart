@@ -46,6 +46,101 @@ SpetoCartItem megaBurgerCartItem({int quantity = 1}) =>
 SpetoCartItem pepperoniPizzaCartItem({int quantity = 1}) =>
     pepperoniPizzaTemplate.copyWith(quantity: quantity);
 
+List<SpetoHappyHourOffer> defaultHappyHourOffers() {
+  return const <SpetoHappyHourOffer>[
+    SpetoHappyHourOffer(
+      id: 'mega-burger-menu',
+      productId: 'mega-burger-menu',
+      vendorId: 'vendor-burger-yiyelim',
+      vendorName: 'Burger Yiyelim',
+      vendorSubtitle: 'Burger ve hızlı pickup menüleri',
+      title: 'Mega Burger Menü',
+      subtitle: 'Çifte köfte, cheddar ve patates',
+      description:
+          'Çifte dana köfte, cheddar, özel sos ve çıtır patatesle hazırlanan hızlı pickup menüsü.',
+      imageUrl: AppImages.burgerHero,
+      badge: 'Happy Hour Özel',
+      discountedPrice: 85,
+      discountedPriceText: '85 TL',
+      originalPrice: 120,
+      originalPriceText: '120 TL',
+      discountPercent: 29,
+      expiresInMinutes: 45,
+      rewardPoints: 50,
+      claimCount: 24,
+      locationTitle: 'Kadıköy Merkez Şubesi',
+      locationSubtitle: '0,4 km uzaklıkta • 23:00\'a kadar açık',
+      sectionLabel: 'Burger',
+      stockStatus: SpetoStockStatus(
+        isInStock: true,
+        availableQuantity: 12,
+        lowStock: false,
+        canPurchase: true,
+      ),
+    ),
+    SpetoHappyHourOffer(
+      id: 'pepperoni-pizza-slice',
+      productId: 'pepperoni-pizza-slice',
+      vendorId: 'vendor-pizza-bulls',
+      vendorName: 'Pizza Bulls',
+      vendorSubtitle: 'İnce hamur ve fırın sıcaklığında servis',
+      title: 'Pepperonili Pizza Dilimi',
+      subtitle: 'Tek dilim + içecek fırsatı',
+      description:
+          'Pepperoni, mozzarella ve günlük hazırlanan sos ile sunulan hızlı servis pizza dilimi.',
+      imageUrl: AppImages.pizza,
+      badge: 'Akşam Fırsatı',
+      discountedPrice: 79,
+      discountedPriceText: '79 TL',
+      originalPrice: 109,
+      originalPriceText: '109 TL',
+      discountPercent: 28,
+      expiresInMinutes: 62,
+      rewardPoints: 40,
+      claimCount: 18,
+      locationTitle: 'Bostancı Gel-Al Noktası',
+      locationSubtitle: '0,8 km uzaklıkta • 22:30\'a kadar açık',
+      sectionLabel: 'Pizza',
+      stockStatus: SpetoStockStatus(
+        isInStock: true,
+        availableQuantity: 9,
+        lowStock: false,
+        canPurchase: true,
+      ),
+    ),
+    SpetoHappyHourOffer(
+      id: 'market-iced-latte-bundle',
+      productId: 'market-iced-latte-bundle',
+      vendorId: 'vendor-happy-hour-market',
+      vendorName: 'Happy Hour Market',
+      vendorSubtitle: 'Soğuk içecek ve hazır tüketim rafı',
+      title: 'Iced Latte + Kruvasan',
+      subtitle: 'Kahve molası için hızlı paket',
+      description:
+          'Soğuk latte ve tereyağlı kruvasan ile hazırlanan kısa mola paketi.',
+      imageUrl: AppImages.nightlife,
+      badge: 'Kampüs Molası',
+      discountedPrice: 69,
+      discountedPriceText: '69 TL',
+      originalPrice: 94,
+      originalPriceText: '94 TL',
+      discountPercent: 27,
+      expiresInMinutes: 54,
+      rewardPoints: 35,
+      claimCount: 31,
+      locationTitle: 'Moda Gel-Al Noktası',
+      locationSubtitle: '0,6 km uzaklıkta • 00:00\'a kadar açık',
+      sectionLabel: 'İçecek',
+      stockStatus: SpetoStockStatus(
+        isInStock: true,
+        availableQuantity: 7,
+        lowStock: true,
+        canPurchase: true,
+      ),
+    ),
+  ];
+}
+
 SpetoCommerceSnapshot initialCommerceSnapshot(SpetoCommerceSnapshot? snapshot) {
   return normalizeCommerceSnapshot(snapshot ?? defaultCommerceSnapshot());
 }
@@ -68,6 +163,7 @@ SpetoCommerceSnapshot normalizeCommerceSnapshot(
         .toList(),
     favoriteRestaurantIds: List<String>.of(snapshot.favoriteRestaurantIds),
     favoriteEventIds: List<String>.of(snapshot.favoriteEventIds),
+    favoriteMarketIds: List<String>.of(snapshot.favoriteMarketIds),
     followedOrganizerIds: List<String>.of(snapshot.followedOrganizerIds),
     orderRatings: Map<String, int>.of(snapshot.orderRatings),
     profileDisplayName: _translateUserFacingText(snapshot.profileDisplayName),
@@ -368,6 +464,7 @@ SpetoCommerceSnapshot defaultCommerceSnapshot() {
     ],
     favoriteRestaurantIds: const <String>[],
     favoriteEventIds: const <String>[],
+    favoriteMarketIds: const <String>[],
     followedOrganizerIds: const <String>[],
     orderRatings: const <String, int>{},
     profileDisplayName: 'Bayram Senbay',

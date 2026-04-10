@@ -26,6 +26,10 @@ enum SpetoIntegrationHealth { healthy, warning, failed }
 
 enum SpetoSyncRunStatus { idle, running, success, failed }
 
+enum SpetoStorefrontType { restaurant, market }
+
+enum SpetoContentBlockType { homeHero, quickFilter, discoveryFilter }
+
 String _normalizeEnumToken(String? value) {
   if (value == null || value.trim().isEmpty) {
     return '';
@@ -45,6 +49,695 @@ T _enumByApiName<T extends Enum>(
     }
   }
   return fallback;
+}
+
+class SpetoCatalogBootstrap {
+  const SpetoCatalogBootstrap({
+    required this.contentVersion,
+    required this.home,
+    required this.restaurants,
+    required this.markets,
+    required this.events,
+    required this.featuredRestaurants,
+    required this.featuredEvents,
+  });
+
+  final String contentVersion;
+  final SpetoCatalogHomeContent home;
+  final List<SpetoCatalogVendor> restaurants;
+  final List<SpetoCatalogVendor> markets;
+  final List<SpetoCatalogEvent> events;
+  final List<SpetoCatalogVendor> featuredRestaurants;
+  final List<SpetoCatalogEvent> featuredEvents;
+
+  factory SpetoCatalogBootstrap.fromJson(Map<String, Object?> json) {
+    final Map<String, Object?> featured =
+        (json['featured'] as Map<Object?, Object?>? ??
+                const <Object?, Object?>{})
+            .cast<String, Object?>();
+    return SpetoCatalogBootstrap(
+      contentVersion: json['contentVersion'] as String? ?? '',
+      home: SpetoCatalogHomeContent.fromJson(
+        (json['home'] as Map<Object?, Object?>? ?? const <Object?, Object?>{})
+            .cast<String, Object?>(),
+      ),
+      restaurants:
+          ((json['restaurants'] as List<Object?>?) ?? const <Object?>[])
+              .map(
+                (Object? item) =>
+                    SpetoCatalogVendor.fromJson(item! as Map<String, Object?>),
+              )
+              .toList(growable: false),
+      markets: ((json['markets'] as List<Object?>?) ?? const <Object?>[])
+          .map(
+            (Object? item) =>
+                SpetoCatalogVendor.fromJson(item! as Map<String, Object?>),
+          )
+          .toList(growable: false),
+      events: ((json['events'] as List<Object?>?) ?? const <Object?>[])
+          .map(
+            (Object? item) =>
+                SpetoCatalogEvent.fromJson(item! as Map<String, Object?>),
+          )
+          .toList(growable: false),
+      featuredRestaurants:
+          ((featured['restaurants'] as List<Object?>?) ?? const <Object?>[])
+              .map(
+                (Object? item) =>
+                    SpetoCatalogVendor.fromJson(item! as Map<String, Object?>),
+              )
+              .toList(growable: false),
+      featuredEvents:
+          ((featured['events'] as List<Object?>?) ?? const <Object?>[])
+              .map(
+                (Object? item) =>
+                    SpetoCatalogEvent.fromJson(item! as Map<String, Object?>),
+              )
+              .toList(growable: false),
+    );
+  }
+}
+
+class SpetoCatalogHomeContent {
+  const SpetoCatalogHomeContent({
+    required this.heroes,
+    required this.quickFilters,
+    required this.discoveryFilters,
+  });
+
+  final List<SpetoCatalogContentBlock> heroes;
+  final List<SpetoCatalogContentBlock> quickFilters;
+  final List<SpetoCatalogContentBlock> discoveryFilters;
+
+  factory SpetoCatalogHomeContent.fromJson(Map<String, Object?> json) {
+    return SpetoCatalogHomeContent(
+      heroes: ((json['heroes'] as List<Object?>?) ?? const <Object?>[])
+          .map(
+            (Object? item) => SpetoCatalogContentBlock.fromJson(
+              item! as Map<String, Object?>,
+            ),
+          )
+          .toList(growable: false),
+      quickFilters:
+          ((json['quickFilters'] as List<Object?>?) ?? const <Object?>[])
+              .map(
+                (Object? item) => SpetoCatalogContentBlock.fromJson(
+                  item! as Map<String, Object?>,
+                ),
+              )
+              .toList(growable: false),
+      discoveryFilters:
+          ((json['discoveryFilters'] as List<Object?>?) ?? const <Object?>[])
+              .map(
+                (Object? item) => SpetoCatalogContentBlock.fromJson(
+                  item! as Map<String, Object?>,
+                ),
+              )
+              .toList(growable: false),
+    );
+  }
+}
+
+class SpetoCatalogContentBlock {
+  const SpetoCatalogContentBlock({
+    required this.id,
+    required this.type,
+    required this.key,
+    required this.title,
+    required this.subtitle,
+    required this.badge,
+    required this.imageUrl,
+    required this.actionLabel,
+    required this.screen,
+    required this.iconKey,
+    required this.highlight,
+    required this.displayOrder,
+    required this.isActive,
+    required this.payload,
+  });
+
+  final String id;
+  final SpetoContentBlockType type;
+  final String key;
+  final String title;
+  final String subtitle;
+  final String badge;
+  final String imageUrl;
+  final String actionLabel;
+  final String screen;
+  final String iconKey;
+  final bool highlight;
+  final int displayOrder;
+  final bool isActive;
+  final Map<String, Object?> payload;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'id': id,
+      'type': type.name,
+      'key': key,
+      'title': title,
+      'subtitle': subtitle,
+      'badge': badge,
+      'imageUrl': imageUrl,
+      'actionLabel': actionLabel,
+      'screen': screen,
+      'iconKey': iconKey,
+      'highlight': highlight,
+      'displayOrder': displayOrder,
+      'isActive': isActive,
+      'payload': payload,
+    };
+  }
+
+  factory SpetoCatalogContentBlock.fromJson(Map<String, Object?> json) {
+    return SpetoCatalogContentBlock(
+      id: json['id'] as String? ?? '',
+      type: _enumByApiName(
+        SpetoContentBlockType.values,
+        json['type'] as String?,
+        fallback: SpetoContentBlockType.homeHero,
+      ),
+      key: json['key'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      subtitle: json['subtitle'] as String? ?? '',
+      badge: json['badge'] as String? ?? '',
+      imageUrl: json['imageUrl'] as String? ?? '',
+      actionLabel: json['actionLabel'] as String? ?? '',
+      screen: json['screen'] as String? ?? '',
+      iconKey: json['iconKey'] as String? ?? '',
+      highlight: json['highlight'] as bool? ?? false,
+      displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
+      isActive: json['isActive'] as bool? ?? true,
+      payload:
+          (json['payload'] as Map<Object?, Object?>? ??
+                  const <Object?, Object?>{})
+              .cast<String, Object?>(),
+    );
+  }
+}
+
+class SpetoHappyHourOffer {
+  const SpetoHappyHourOffer({
+    required this.id,
+    required this.productId,
+    required this.vendorId,
+    required this.vendorName,
+    required this.vendorSubtitle,
+    required this.title,
+    required this.subtitle,
+    required this.description,
+    required this.imageUrl,
+    required this.badge,
+    required this.discountedPrice,
+    required this.discountedPriceText,
+    required this.originalPrice,
+    required this.originalPriceText,
+    required this.discountPercent,
+    required this.expiresInMinutes,
+    required this.rewardPoints,
+    required this.claimCount,
+    required this.locationTitle,
+    required this.locationSubtitle,
+    required this.sectionLabel,
+    required this.stockStatus,
+  });
+
+  final String id;
+  final String productId;
+  final String vendorId;
+  final String vendorName;
+  final String vendorSubtitle;
+  final String title;
+  final String subtitle;
+  final String description;
+  final String imageUrl;
+  final String badge;
+  final double discountedPrice;
+  final String discountedPriceText;
+  final double originalPrice;
+  final String originalPriceText;
+  final int discountPercent;
+  final int expiresInMinutes;
+  final int rewardPoints;
+  final int claimCount;
+  final String locationTitle;
+  final String locationSubtitle;
+  final String sectionLabel;
+  final SpetoStockStatus stockStatus;
+
+  factory SpetoHappyHourOffer.fromJson(Map<String, Object?> json) {
+    return SpetoHappyHourOffer(
+      id: json['id'] as String? ?? '',
+      productId: json['productId'] as String? ?? '',
+      vendorId: json['vendorId'] as String? ?? '',
+      vendorName: json['vendorName'] as String? ?? '',
+      vendorSubtitle: json['vendorSubtitle'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      subtitle: json['subtitle'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      imageUrl: json['imageUrl'] as String? ?? '',
+      badge: json['badge'] as String? ?? '',
+      discountedPrice: (json['discountedPrice'] as num?)?.toDouble() ?? 0,
+      discountedPriceText: json['discountedPriceText'] as String? ?? '',
+      originalPrice: (json['originalPrice'] as num?)?.toDouble() ?? 0,
+      originalPriceText: json['originalPriceText'] as String? ?? '',
+      discountPercent: (json['discountPercent'] as num?)?.toInt() ?? 0,
+      expiresInMinutes: (json['expiresInMinutes'] as num?)?.toInt() ?? 0,
+      rewardPoints: (json['rewardPoints'] as num?)?.toInt() ?? 0,
+      claimCount: (json['claimCount'] as num?)?.toInt() ?? 0,
+      locationTitle: json['locationTitle'] as String? ?? '',
+      locationSubtitle: json['locationSubtitle'] as String? ?? '',
+      sectionLabel: json['sectionLabel'] as String? ?? '',
+      stockStatus: SpetoStockStatus.fromJson(
+        (json['stockStatus'] as Map<Object?, Object?>? ??
+                const <Object?, Object?>{})
+            .cast<String, Object?>(),
+      ),
+    );
+  }
+}
+
+class SpetoCatalogPickupPoint {
+  const SpetoCatalogPickupPoint({
+    required this.id,
+    required this.label,
+    required this.address,
+  });
+
+  final String id;
+  final String label;
+  final String address;
+
+  factory SpetoCatalogPickupPoint.fromJson(Map<String, Object?> json) {
+    return SpetoCatalogPickupPoint(
+      id: json['id'] as String? ?? '',
+      label: json['label'] as String? ?? '',
+      address: json['address'] as String? ?? '',
+    );
+  }
+}
+
+class SpetoCatalogVendorHighlight {
+  const SpetoCatalogVendorHighlight({
+    required this.id,
+    required this.label,
+    required this.icon,
+    required this.displayOrder,
+  });
+
+  final String id;
+  final String label;
+  final String icon;
+  final int displayOrder;
+
+  factory SpetoCatalogVendorHighlight.fromJson(Map<String, Object?> json) {
+    return SpetoCatalogVendorHighlight(
+      id: json['id'] as String? ?? '',
+      label: json['label'] as String? ?? '',
+      icon: json['icon'] as String? ?? '',
+      displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class SpetoCatalogOperatorAccount {
+  const SpetoCatalogOperatorAccount({
+    required this.id,
+    required this.email,
+    required this.displayName,
+    required this.phone,
+  });
+
+  final String id;
+  final String email;
+  final String displayName;
+  final String phone;
+
+  factory SpetoCatalogOperatorAccount.fromJson(Map<String, Object?> json) {
+    return SpetoCatalogOperatorAccount(
+      id: json['id'] as String? ?? '',
+      email: json['email'] as String? ?? '',
+      displayName: json['displayName'] as String? ?? '',
+      phone: json['phone'] as String? ?? '',
+    );
+  }
+}
+
+class SpetoCatalogVendor {
+  const SpetoCatalogVendor({
+    required this.id,
+    required this.vendorId,
+    required this.storefrontType,
+    required this.title,
+    required this.subtitle,
+    required this.meta,
+    required this.image,
+    required this.badge,
+    required this.rewardLabel,
+    required this.ratingLabel,
+    required this.distanceLabel,
+    required this.etaLabel,
+    required this.promoLabel,
+    required this.workingHoursLabel,
+    required this.minOrderLabel,
+    required this.deliveryWindowLabel,
+    required this.reviewCountLabel,
+    required this.announcement,
+    required this.bundleTitle,
+    required this.bundleDescription,
+    required this.bundlePrice,
+    required this.heroTitle,
+    required this.heroSubtitle,
+    required this.cuisine,
+    required this.etaMin,
+    required this.etaMax,
+    required this.ratingValue,
+    required this.promo,
+    required this.studentFriendly,
+    required this.isFeatured,
+    required this.isActive,
+    required this.pickupPoints,
+    required this.highlights,
+    required this.operatorAccounts,
+    required this.sections,
+    required this.stockStatus,
+  });
+
+  final String id;
+  final String vendorId;
+  final SpetoStorefrontType storefrontType;
+  final String title;
+  final String subtitle;
+  final String meta;
+  final String image;
+  final String badge;
+  final String rewardLabel;
+  final String ratingLabel;
+  final String distanceLabel;
+  final String etaLabel;
+  final String promoLabel;
+  final String workingHoursLabel;
+  final String minOrderLabel;
+  final String deliveryWindowLabel;
+  final String reviewCountLabel;
+  final String announcement;
+  final String bundleTitle;
+  final String bundleDescription;
+  final String bundlePrice;
+  final String heroTitle;
+  final String heroSubtitle;
+  final String cuisine;
+  final int etaMin;
+  final int etaMax;
+  final double ratingValue;
+  final String promo;
+  final bool studentFriendly;
+  final bool isFeatured;
+  final bool isActive;
+  final List<SpetoCatalogPickupPoint> pickupPoints;
+  final List<SpetoCatalogVendorHighlight> highlights;
+  final List<SpetoCatalogOperatorAccount> operatorAccounts;
+  final List<SpetoCatalogSection> sections;
+  final SpetoStockStatus stockStatus;
+
+  factory SpetoCatalogVendor.fromJson(Map<String, Object?> json) {
+    return SpetoCatalogVendor(
+      id: json['id'] as String? ?? '',
+      vendorId: json['vendorId'] as String? ?? '',
+      storefrontType: _enumByApiName(
+        SpetoStorefrontType.values,
+        json['storefrontType'] as String?,
+        fallback: SpetoStorefrontType.restaurant,
+      ),
+      title: json['title'] as String? ?? '',
+      subtitle: json['subtitle'] as String? ?? '',
+      meta: json['meta'] as String? ?? '',
+      image: json['image'] as String? ?? '',
+      badge: json['badge'] as String? ?? '',
+      rewardLabel: json['rewardLabel'] as String? ?? '',
+      ratingLabel: json['ratingLabel'] as String? ?? '',
+      distanceLabel: json['distanceLabel'] as String? ?? '',
+      etaLabel: json['etaLabel'] as String? ?? '',
+      promoLabel: json['promoLabel'] as String? ?? '',
+      workingHoursLabel: json['workingHoursLabel'] as String? ?? '',
+      minOrderLabel: json['minOrderLabel'] as String? ?? '',
+      deliveryWindowLabel: json['deliveryWindowLabel'] as String? ?? '',
+      reviewCountLabel: json['reviewCountLabel'] as String? ?? '',
+      announcement: json['announcement'] as String? ?? '',
+      bundleTitle: json['bundleTitle'] as String? ?? '',
+      bundleDescription: json['bundleDescription'] as String? ?? '',
+      bundlePrice: json['bundlePrice'] as String? ?? '',
+      heroTitle: json['heroTitle'] as String? ?? '',
+      heroSubtitle: json['heroSubtitle'] as String? ?? '',
+      cuisine: json['cuisine'] as String? ?? '',
+      etaMin: (json['etaMin'] as num?)?.toInt() ?? 0,
+      etaMax: (json['etaMax'] as num?)?.toInt() ?? 0,
+      ratingValue: (json['ratingValue'] as num?)?.toDouble() ?? 0,
+      promo: json['promo'] as String? ?? '',
+      studentFriendly: json['studentFriendly'] as bool? ?? false,
+      isFeatured: json['isFeatured'] as bool? ?? false,
+      isActive: json['isActive'] as bool? ?? true,
+      pickupPoints:
+          ((json['pickupPoints'] as List<Object?>?) ?? const <Object?>[])
+              .map(
+                (Object? item) => SpetoCatalogPickupPoint.fromJson(
+                  item! as Map<String, Object?>,
+                ),
+              )
+              .toList(growable: false),
+      highlights: ((json['highlights'] as List<Object?>?) ?? const <Object?>[])
+          .map(
+            (Object? item) => SpetoCatalogVendorHighlight.fromJson(
+              item! as Map<String, Object?>,
+            ),
+          )
+          .toList(growable: false),
+      operatorAccounts:
+          ((json['operatorAccounts'] as List<Object?>?) ?? const <Object?>[])
+              .map(
+                (Object? item) => SpetoCatalogOperatorAccount.fromJson(
+                  item! as Map<String, Object?>,
+                ),
+              )
+              .toList(growable: false),
+      sections: ((json['sections'] as List<Object?>?) ?? const <Object?>[])
+          .map(
+            (Object? item) =>
+                SpetoCatalogSection.fromJson(item! as Map<String, Object?>),
+          )
+          .toList(growable: false),
+      stockStatus: SpetoStockStatus.fromJson(
+        (json['stockStatus'] as Map<Object?, Object?>? ??
+                const <Object?, Object?>{})
+            .cast<String, Object?>(),
+      ),
+    );
+  }
+}
+
+class SpetoCatalogSection {
+  const SpetoCatalogSection({
+    required this.id,
+    required this.key,
+    required this.label,
+    required this.displayOrder,
+    required this.isActive,
+    required this.products,
+  });
+
+  final String id;
+  final String key;
+  final String label;
+  final int displayOrder;
+  final bool isActive;
+  final List<SpetoCatalogProduct> products;
+
+  factory SpetoCatalogSection.fromJson(Map<String, Object?> json) {
+    return SpetoCatalogSection(
+      id: json['id'] as String? ?? '',
+      key: json['key'] as String? ?? '',
+      label: json['label'] as String? ?? '',
+      displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
+      isActive: json['isActive'] as bool? ?? true,
+      products: ((json['products'] as List<Object?>?) ?? const <Object?>[])
+          .map(
+            (Object? item) =>
+                SpetoCatalogProduct.fromJson(item! as Map<String, Object?>),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
+class SpetoCatalogProduct {
+  const SpetoCatalogProduct({
+    required this.id,
+    required this.vendorId,
+    required this.vendorName,
+    required this.sectionId,
+    required this.sectionLabel,
+    required this.title,
+    required this.description,
+    required this.image,
+    required this.imageUrl,
+    required this.unitPrice,
+    required this.priceText,
+    required this.category,
+    required this.sku,
+    required this.barcode,
+    required this.externalCode,
+    required this.displaySubtitle,
+    required this.displayBadge,
+    required this.displayOrder,
+    required this.isFeatured,
+    required this.isVisibleInApp,
+    required this.trackStock,
+    required this.reorderLevel,
+    required this.isArchived,
+    required this.stockStatus,
+    required this.searchKeywords,
+    required this.legacyAliases,
+  });
+
+  final String id;
+  final String vendorId;
+  final String vendorName;
+  final String sectionId;
+  final String sectionLabel;
+  final String title;
+  final String description;
+  final String image;
+  final String imageUrl;
+  final double unitPrice;
+  final String priceText;
+  final String category;
+  final String sku;
+  final String barcode;
+  final String externalCode;
+  final String displaySubtitle;
+  final String displayBadge;
+  final int displayOrder;
+  final bool isFeatured;
+  final bool isVisibleInApp;
+  final bool trackStock;
+  final int reorderLevel;
+  final bool isArchived;
+  final SpetoStockStatus stockStatus;
+  final List<String> searchKeywords;
+  final List<String> legacyAliases;
+
+  factory SpetoCatalogProduct.fromJson(Map<String, Object?> json) {
+    return SpetoCatalogProduct(
+      id: json['id'] as String? ?? '',
+      vendorId: json['vendorId'] as String? ?? '',
+      vendorName: json['vendorName'] as String? ?? '',
+      sectionId: json['sectionId'] as String? ?? '',
+      sectionLabel: json['sectionLabel'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      image: json['image'] as String? ?? '',
+      imageUrl: json['imageUrl'] as String? ?? '',
+      unitPrice: (json['unitPrice'] as num?)?.toDouble() ?? 0,
+      priceText: json['priceText'] as String? ?? '',
+      category: json['category'] as String? ?? '',
+      sku: json['sku'] as String? ?? '',
+      barcode: json['barcode'] as String? ?? '',
+      externalCode: json['externalCode'] as String? ?? '',
+      displaySubtitle: json['displaySubtitle'] as String? ?? '',
+      displayBadge: json['displayBadge'] as String? ?? '',
+      displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
+      isFeatured: json['isFeatured'] as bool? ?? false,
+      isVisibleInApp: json['isVisibleInApp'] as bool? ?? true,
+      trackStock: json['trackStock'] as bool? ?? true,
+      reorderLevel: (json['reorderLevel'] as num?)?.toInt() ?? 0,
+      isArchived: json['isArchived'] as bool? ?? false,
+      stockStatus: SpetoStockStatus.fromJson(
+        (json['stockStatus'] as Map<Object?, Object?>? ??
+                const <Object?, Object?>{})
+            .cast<String, Object?>(),
+      ),
+      searchKeywords:
+          ((json['searchKeywords'] as List<Object?>?) ?? const <Object?>[])
+              .map((Object? item) => item! as String)
+              .toList(growable: false),
+      legacyAliases:
+          ((json['legacyAliases'] as List<Object?>?) ?? const <Object?>[])
+              .map((Object? item) => item! as String)
+              .toList(growable: false),
+    );
+  }
+}
+
+class SpetoCatalogEvent {
+  const SpetoCatalogEvent({
+    required this.id,
+    required this.title,
+    required this.venue,
+    required this.district,
+    required this.dateLabel,
+    required this.timeLabel,
+    required this.image,
+    required this.pointsCost,
+    required this.primaryTag,
+    required this.secondaryTag,
+    required this.description,
+    required this.organizer,
+    required this.participantLabel,
+    required this.ticketCategory,
+    required this.locationTitle,
+    required this.locationSubtitle,
+    required this.remainingCount,
+    required this.capacity,
+    required this.isFeatured,
+    required this.isActive,
+  });
+
+  final String id;
+  final String title;
+  final String venue;
+  final String district;
+  final String dateLabel;
+  final String timeLabel;
+  final String image;
+  final int pointsCost;
+  final String primaryTag;
+  final String secondaryTag;
+  final String description;
+  final String organizer;
+  final String participantLabel;
+  final String ticketCategory;
+  final String locationTitle;
+  final String locationSubtitle;
+  final int remainingCount;
+  final int capacity;
+  final bool isFeatured;
+  final bool isActive;
+
+  factory SpetoCatalogEvent.fromJson(Map<String, Object?> json) {
+    return SpetoCatalogEvent(
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      venue: json['venue'] as String? ?? '',
+      district: json['district'] as String? ?? '',
+      dateLabel: json['dateLabel'] as String? ?? '',
+      timeLabel: json['timeLabel'] as String? ?? '',
+      image: json['image'] as String? ?? '',
+      pointsCost: (json['pointsCost'] as num?)?.toInt() ?? 0,
+      primaryTag: json['primaryTag'] as String? ?? '',
+      secondaryTag: json['secondaryTag'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      organizer: json['organizer'] as String? ?? '',
+      participantLabel: json['participantLabel'] as String? ?? '',
+      ticketCategory: json['ticketCategory'] as String? ?? '',
+      locationTitle: json['locationTitle'] as String? ?? '',
+      locationSubtitle: json['locationSubtitle'] as String? ?? '',
+      remainingCount: (json['remainingCount'] as num?)?.toInt() ?? 0,
+      capacity: (json['capacity'] as num?)?.toInt() ?? 0,
+      isFeatured: json['isFeatured'] as bool? ?? false,
+      isActive: json['isActive'] as bool? ?? true,
+    );
+  }
 }
 
 class SpetoStockStatus {
@@ -591,10 +1284,10 @@ class SpetoSession {
         json['role'] as String?,
         fallback: SpetoUserRole.customer,
       ),
-      vendorScopes: ((json['vendorScopes'] as List<Object?>?) ??
-              const <Object?>[])
-          .map((Object? item) => item! as String)
-          .toList(growable: false),
+      vendorScopes:
+          ((json['vendorScopes'] as List<Object?>?) ?? const <Object?>[])
+              .map((Object? item) => item! as String)
+              .toList(growable: false),
     );
   }
 }
@@ -645,6 +1338,7 @@ class SpetoCommerceSnapshot {
     required this.supportTickets,
     required this.favoriteRestaurantIds,
     required this.favoriteEventIds,
+    required this.favoriteMarketIds,
     required this.followedOrganizerIds,
     required this.orderRatings,
     required this.profileDisplayName,
@@ -665,6 +1359,7 @@ class SpetoCommerceSnapshot {
   final List<SpetoSupportTicket> supportTickets;
   final List<String> favoriteRestaurantIds;
   final List<String> favoriteEventIds;
+  final List<String> favoriteMarketIds;
   final List<String> followedOrganizerIds;
   final Map<String, int> orderRatings;
   final String profileDisplayName;
@@ -700,6 +1395,7 @@ class SpetoCommerceSnapshot {
           .toList(),
       'favoriteRestaurantIds': favoriteRestaurantIds,
       'favoriteEventIds': favoriteEventIds,
+      'favoriteMarketIds': favoriteMarketIds,
       'followedOrganizerIds': followedOrganizerIds,
       'orderRatings': orderRatings,
       'profileDisplayName': profileDisplayName,
@@ -770,6 +1466,10 @@ class SpetoCommerceSnapshot {
           ((json['favoriteEventIds'] as List<Object?>?) ?? const <Object?>[])
               .map((Object? item) => item! as String)
               .toList(),
+      favoriteMarketIds:
+          ((json['favoriteMarketIds'] as List<Object?>?) ?? const <Object?>[])
+              .map((Object? item) => item! as String)
+              .toList(),
       followedOrganizerIds:
           ((json['followedOrganizerIds'] as List<Object?>?) ??
                   const <Object?>[])
@@ -803,6 +1503,11 @@ class SpetoRemoteSnapshot {
     required this.supportTickets,
     required this.ownedTickets,
     required this.proPointsBalance,
+    required this.favoriteRestaurantIds,
+    required this.favoriteEventIds,
+    required this.favoriteMarketIds,
+    required this.followedOrganizerIds,
+    required this.orderRatings,
   });
 
   final SpetoRemoteUserProfile profile;
@@ -813,6 +1518,11 @@ class SpetoRemoteSnapshot {
   final List<SpetoSupportTicket> supportTickets;
   final List<SpetoEventTicket> ownedTickets;
   final double proPointsBalance;
+  final List<String> favoriteRestaurantIds;
+  final List<String> favoriteEventIds;
+  final List<String> favoriteMarketIds;
+  final List<String> followedOrganizerIds;
+  final Map<String, int> orderRatings;
 }
 
 class SpetoRemoteUserProfile {
@@ -929,9 +1639,7 @@ class SpetoInventoryItem {
       isArchived: json['isArchived'] as bool? ?? false,
       onHand: (json['onHand'] as num?)?.toInt() ?? 0,
       reserved: (json['reserved'] as num?)?.toInt() ?? 0,
-      stockStatus: SpetoStockStatus.fromJson(
-        _asJsonMap(json['stockStatus']),
-      ),
+      stockStatus: SpetoStockStatus.fromJson(_asJsonMap(json['stockStatus'])),
       externalCode: json['externalCode'] as String? ?? '',
     );
   }

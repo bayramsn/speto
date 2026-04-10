@@ -42,12 +42,34 @@ class RestaurantCardData {
 }
 
 class MenuListItem {
-  const MenuListItem(this.title, this.description, this.price, this.image);
+  const MenuListItem(
+    this.title,
+    this.description,
+    this.price,
+    this.image, {
+    this.id = '',
+  });
 
   final String title;
   final String description;
   final String price;
   final String image;
+  final String id;
+}
+
+final Map<String, Map<String, List<MenuListItem>>> _runtimeRestaurantSections =
+    <String, Map<String, List<MenuListItem>>>{};
+
+void setRuntimeRestaurantMenuSections(
+  Map<String, Map<String, List<MenuListItem>>> sections,
+) {
+  _runtimeRestaurantSections
+    ..clear()
+    ..addAll(sections);
+}
+
+void clearRuntimeRestaurantMenuSections() {
+  _runtimeRestaurantSections.clear();
 }
 
 List<RestaurantCardData> defaultRestaurantCatalog() {
@@ -248,6 +270,11 @@ String marketCategoryForItem(MenuListItem item, String sourceCategory) {
 Map<String, List<MenuListItem>> restaurantMenuSectionsFor(
   RestaurantCardData restaurant,
 ) {
+  final Map<String, List<MenuListItem>>? runtimeSections =
+      _runtimeRestaurantSections[restaurant.id];
+  if (runtimeSections != null && runtimeSections.isNotEmpty) {
+    return runtimeSections;
+  }
   switch (restaurant.id) {
     case 'restaurant-pizza-bulls':
       return const <String, List<MenuListItem>>{

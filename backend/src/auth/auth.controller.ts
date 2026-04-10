@@ -2,9 +2,11 @@ import { Body, Controller, Get, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 
 import { AuthService } from './auth.service';
+import { AccountExistsDto } from './dto/account-exists.dto';
 import { LoginDto } from './dto/login.dto';
 import { PasswordRequestDto } from './dto/password-request.dto';
 import { PasswordUpdateDto } from './dto/password-update.dto';
+import { PasswordVerifyOtpDto } from './dto/password-verify-otp.dto';
 import { RegisterDto } from './dto/register.dto';
 
 @ApiTags('auth')
@@ -27,9 +29,19 @@ export class AuthController {
     return this.authService.requestPasswordReset(payload.email);
   }
 
+  @Post('account-exists')
+  accountExists(@Body() payload: AccountExistsDto) {
+    return this.authService.accountExists(payload.email);
+  }
+
   @Post('password/update')
   updatePassword(@Body() payload: PasswordUpdateDto) {
     return this.authService.updatePassword(payload.email, payload.password);
+  }
+
+  @Post('password/verify-otp')
+  verifyPasswordResetOtp(@Body() payload: PasswordVerifyOtpDto) {
+    return this.authService.verifyPasswordResetOtp(payload.email, payload.code);
   }
 
   @Get('capabilities')
