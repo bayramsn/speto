@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:speto_shared/speto_shared.dart';
@@ -21,6 +22,19 @@ const Color _warning = Color(0xFFB77A12);
 const Color _warningSoft = Color(0xFFFFF6DB);
 const Color _info = Color(0xFF3657B8);
 const Color _infoSoft = Color(0xFFEAF0FF);
+
+enum _StockDestination {
+  dashboard,
+  reports,
+  orders,
+  products,
+  campaigns,
+  revenue,
+  help,
+  account,
+}
+
+enum _OrderQueueFilter { all, fresh, preparing, ready, delivered, cancelled }
 
 LinearGradient get _heroGradient => const LinearGradient(
   colors: <Color>[Color(0xFFFBE5C5), Color(0xFFE9F0DE), Color(0xFFF7F1E8)],
@@ -131,11 +145,25 @@ class SpetoStockApp extends StatefulWidget {
 }
 
 class _SpetoStockAppState extends State<SpetoStockApp> {
-  final SpetoRemoteDomainApi _api = SpetoRemoteDomainApi(
-    SpetoRemoteApiClient(),
-  );
-
+  SpetoRemoteDomainApi? _api;
   SpetoSession? _session;
+
+  @override
+  void initState() {
+    super.initState();
+    _bootstrapApi();
+  }
+
+  Future<void> _bootstrapApi() async {
+    final SpetoRemoteApiClient client =
+        await SpetoRemoteApiClient.resolveDefault();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _api = SpetoRemoteDomainApi(client);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -256,13 +284,16 @@ class _SpetoStockAppState extends State<SpetoStockApp> {
         }),
       ),
     );
+    final SpetoRemoteDomainApi? api = _api;
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Speto Stock',
       theme: theme,
-      home: _session == null
+      home: api == null
+          ? const _BootScreen()
+          : _session == null
           ? _LoginScreen(
-              api: _api,
+              api: api,
               onLoggedIn: (SpetoSession session) {
                 setState(() {
                   _session = session;
@@ -270,16 +301,25 @@ class _SpetoStockAppState extends State<SpetoStockApp> {
               },
             )
           : _StockShell(
-              api: _api,
+              api: api,
               session: _session!,
               onSignOut: () {
-                _api.clearSession();
+                api.clearSession();
                 setState(() {
                   _session = null;
                 });
               },
             ),
     );
+  }
+}
+
+class _BootScreen extends StatelessWidget {
+  const _BootScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }
 
@@ -693,7 +733,10 @@ class _StockShell extends StatefulWidget {
 }
 
 class _StockShellState extends State<_StockShell> {
-  int _index = 0;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  _StockDestination _destination = _StockDestination.dashboard;
+  bool _showTopBar = true;
   bool _loading = true;
   String? _error;
   String? _warningMessage;
@@ -706,6 +749,7 @@ class _StockShellState extends State<_StockShell> {
   List<SpetoIntegrationConnection> _integrations =
       <SpetoIntegrationConnection>[];
   List<SpetoInventoryMovement> _movements = <SpetoInventoryMovement>[];
+  List<SpetoHappyHourOffer> _offers = <SpetoHappyHourOffer>[];
   List<SpetoCatalogVendor> _catalogVendors = <SpetoCatalogVendor>[];
   List<SpetoCatalogEvent> _catalogEvents = <SpetoCatalogEvent>[];
   List<SpetoCatalogContentBlock> _contentBlocks = <SpetoCatalogContentBlock>[];
@@ -799,6 +843,26 @@ class _StockShellState extends State<_StockShell> {
     return 'İstek başarısız oldu.';
   }
 
+  bool _handleContentScrollNotification(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) {
+      return false;
+    }
+    final bool nextValue = notification.metrics.pixels <= 0.5;
+    if (nextValue != _showTopBar) {
+      setState(() {
+        _showTopBar = nextValue;
+      });
+    }
+    return false;
+  }
+
+  void _selectDestination(_StockDestination destination) {
+    setState(() {
+      _destination = destination;
+      _showTopBar = true;
+    });
+  }
+
   Future<T?> _safeLoad<T>(
     String label,
     Future<T> Function() action,
@@ -880,7 +944,7 @@ class _StockShellState extends State<_StockShell> {
     final String? vendorId = _resolvedVendorId();
 
     final SpetoInventorySnapshot? snapshot = await _safeLoad(
-      'Dashboard',
+      'Anasayfa',
       () => widget.api.fetchInventorySnapshot(vendorId: vendorId),
       warnings,
     );
@@ -905,6 +969,13 @@ class _StockShellState extends State<_StockShell> {
           warnings,
         ) ??
         const <SpetoIntegrationConnection>[];
+    final List<SpetoHappyHourOffer> offers =
+        await _safeLoad(
+          'Kampanyalar',
+          () => widget.api.fetchHappyHourOffers(),
+          warnings,
+        ) ??
+        const <SpetoHappyHourOffer>[];
     final List<SpetoCatalogVendor> catalogVendors =
         await _safeLoad(
           'Katalog vendorları',
@@ -963,6 +1034,7 @@ class _StockShellState extends State<_StockShell> {
         resolvedSnapshot.items.isNotEmpty ||
         orders.isNotEmpty ||
         integrations.isNotEmpty ||
+        offers.isNotEmpty ||
         catalogVendors.isNotEmpty ||
         catalogEvents.isNotEmpty ||
         contentBlocks.isNotEmpty;
@@ -972,6 +1044,7 @@ class _StockShellState extends State<_StockShell> {
       _inventoryItems = inventory;
       _orders = orders;
       _integrations = integrations;
+      _offers = offers;
       _selectedVendorId = normalizedVendorId;
       _selectedInventoryId = selectedInventoryId;
       _movements = movements;
@@ -1516,7 +1589,7 @@ class _StockShellState extends State<_StockShell> {
             ),
           ];
           _selectedVendorId = created.vendorId;
-          _index = 4;
+          _destination = _StockDestination.products;
         });
       }
       await _reload();
@@ -2811,23 +2884,74 @@ class _StockShellState extends State<_StockShell> {
   @override
   Widget build(BuildContext context) {
     final bool compact = MediaQuery.of(context).size.width < 980;
-    final List<_NavItem> items = const <_NavItem>[
+    final List<_NavItem> drawerItems = const <_NavItem>[
       _NavItem(
-        'Gösterge',
-        Icons.dashboard_customize_outlined,
-        'Özet operasyon görünümü',
+        'Satış Raporları',
+        Icons.insert_chart_outlined_rounded,
+        'Ciro, adet ve tempo özeti',
+        _StockDestination.reports,
       ),
-      _NavItem('Envanter', Icons.inventory_2_outlined, 'SKU ve stok masası'),
       _NavItem(
-        'Operasyon',
+        'Tüm Siparişler',
         Icons.receipt_long_outlined,
-        'Sipariş akış tahtası',
+        'Yeni, hazır ve teslim edilen siparişler',
+        _StockDestination.orders,
       ),
-      _NavItem('Bağlantılar', Icons.hub_outlined, 'ERP ve POS kontrolü'),
       _NavItem(
-        'Katalog',
-        Icons.storefront_outlined,
-        'Storefront içerik yönetimi',
+        'Ürün Yönetimi',
+        Icons.inventory_2_outlined,
+        'Stok ve vitrin akışını yönet',
+        _StockDestination.products,
+      ),
+      _NavItem(
+        'Kampanyalar',
+        Icons.local_offer_outlined,
+        'Aktif fırsatlar ve vitrin teklifleri',
+        _StockDestination.campaigns,
+      ),
+      _NavItem(
+        'Gelir ve Ödemeler',
+        Icons.account_balance_wallet_outlined,
+        'Tahsilat ve ödeme kırılımları',
+        _StockDestination.revenue,
+      ),
+      _NavItem(
+        'Yardım Merkezi',
+        Icons.support_agent_outlined,
+        'Operasyon rehberi ve destek notları',
+        _StockDestination.help,
+      ),
+    ];
+    final List<_NavItem> bottomItems = const <_NavItem>[
+      _NavItem(
+        'Anasayfa',
+        Icons.home_rounded,
+        'Genel operasyon özeti',
+        _StockDestination.dashboard,
+      ),
+      _NavItem(
+        'Siparişler',
+        Icons.receipt_long_outlined,
+        'Canlı sipariş akışı',
+        _StockDestination.orders,
+      ),
+      _NavItem(
+        'Ürünler',
+        Icons.inventory_2_outlined,
+        'Stok ve ürün yönetimi',
+        _StockDestination.products,
+      ),
+      _NavItem(
+        'Kampanyalar',
+        Icons.local_offer_outlined,
+        'Aktif teklif ve fırsatlar',
+        _StockDestination.campaigns,
+      ),
+      _NavItem(
+        'Hesabım',
+        Icons.person_outline_rounded,
+        'Profil ve erişim bilgileri',
+        _StockDestination.account,
       ),
     ];
     final _VendorScopeChoice? selectedVendorChoice = _vendorChoices
@@ -2840,8 +2964,139 @@ class _StockShellState extends State<_StockShell> {
         selectedVendorChoice?.label.isNotEmpty == true
         ? selectedVendorChoice!.label
         : 'Operasyon paneli';
+    final String? selectedVendorId = _normalizedVendorId();
+    final SpetoInventorySnapshot? dashboardSnapshot = _dashboard;
+    final List<SpetoHappyHourOffer> visibleOffers = _offers
+        .where(
+          (SpetoHappyHourOffer offer) =>
+              selectedVendorId == null || offer.vendorId == selectedVendorId,
+        )
+        .toList(growable: false);
+    final Widget currentPage = switch (_destination) {
+      _StockDestination.dashboard when dashboardSnapshot != null =>
+        _DashboardPage(
+          vendorLabel: selectedVendorLabel,
+          snapshot: dashboardSnapshot,
+          orders: _orders,
+          integrations: _integrations,
+          onNavigate: _selectDestination,
+        ),
+      _StockDestination.reports when dashboardSnapshot != null =>
+        _SalesReportsPage(
+          vendorLabel: selectedVendorLabel,
+          snapshot: dashboardSnapshot,
+          orders: _orders,
+        ),
+      _StockDestination.dashboard || _StockDestination.reports =>
+        const _CenterStateMessage(
+          title: 'Anasayfa hazırlanıyor',
+          description:
+              'Özet metrikler yeniden yüklenirken birkaç saniye bekleyin.',
+          icon: Icons.home_rounded,
+        ),
+      _StockDestination.orders => _OrdersPage(
+        orders: _orders,
+        onAdvance: _changeOrderStatus,
+      ),
+      _StockDestination.products => _ProductsManagementPage(
+        session: widget.session,
+        items: _inventoryItems,
+        selectedId: _selectedInventoryId,
+        movements: _movements,
+        vendors: _catalogVendors,
+        events: _catalogEvents,
+        contentBlocks: _contentBlocks,
+        onSelected: (String id) async {
+          setState(() {
+            _selectedInventoryId = id;
+          });
+          try {
+            final List<SpetoInventoryMovement> movements = await widget.api
+                .fetchInventoryMovements(
+                  vendorId: _resolvedVendorId(),
+                  productId: id,
+                );
+            if (!mounted) {
+              return;
+            }
+            setState(() {
+              _movements = movements;
+            });
+          } on SpetoRemoteApiException catch (error) {
+            _showMessage(_friendlyApiError(error), isError: true);
+          } on TimeoutException {
+            _showMessage(
+              'Hareket geçmişi zamanında yüklenemedi.',
+              isError: true,
+            );
+          } catch (_) {
+            _showMessage('Hareket geçmişi yüklenemedi.', isError: true);
+          }
+        },
+        onAdjust: (SpetoInventoryItem item) => _adjustInventory(item, false),
+        onRestock: (SpetoInventoryItem item) => _adjustInventory(item, true),
+        onCreateVendor: _isAdmin ? _createCatalogVendor : null,
+        onEditVendor: _editCatalogVendor,
+        onCreateSection: _createCatalogSection,
+        onEditSection: _editCatalogSection,
+        onCreateProduct:
+            ({
+              required SpetoCatalogVendor vendor,
+              SpetoCatalogSection? section,
+            }) => _openCatalogProductEditor(
+              vendor: vendor,
+              initialSection: section,
+            ),
+        onEditProduct: _editCatalogProduct,
+        onEditEvent: _editCatalogEvent,
+        onEditContentBlock: _editContentBlock,
+      ),
+      _StockDestination.campaigns => _CampaignsPage(
+        vendorLabel: selectedVendorLabel,
+        offers: visibleOffers,
+        onNavigate: _selectDestination,
+      ),
+      _StockDestination.revenue => _RevenuePaymentsPage(
+        orders: _orders,
+        integrations: _integrations,
+        onSync: _syncIntegration,
+        onCreate: _createIntegration,
+      ),
+      _StockDestination.help => _HelpCenterPage(
+        vendorLabel: selectedVendorLabel,
+        session: widget.session,
+      ),
+      _StockDestination.account => _AccountPage(
+        session: widget.session,
+        vendorLabel: selectedVendorLabel,
+        snapshot: _dashboard,
+        offers: visibleOffers,
+        onSignOut: widget.onSignOut,
+      ),
+    };
 
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: compact
+          ? Drawer(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 0, 12),
+                  child: _SidebarNav(
+                    items: drawerItems,
+                    selectedDestination: _destination,
+                    onSelected: _selectDestination,
+                    session: widget.session,
+                    selectedVendorLabel: selectedVendorLabel,
+                    snapshot: _dashboard,
+                    drawerMode: true,
+                  ),
+                ),
+              ),
+            )
+          : null,
       body: DecoratedBox(
         decoration: BoxDecoration(gradient: _heroGradient),
         child: Stack(
@@ -2853,13 +3108,9 @@ class _StockShellState extends State<_StockShell> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 0, 16),
                     child: _SidebarNav(
-                      items: items,
-                      selectedIndex: _index,
-                      onSelected: (int value) {
-                        setState(() {
-                          _index = value;
-                        });
-                      },
+                      items: drawerItems,
+                      selectedDestination: _destination,
+                      onSelected: _selectDestination,
                       session: widget.session,
                       selectedVendorLabel: selectedVendorLabel,
                       snapshot: _dashboard,
@@ -2876,22 +3127,52 @@ class _StockShellState extends State<_StockShell> {
                       ),
                       child: Column(
                         children: <Widget>[
-                          _TopBar(
-                            session: widget.session,
-                            selectedVendorId: _normalizedVendorId(),
-                            vendorChoices: _vendorChoices,
-                            selectedVendorLabel: selectedVendorLabel,
-                            onVendorChanged:
-                                widget.session.role == SpetoUserRole.admin
-                                ? (String? value) async {
-                                    setState(() {
-                                      _selectedVendorId = value;
-                                    });
-                                    await _reload();
-                                  }
-                                : null,
-                            onRefresh: _reload,
-                            onSignOut: widget.onSignOut,
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            switchInCurve: Curves.easeOutCubic,
+                            switchOutCurve: Curves.easeInCubic,
+                            transitionBuilder:
+                                (
+                                  Widget child,
+                                  Animation<double> animation,
+                                ) => SizeTransition(
+                                  sizeFactor: animation,
+                                  axisAlignment: -1,
+                                  child: FadeTransition(
+                                    opacity: animation,
+                                    child: child,
+                                  ),
+                                ),
+                            child: !compact || _showTopBar
+                                ? _TopBar(
+                                    key: const ValueKey<String>(
+                                      'top-bar-visible',
+                                    ),
+                                    session: widget.session,
+                                    selectedVendorId: selectedVendorId,
+                                    vendorChoices: _vendorChoices,
+                                    selectedVendorLabel: selectedVendorLabel,
+                                    onVendorChanged:
+                                        widget.session.role ==
+                                            SpetoUserRole.admin
+                                        ? (String? value) async {
+                                            setState(() {
+                                              _selectedVendorId = value;
+                                            });
+                                            await _reload();
+                                          }
+                                        : null,
+                                    onRefresh: _reload,
+                                    onSignOut: widget.onSignOut,
+                                    onMenuPressed: compact
+                                        ? () =>
+                                              _scaffoldKey.currentState
+                                                  ?.openDrawer()
+                                        : null,
+                                  )
+                                : const SizedBox(
+                                    key: ValueKey<String>('top-bar-hidden'),
+                                  ),
                           ),
                           if (_warningMessage != null)
                             Padding(
@@ -2914,99 +3195,12 @@ class _StockShellState extends State<_StockShell> {
                                     description: _error!,
                                     icon: Icons.cloud_off_outlined,
                                   )
-                                : IndexedStack(
-                                    index: _index,
-                                    children: <Widget>[
-                                      _DashboardPage(
-                                        vendorLabel: selectedVendorLabel,
-                                        snapshot: _dashboard!,
-                                        orders: _orders,
-                                        integrations: _integrations,
-                                        onNavigate: (int tabIndex) {
-                                          setState(() {
-                                            _index = tabIndex;
-                                          });
-                                        },
-                                      ),
-                                      _InventoryPage(
-                                        items: _inventoryItems,
-                                        selectedId: _selectedInventoryId,
-                                        movements: _movements,
-                                        onSelected: (String id) async {
-                                          setState(() {
-                                            _selectedInventoryId = id;
-                                          });
-                                          try {
-                                            final List<SpetoInventoryMovement>
-                                            movements = await widget.api
-                                                .fetchInventoryMovements(
-                                                  vendorId: _resolvedVendorId(),
-                                                  productId: id,
-                                                );
-                                            if (!mounted) {
-                                              return;
-                                            }
-                                            setState(() {
-                                              _movements = movements;
-                                            });
-                                          } on SpetoRemoteApiException catch (
-                                            error
-                                          ) {
-                                            _showMessage(
-                                              _friendlyApiError(error),
-                                              isError: true,
-                                            );
-                                          } on TimeoutException {
-                                            _showMessage(
-                                              'Hareket geçmişi zamanında yüklenemedi.',
-                                              isError: true,
-                                            );
-                                          } catch (_) {
-                                            _showMessage(
-                                              'Hareket geçmişi yüklenemedi.',
-                                              isError: true,
-                                            );
-                                          }
-                                        },
-                                        onAdjust: (SpetoInventoryItem item) =>
-                                            _adjustInventory(item, false),
-                                        onRestock: (SpetoInventoryItem item) =>
-                                            _adjustInventory(item, true),
-                                      ),
-                                      _OrdersPage(
-                                        orders: _orders,
-                                        onAdvance: _changeOrderStatus,
-                                      ),
-                                      _IntegrationsPage(
-                                        integrations: _integrations,
-                                        onSync: _syncIntegration,
-                                        onCreate: _createIntegration,
-                                      ),
-                                      _CatalogPage(
-                                        session: widget.session,
-                                        vendors: _catalogVendors,
-                                        events: _catalogEvents,
-                                        contentBlocks: _contentBlocks,
-                                        onCreateVendor: _isAdmin
-                                            ? _createCatalogVendor
-                                            : null,
-                                        onEditVendor: _editCatalogVendor,
-                                        onCreateSection: _createCatalogSection,
-                                        onEditSection: _editCatalogSection,
-                                        onCreateProduct:
-                                            ({
-                                              required SpetoCatalogVendor
-                                              vendor,
-                                              SpetoCatalogSection? section,
-                                            }) => _openCatalogProductEditor(
-                                              vendor: vendor,
-                                              initialSection: section,
-                                            ),
-                                        onEditProduct: _editCatalogProduct,
-                                        onEditEvent: _editCatalogEvent,
-                                        onEditContentBlock: _editContentBlock,
-                                      ),
-                                    ],
+                                : NotificationListener<ScrollNotification>(
+                                    onNotification:
+                                        compact
+                                        ? _handleContentScrollNotification
+                                        : (_) => false,
+                                    child: currentPage,
                                   ),
                           ),
                         ],
@@ -3024,24 +3218,11 @@ class _StockShellState extends State<_StockShell> {
               top: false,
               left: false,
               right: false,
-              minimum: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              child: NavigationBar(
-                selectedIndex: _index,
-                labelBehavior:
-                    NavigationDestinationLabelBehavior.onlyShowSelected,
-                destinations: items
-                    .map(
-                      (_NavItem item) => NavigationDestination(
-                        icon: Icon(item.icon),
-                        label: item.label,
-                      ),
-                    )
-                    .toList(growable: false),
-                onDestinationSelected: (int value) {
-                  setState(() {
-                    _index = value;
-                  });
-                },
+              minimum: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              child: _GlassBottomNavBar(
+                items: bottomItems,
+                selectedDestination: _destination,
+                onSelected: _selectDestination,
               ),
             )
           : null,
@@ -3051,6 +3232,7 @@ class _StockShellState extends State<_StockShell> {
 
 class _TopBar extends StatelessWidget {
   const _TopBar({
+    super.key,
     required this.session,
     required this.selectedVendorId,
     required this.vendorChoices,
@@ -3058,6 +3240,7 @@ class _TopBar extends StatelessWidget {
     required this.onVendorChanged,
     required this.onRefresh,
     required this.onSignOut,
+    this.onMenuPressed,
   });
 
   final SpetoSession session;
@@ -3067,6 +3250,7 @@ class _TopBar extends StatelessWidget {
   final ValueChanged<String?>? onVendorChanged;
   final Future<void> Function() onRefresh;
   final VoidCallback onSignOut;
+  final VoidCallback? onMenuPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -3074,28 +3258,69 @@ class _TopBar extends StatelessWidget {
       builder: (BuildContext context, BoxConstraints constraints) {
         final bool compact = constraints.maxWidth < 880;
         final double vendorFieldWidth = compact ? constraints.maxWidth : 320;
+        final ButtonStyle filledButtonStyle = FilledButton.styleFrom(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 14 : 18,
+            vertical: compact ? 12 : 14,
+          ),
+          minimumSize: Size(0, compact ? 46 : 52),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          textStyle: TextStyle(
+            fontSize: compact ? 15 : 16,
+            fontWeight: FontWeight.w700,
+          ),
+        );
+        final ButtonStyle outlinedButtonStyle = OutlinedButton.styleFrom(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 14 : 18,
+            vertical: compact ? 12 : 14,
+          ),
+          minimumSize: Size(0, compact ? 46 : 52),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          textStyle: TextStyle(
+            fontSize: compact ? 15 : 16,
+            fontWeight: FontWeight.w700,
+          ),
+        );
         final Widget heading = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
+            if (compact && onMenuPressed != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: IconButton.filledTonal(
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size(44, 44),
+                    maximumSize: const Size(44, 44),
+                    padding: EdgeInsets.zero,
+                  ),
+                  onPressed: onMenuPressed,
+                  icon: const Icon(Icons.menu_rounded),
+                ),
+              ),
             _StatusPill(
               label: compact ? _roleLabel(session.role) : selectedVendorLabel,
               color: _accent,
               backgroundColor: _accentSoft,
+              compact: compact,
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: compact ? 10 : 12),
             Text(
               'Operasyon Merkezi',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 color: _ink,
                 fontWeight: FontWeight.w800,
+                fontSize: compact ? 18 : null,
               ),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: compact ? 4 : 6),
             Text(
               '${session.displayName} • ${_roleLabel(session.role)} • Canlı operasyon paneli',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: _muted,
                 fontWeight: FontWeight.w600,
+                fontSize: compact ? 13.5 : null,
+                height: compact ? 1.35 : null,
               ),
             ),
           ],
@@ -3165,27 +3390,29 @@ class _TopBar extends StatelessWidget {
             ),
           FilledButton.tonalIcon(
             onPressed: onRefresh,
+            style: filledButtonStyle,
             icon: const Icon(Icons.refresh_rounded),
             label: const Text('Yenile'),
           ),
           OutlinedButton.icon(
             onPressed: onSignOut,
+            style: outlinedButtonStyle,
             icon: const Icon(Icons.logout_rounded),
             label: const Text('Çıkış'),
           ),
         ];
 
         return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
+          padding: EdgeInsets.only(bottom: compact ? 8 : 12),
           child: _SurfaceCard(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(compact ? 16 : 20),
             child: compact
                 ? Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       heading,
-                      const SizedBox(height: 16),
-                      Wrap(spacing: 10, runSpacing: 10, children: controls),
+                      const SizedBox(height: 12),
+                      Wrap(spacing: 8, runSpacing: 8, children: controls),
                     ],
                   )
                 : Row(
@@ -3223,7 +3450,7 @@ class _DashboardPage extends StatelessWidget {
   final SpetoInventorySnapshot snapshot;
   final List<SpetoOpsOrder> orders;
   final List<SpetoIntegrationConnection> integrations;
-  final ValueChanged<int> onNavigate;
+  final ValueChanged<_StockDestination> onNavigate;
 
   @override
   Widget build(BuildContext context) {
@@ -3890,7 +4117,7 @@ class _InventoryCard extends StatelessWidget {
   }
 }
 
-class _OrdersPage extends StatelessWidget {
+class _OrdersPage extends StatefulWidget {
   const _OrdersPage({required this.orders, required this.onAdvance});
 
   final List<SpetoOpsOrder> orders;
@@ -3898,99 +4125,1492 @@ class _OrdersPage extends StatelessWidget {
   onAdvance;
 
   @override
+  State<_OrdersPage> createState() => _OrdersPageState();
+}
+
+class _OrdersPageState extends State<_OrdersPage> {
+  static const List<(_OrderQueueFilter, String)> _filters =
+      <(_OrderQueueFilter, String)>[
+        (_OrderQueueFilter.all, 'Tümü'),
+        (_OrderQueueFilter.fresh, 'Yeni'),
+        (_OrderQueueFilter.preparing, 'Hazırlanıyor'),
+        (_OrderQueueFilter.ready, 'Hazır'),
+        (_OrderQueueFilter.delivered, 'Teslim Edildi'),
+        (_OrderQueueFilter.cancelled, 'İptal Edilen'),
+      ];
+
+  List<SpetoOpsOrder> _filteredOrders(_OrderQueueFilter filter) {
+    return widget.orders
+        .where((SpetoOpsOrder order) {
+          return switch (filter) {
+            _OrderQueueFilter.all => true,
+            _OrderQueueFilter.fresh =>
+              order.opsStatus == SpetoOpsOrderStage.created,
+            _OrderQueueFilter.preparing =>
+              order.opsStatus == SpetoOpsOrderStage.accepted ||
+                  order.opsStatus == SpetoOpsOrderStage.preparing,
+            _OrderQueueFilter.ready =>
+              order.opsStatus == SpetoOpsOrderStage.ready,
+            _OrderQueueFilter.delivered =>
+              order.opsStatus == SpetoOpsOrderStage.completed ||
+                  order.status == SpetoOrderStatus.completed,
+            _OrderQueueFilter.cancelled =>
+              order.opsStatus == SpetoOpsOrderStage.cancelled ||
+                  order.status == SpetoOrderStatus.cancelled,
+          };
+        })
+        .toList(growable: false);
+  }
+
+  int _countFor(_OrderQueueFilter filter) => _filteredOrders(filter).length;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool compact = MediaQuery.sizeOf(context).width < 860;
+    return DefaultTabController(
+      length: _filters.length,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(4, 4, 4, 24),
+        child: _SurfaceCard(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'Tüm siparişler',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Yeni, hazırlanan, hazır, teslim edilen ve iptal edilen siparişleri aynı akıştan yönet.',
+                          style: TextStyle(color: _muted, height: 1.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  _StatusPill(
+                    label: '${widget.orders.length} toplam sipariş',
+                    color: _accent,
+                    backgroundColor: _accentSoft,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _filters
+                    .map(
+                      ((entry) => _InfoPill(
+                        label: '${entry.$2} • ${_countFor(entry.$1)}',
+                      )),
+                    )
+                    .toList(growable: false),
+              ),
+              const SizedBox(height: 18),
+              TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                labelColor: _ink,
+                unselectedLabelColor: _muted,
+                dividerColor: Colors.transparent,
+                indicator: BoxDecoration(
+                  color: _accentSoft,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: const Color(0xFFFFD6A3)),
+                ),
+                tabs: _filters
+                    .map(
+                      ((entry) => Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Tab(text: entry.$2),
+                      )),
+                    )
+                    .toList(growable: false),
+              ),
+              const SizedBox(height: 18),
+              Expanded(
+                child: TabBarView(
+                  children: _filters
+                      .map(
+                        ((entry) => _OrdersTabBody(
+                          filter: entry.$1,
+                          title: entry.$2,
+                          orders: _filteredOrders(entry.$1),
+                          compact: compact,
+                          onAdvance: widget.onAdvance,
+                        )),
+                      )
+                      .toList(growable: false),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OrdersTabBody extends StatelessWidget {
+  const _OrdersTabBody({
+    required this.filter,
+    required this.title,
+    required this.orders,
+    required this.compact,
+    required this.onAdvance,
+  });
+
+  final _OrderQueueFilter filter;
+  final String title;
+  final List<SpetoOpsOrder> orders;
+  final bool compact;
+  final Future<void> Function(SpetoOpsOrder order, SpetoOpsOrderStage stage)
+  onAdvance;
+
+  @override
   Widget build(BuildContext context) {
     if (orders.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.fromLTRB(4, 4, 4, 24),
-        child: _SectionCard(
-          title: 'Operasyon kuyruğu',
-          subtitle: 'Siparişleri aşama bazlı tahtadan yönet',
-          child: _EmptyState(
-            title: 'Sipariş kuyruğu boş',
-            description:
-                'Yeni siparişler operasyon akışına düştüğünde bu ekranda ilerletilebilir.',
-            icon: Icons.inbox_rounded,
-          ),
+      return _EmptyState(
+        title: '$title kuyruğu boş',
+        description:
+            'Bu filtrede bekleyen sipariş görünmüyor. Yeni operasyon oluştuğunda burada listelenecek.',
+        icon: Icons.inbox_outlined,
+      );
+    }
+    if (filter == _OrderQueueFilter.all) {
+      return _AllOrdersList(
+        orders: orders,
+        compact: compact,
+        onAdvance: onAdvance,
+      );
+    }
+    if (filter == _OrderQueueFilter.preparing) {
+      return _AllOrdersList(
+        orders: orders,
+        compact: compact,
+        onAdvance: onAdvance,
+        headerLabel: 'Hazırlık hattı',
+      );
+    }
+    final SpetoOpsOrderStage stage = switch (filter) {
+      _OrderQueueFilter.fresh => SpetoOpsOrderStage.created,
+      _OrderQueueFilter.ready => SpetoOpsOrderStage.ready,
+      _OrderQueueFilter.delivered => SpetoOpsOrderStage.completed,
+      _OrderQueueFilter.cancelled => SpetoOpsOrderStage.cancelled,
+      _OrderQueueFilter.all ||
+      _OrderQueueFilter.preparing => SpetoOpsOrderStage.created,
+    };
+    if (compact) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 92),
+        child: _MobileOrderStageSection(
+          stage: stage,
+          orders: orders,
+          onAdvance: onAdvance,
         ),
       );
     }
-    final List<SpetoOpsOrderStage> columns = <SpetoOpsOrderStage>[
-      SpetoOpsOrderStage.created,
-      SpetoOpsOrderStage.accepted,
-      SpetoOpsOrderStage.preparing,
-      SpetoOpsOrderStage.ready,
-      SpetoOpsOrderStage.completed,
-    ];
-    final Map<SpetoOpsOrderStage, List<SpetoOpsOrder>> grouped =
-        <SpetoOpsOrderStage, List<SpetoOpsOrder>>{
-          for (final SpetoOpsOrderStage stage in columns)
-            stage: orders
-                .where((SpetoOpsOrder order) => order.opsStatus == stage)
-                .toList(growable: false),
-        };
-    final bool compact = MediaQuery.sizeOf(context).width < 780;
-    final Widget compactBoard = _SectionCard(
-      title: 'Operasyon tahtası',
-      subtitle:
-          'Siparişleri tek bakışta aşamaya, tempo riskine ve müşteri tipine göre ilerlet.',
-      trailing: _StatusPill(
-        label: '${orders.length} aktif sipariş',
-        color: _accent,
-        backgroundColor: _accentSoft,
-      ),
-      child: Column(
-        children: columns
-            .map(
-              (SpetoOpsOrderStage stage) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _MobileOrderStageSection(
-                  stage: stage,
-                  orders: grouped[stage]!,
-                  onAdvance: onAdvance,
-                ),
-              ),
-            )
-            .toList(growable: false),
+    return Center(
+      child: SizedBox(
+        height: 560,
+        child: _OrdersBoardColumn(
+          stage: stage,
+          orders: orders,
+          onAdvance: onAdvance,
+        ),
       ),
     );
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 4, 4, 24),
-      child: compact
-          ? SingleChildScrollView(
-              padding: const EdgeInsets.only(bottom: 88),
-              child: compactBoard,
-            )
-          : _SectionCard(
-              title: 'Operasyon tahtası',
-              subtitle:
-                  'Siparişleri tek bakışta aşamaya, tempo riskine ve müşteri tipine göre ilerlet.',
-              trailing: _StatusPill(
-                label: '${orders.length} aktif sipariş',
-                color: _accent,
-                backgroundColor: _accentSoft,
+  }
+}
+
+class _AllOrdersList extends StatelessWidget {
+  const _AllOrdersList({
+    required this.orders,
+    required this.compact,
+    required this.onAdvance,
+    this.headerLabel,
+  });
+
+  final List<SpetoOpsOrder> orders;
+  final bool compact;
+  final Future<void> Function(SpetoOpsOrder order, SpetoOpsOrderStage stage)
+  onAdvance;
+  final String? headerLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget content = ListView.separated(
+      padding: EdgeInsets.only(bottom: compact ? 96 : 8),
+      itemCount: orders.length,
+      separatorBuilder: (_, int index) => const SizedBox(height: 12),
+      itemBuilder: (BuildContext context, int index) {
+        final SpetoOpsOrder order = orders[index];
+        return compact
+            ? _MobileOrderCard(order: order, onAdvance: onAdvance)
+            : _AllOrdersDesktopCard(order: order, onAdvance: onAdvance);
+      },
+    );
+    if (headerLabel == null) {
+      return content;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _StatusPill(
+          label: headerLabel!,
+          color: _warning,
+          backgroundColor: _warningSoft,
+        ),
+        const SizedBox(height: 16),
+        Expanded(child: content),
+      ],
+    );
+  }
+}
+
+class _AllOrdersDesktopCard extends StatelessWidget {
+  const _AllOrdersDesktopCard({required this.order, required this.onAdvance});
+
+  final SpetoOpsOrder order;
+  final Future<void> Function(SpetoOpsOrder order, SpetoOpsOrderStage stage)
+  onAdvance;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<SpetoOpsOrderStage> actions = _nextOpsStages(order.opsStatus);
+    final Color statusColor = switch (order.opsStatus) {
+      SpetoOpsOrderStage.completed => _success,
+      SpetoOpsOrderStage.cancelled => _danger,
+      SpetoOpsOrderStage.ready => _info,
+      SpetoOpsOrderStage.preparing => _warning,
+      SpetoOpsOrderStage.accepted => _accent,
+      SpetoOpsOrderStage.created => _ink,
+    };
+    return _SurfaceCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      '${order.vendor} • ${order.pickupCode}',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${order.itemCount} ürün • ${order.paymentMethod} • ${order.deliveryMode}',
+                      style: const TextStyle(color: _muted),
+                    ),
+                  ],
+                ),
               ),
-              child: SizedBox(
-                height: 640,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  _StatusPill(
+                    label: _opsStageLabel(order.opsStatus),
+                    color: statusColor,
+                    backgroundColor: statusColor.withValues(alpha: 0.12),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${order.payableTotal.toStringAsFixed(0)} TL',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              _InfoPill(label: 'Alındı ${order.placedAtLabel}'),
+              _InfoPill(label: 'Hazır süresi ${order.etaLabel}'),
+              if (order.promoCode.isNotEmpty)
+                _InfoPill(label: 'Kampanya ${order.promoCode}'),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...order.items
+              .take(3)
+              .map(
+                (SpetoCartItem item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: columns
-                        .map(
-                          (SpetoOpsOrderStage stage) => Padding(
-                            padding: const EdgeInsets.only(right: 16),
-                            child: _OrdersBoardColumn(
-                              stage: stage,
-                              orders: grouped[stage]!,
-                              onAdvance: onAdvance,
-                            ),
-                          ),
-                        )
-                        .toList(growable: false),
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          '${item.quantity}x ${item.title}',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      Text('${item.totalPrice.toStringAsFixed(0)} TL'),
+                    ],
                   ),
                 ),
               ),
+          if (actions.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: actions
+                  .map(
+                    (SpetoOpsOrderStage nextStage) => FilledButton.tonal(
+                      onPressed: () => onAdvance(order, nextStage),
+                      child: Text(_opsStageLabel(nextStage)),
+                    ),
+                  )
+                  .toList(growable: false),
             ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SalesReportsPage extends StatelessWidget {
+  const _SalesReportsPage({
+    required this.vendorLabel,
+    required this.snapshot,
+    required this.orders,
+  });
+
+  final String vendorLabel;
+  final SpetoInventorySnapshot snapshot;
+  final List<SpetoOpsOrder> orders;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<SpetoOpsOrder> completedOrders = orders
+        .where(
+          (SpetoOpsOrder order) =>
+              order.opsStatus == SpetoOpsOrderStage.completed ||
+              order.status == SpetoOrderStatus.completed,
+        )
+        .toList(growable: false);
+    final List<SpetoOpsOrder> cancelledOrders = orders
+        .where(
+          (SpetoOpsOrder order) =>
+              order.opsStatus == SpetoOpsOrderStage.cancelled ||
+              order.status == SpetoOrderStatus.cancelled,
+        )
+        .toList(growable: false);
+    final double totalRevenue = completedOrders.fold<double>(
+      0,
+      (double sum, SpetoOpsOrder order) => sum + order.payableTotal,
+    );
+    final int totalItemsSold = completedOrders.fold<int>(
+      0,
+      (int sum, SpetoOpsOrder order) => sum + order.itemCount,
+    );
+    final double averageBasket = completedOrders.isEmpty
+        ? 0
+        : totalRevenue / completedOrders.length;
+    final Map<String, int> productSales = <String, int>{};
+    for (final SpetoOpsOrder order in completedOrders) {
+      for (final SpetoCartItem item in order.items) {
+        productSales.update(
+          item.title,
+          (int current) => current + item.quantity,
+          ifAbsent: () => item.quantity,
+        );
+      }
+    }
+    final List<MapEntry<String, int>> topProducts =
+        productSales.entries.toList()..sort(
+          (MapEntry<String, int> a, MapEntry<String, int> b) =>
+              b.value.compareTo(a.value),
+        );
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _SectionCard(
+            title: 'Satış raporları',
+            subtitle:
+                '$vendorLabel için ciro, ürün hızı ve operasyon verimini tek akışta izle.',
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: <Widget>[
+                _SummaryStatCard(
+                  label: 'Toplam ciro',
+                  value: '${totalRevenue.toStringAsFixed(0)} TL',
+                  tone: _success,
+                  note: '${completedOrders.length} teslim edilen sipariş',
+                ),
+                _SummaryStatCard(
+                  label: 'Ortalama sepet',
+                  value: '${averageBasket.toStringAsFixed(0)} TL',
+                  tone: _info,
+                  note: '${snapshot.openOrdersCount} aktif sipariş akışı',
+                ),
+                _SummaryStatCard(
+                  label: 'Satılan ürün',
+                  value: '$totalItemsSold adet',
+                  tone: _accent,
+                  note: '${snapshot.totalItems} SKU havuzu',
+                ),
+                _SummaryStatCard(
+                  label: 'İptal oranı',
+                  value: orders.isEmpty
+                      ? '%0'
+                      : '%${((cancelledOrders.length / orders.length) * 100).toStringAsFixed(0)}',
+                  tone: _danger,
+                  note: '${cancelledOrders.length} iptal sipariş',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: 'Akış özeti',
+            subtitle:
+                'Operasyon hattındaki yükün şu an hangi aşamada biriktiğini gör.',
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: <Widget>[
+                _InfoPill(
+                  label:
+                      'Yeni ${orders.where((SpetoOpsOrder order) => order.opsStatus == SpetoOpsOrderStage.created).length}',
+                ),
+                _InfoPill(
+                  label:
+                      'Hazırlanan ${orders.where((SpetoOpsOrder order) => order.opsStatus == SpetoOpsOrderStage.accepted || order.opsStatus == SpetoOpsOrderStage.preparing).length}',
+                ),
+                _InfoPill(
+                  label:
+                      'Hazır ${orders.where((SpetoOpsOrder order) => order.opsStatus == SpetoOpsOrderStage.ready).length}',
+                ),
+                _InfoPill(
+                  label:
+                      'Teslim ${orders.where((SpetoOpsOrder order) => order.opsStatus == SpetoOpsOrderStage.completed).length}',
+                ),
+                _InfoPill(
+                  label:
+                      'İptal ${orders.where((SpetoOpsOrder order) => order.opsStatus == SpetoOpsOrderStage.cancelled).length}',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: 'En çok satan ürünler',
+            subtitle: 'Teslim edilen siparişlerden türetilen ürün temposu.',
+            child: topProducts.isEmpty
+                ? const _EmptyState(
+                    title: 'Rapor üretilecek veri yok',
+                    description:
+                        'Teslim edilen siparişler geldikçe ürün performansı burada listelenecek.',
+                    icon: Icons.bar_chart_rounded,
+                  )
+                : Column(
+                    children: topProducts
+                        .take(6)
+                        .map((MapEntry<String, int> entry) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _SurfaceCard(
+                              padding: const EdgeInsets.all(16),
+                              tint: _panel,
+                              child: Row(
+                                children: <Widget>[
+                                  Container(
+                                    width: 42,
+                                    height: 42,
+                                    decoration: BoxDecoration(
+                                      color: _accentSoft,
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      '${topProducts.indexOf(entry) + 1}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      entry.key,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    '${entry.value} adet',
+                                    style: const TextStyle(
+                                      color: _muted,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        })
+                        .toList(growable: false),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductsManagementPage extends StatelessWidget {
+  const _ProductsManagementPage({
+    required this.session,
+    required this.items,
+    required this.selectedId,
+    required this.movements,
+    required this.vendors,
+    required this.events,
+    required this.contentBlocks,
+    required this.onSelected,
+    required this.onAdjust,
+    required this.onRestock,
+    required this.onCreateVendor,
+    required this.onEditVendor,
+    required this.onCreateSection,
+    required this.onEditSection,
+    required this.onCreateProduct,
+    required this.onEditProduct,
+    required this.onEditEvent,
+    required this.onEditContentBlock,
+  });
+
+  final SpetoSession session;
+  final List<SpetoInventoryItem> items;
+  final String? selectedId;
+  final List<SpetoInventoryMovement> movements;
+  final List<SpetoCatalogVendor> vendors;
+  final List<SpetoCatalogEvent> events;
+  final List<SpetoCatalogContentBlock> contentBlocks;
+  final ValueChanged<String> onSelected;
+  final ValueChanged<SpetoInventoryItem> onAdjust;
+  final ValueChanged<SpetoInventoryItem> onRestock;
+  final Future<void> Function()? onCreateVendor;
+  final ValueChanged<SpetoCatalogVendor> onEditVendor;
+  final Future<void> Function(SpetoCatalogVendor vendor) onCreateSection;
+  final void Function(SpetoCatalogVendor, SpetoCatalogSection) onEditSection;
+  final Future<void> Function({
+    required SpetoCatalogVendor vendor,
+    SpetoCatalogSection? section,
+  })
+  onCreateProduct;
+  final ValueChanged<SpetoCatalogProduct> onEditProduct;
+  final ValueChanged<SpetoCatalogEvent> onEditEvent;
+  final ValueChanged<SpetoCatalogContentBlock> onEditContentBlock;
+
+  @override
+  Widget build(BuildContext context) {
+    final int totalSections = vendors.fold<int>(
+      0,
+      (int sum, SpetoCatalogVendor vendor) => sum + vendor.sections.length,
+    );
+    final int totalProducts = vendors.fold<int>(
+      0,
+      (int sum, SpetoCatalogVendor vendor) =>
+          sum +
+          vendor.sections.fold<int>(
+            0,
+            (int sectionSum, SpetoCatalogSection section) =>
+                sectionSum + section.products.length,
+          ),
+    );
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool compact = constraints.maxWidth < 760;
+        final List<Widget> summaryPills = <Widget>[
+          _InfoPill(label: '${items.length} stok kartı'),
+          _InfoPill(label: '$totalSections kategori'),
+          _InfoPill(label: '$totalProducts vitrin ürünü'),
+        ];
+        return DefaultTabController(
+          length: 2,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 24),
+            child: Column(
+              children: <Widget>[
+                _SurfaceCard(
+                  padding: EdgeInsets.all(compact ? 14 : 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      if (compact)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              'Ürün yönetimi',
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 20,
+                                  ),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Stok operasyonu ile vitrin/katalog düzenini tek merkezden yönet.',
+                              style: TextStyle(color: _muted, height: 1.45),
+                            ),
+                            const SizedBox(height: 10),
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: <Widget>[
+                                  summaryPills[0],
+                                  const SizedBox(width: 8),
+                                  summaryPills[1],
+                                  const SizedBox(width: 8),
+                                  summaryPills[2],
+                                ],
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
+                                    'Ürün yönetimi',
+                                    style: Theme.of(context).textTheme.titleLarge
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const Text(
+                                    'Stok operasyonu ile vitrin/katalog düzenini tek merkezden yönet.',
+                                    style: TextStyle(
+                                      color: _muted,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: summaryPills,
+                            ),
+                          ],
+                        ),
+                      SizedBox(height: compact ? 12 : 18),
+                      const TabBar(
+                        isScrollable: true,
+                        tabAlignment: TabAlignment.start,
+                        tabs: <Widget>[
+                          Tab(text: 'Stok ve ürünler'),
+                          Tab(text: 'Vitrin ve katalog'),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: TabBarView(
+                    children: <Widget>[
+                      _InventoryPage(
+                        items: items,
+                        selectedId: selectedId,
+                        movements: movements,
+                        onSelected: onSelected,
+                        onAdjust: onAdjust,
+                        onRestock: onRestock,
+                      ),
+                      _CatalogPage(
+                        session: session,
+                        vendors: vendors,
+                        events: events,
+                        contentBlocks: contentBlocks,
+                        onCreateVendor: onCreateVendor,
+                        onEditVendor: onEditVendor,
+                        onCreateSection: onCreateSection,
+                        onEditSection: onEditSection,
+                        onCreateProduct: onCreateProduct,
+                        onEditProduct: onEditProduct,
+                        onEditEvent: onEditEvent,
+                        onEditContentBlock: onEditContentBlock,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CampaignsPage extends StatelessWidget {
+  const _CampaignsPage({
+    required this.vendorLabel,
+    required this.offers,
+    required this.onNavigate,
+  });
+
+  final String vendorLabel;
+  final List<SpetoHappyHourOffer> offers;
+  final ValueChanged<_StockDestination> onNavigate;
+
+  @override
+  Widget build(BuildContext context) {
+    final double averageDiscount = offers.isEmpty
+        ? 0
+        : offers.fold<int>(
+                0,
+                (int sum, SpetoHappyHourOffer offer) =>
+                    sum + offer.discountPercent,
+              ) /
+              offers.length;
+    final int expiringSoon = offers
+        .where((SpetoHappyHourOffer offer) => offer.expiresInMinutes <= 60)
+        .length;
+    final int stockRiskCount = offers
+        .where((SpetoHappyHourOffer offer) => !offer.stockStatus.canPurchase)
+        .length;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _SectionCard(
+            title: 'Kampanyalar',
+            subtitle:
+                '$vendorLabel için vitrine çıkan fırsatları, indirim temposunu ve stok riskini yönet.',
+            trailing: FilledButton.tonalIcon(
+              onPressed: () => onNavigate(_StockDestination.products),
+              icon: const Icon(Icons.inventory_2_outlined),
+              label: const Text('Ürünlere git'),
+            ),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: <Widget>[
+                _SummaryStatCard(
+                  label: 'Aktif kampanya',
+                  value: '${offers.length}',
+                  tone: _accent,
+                  note: 'Vitrinde yayınlanan teklif',
+                ),
+                _SummaryStatCard(
+                  label: 'Ortalama indirim',
+                  value: '%${averageDiscount.toStringAsFixed(0)}',
+                  tone: _success,
+                  note: '$expiringSoon kampanya 1 saat içinde bitiyor',
+                ),
+                _SummaryStatCard(
+                  label: 'Stok riski',
+                  value: '$stockRiskCount',
+                  tone: _danger,
+                  note: 'Stok problemi olan kampanya',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: 'Yayındaki teklifler',
+            subtitle:
+                'İndirim yüzdesi, kalan süre ve talep sayısı ile kampanyaları sırala.',
+            child: offers.isEmpty
+                ? const _EmptyState(
+                    title: 'Aktif kampanya görünmüyor',
+                    description:
+                        'Happy hour veya vitrin teklifleri açıldığında burada listelenecek.',
+                    icon: Icons.local_offer_outlined,
+                  )
+                : Column(
+                    children: offers
+                        .map((SpetoHappyHourOffer offer) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _CampaignOfferCard(offer: offer),
+                          );
+                        })
+                        .toList(growable: false),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RevenuePaymentsPage extends StatelessWidget {
+  const _RevenuePaymentsPage({
+    required this.orders,
+    required this.integrations,
+    required this.onSync,
+    required this.onCreate,
+  });
+
+  final List<SpetoOpsOrder> orders;
+  final List<SpetoIntegrationConnection> integrations;
+  final Future<void> Function(SpetoIntegrationConnection connection) onSync;
+  final Future<void> Function() onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<SpetoOpsOrder> settledOrders = orders
+        .where(
+          (SpetoOpsOrder order) =>
+              order.opsStatus == SpetoOpsOrderStage.completed ||
+              order.status == SpetoOrderStatus.completed,
+        )
+        .toList(growable: false);
+    final Map<String, double> paymentTotals = <String, double>{};
+    for (final SpetoOpsOrder order in settledOrders) {
+      paymentTotals.update(
+        order.paymentMethod,
+        (double current) => current + order.payableTotal,
+        ifAbsent: () => order.payableTotal,
+      );
+    }
+    final List<MapEntry<String, double>> paymentEntries =
+        paymentTotals.entries.toList()..sort(
+          (MapEntry<String, double> a, MapEntry<String, double> b) =>
+              b.value.compareTo(a.value),
+        );
+    final double settledRevenue = settledOrders.fold<double>(
+      0,
+      (double sum, SpetoOpsOrder order) => sum + order.payableTotal,
+    );
+    final double discounts = settledOrders.fold<double>(
+      0,
+      (double sum, SpetoOpsOrder order) => sum + order.discountAmount,
+    );
+
+    return DefaultTabController(
+      length: 3,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(4, 4, 4, 24),
+        child: Column(
+          children: <Widget>[
+            _SurfaceCard(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Gelir ve ödemeler',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Tahsil edilen siparişleri, ödeme yöntemi dağılımını ve entegrasyon bağlantılarını aynı görünümde takip et.',
+                    style: TextStyle(color: _muted, height: 1.5),
+                  ),
+                  const SizedBox(height: 18),
+                  const TabBar(
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    tabs: <Widget>[
+                      Tab(text: 'Gelir özeti'),
+                      Tab(text: 'Ödeme yöntemleri'),
+                      Tab(text: 'Bağlantılar'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: TabBarView(
+                children: <Widget>[
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        _SectionCard(
+                          title: 'Tahsilat özeti',
+                          child: Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: <Widget>[
+                              _SummaryStatCard(
+                                label: 'Tahsil edilen gelir',
+                                value:
+                                    '${settledRevenue.toStringAsFixed(0)} TL',
+                                tone: _success,
+                                note:
+                                    '${settledOrders.length} teslim edilen sipariş',
+                              ),
+                              _SummaryStatCard(
+                                label: 'İndirim toplamı',
+                                value: '${discounts.toStringAsFixed(0)} TL',
+                                tone: _warning,
+                                note: 'Kampanya ve kupon etkisi',
+                              ),
+                              _SummaryStatCard(
+                                label: 'Aktif ödeme tipi',
+                                value: '${paymentEntries.length}',
+                                tone: _info,
+                                note: 'Kasada kullanılan yöntem',
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _SectionCard(
+                          title: 'Son tahsil edilen siparişler',
+                          child: settledOrders.isEmpty
+                              ? const _EmptyState(
+                                  title: 'Tahsil edilmiş sipariş yok',
+                                  description:
+                                      'Tamamlanan siparişler geldikçe ödeme listesi burada görünür.',
+                                  icon: Icons.payments_outlined,
+                                )
+                              : Column(
+                                  children: settledOrders
+                                      .take(6)
+                                      .map((SpetoOpsOrder order) {
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 12,
+                                          ),
+                                          child: _RevenueOrderTile(
+                                            order: order,
+                                          ),
+                                        );
+                                      })
+                                      .toList(growable: false),
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: _SectionCard(
+                      title: 'Ödeme yöntemi kırılımı',
+                      subtitle:
+                          'Hangi tahsilat kanalının daha fazla gelir getirdiğini izle.',
+                      child: paymentEntries.isEmpty
+                          ? const _EmptyState(
+                              title: 'Ödeme verisi oluşmadı',
+                              description:
+                                  'Teslim edilen siparişlerden sonra ödeme kırılımı burada listelenir.',
+                              icon: Icons.account_balance_wallet_outlined,
+                            )
+                          : Column(
+                              children: paymentEntries
+                                  .map((MapEntry<String, double> entry) {
+                                    final double percent = settledRevenue == 0
+                                        ? 0
+                                        : (entry.value / settledRevenue) * 100;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 12,
+                                      ),
+                                      child: _SurfaceCard(
+                                        padding: const EdgeInsets.all(16),
+                                        tint: _panel,
+                                        child: Row(
+                                          children: <Widget>[
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: <Widget>[
+                                                  Text(
+                                                    entry.key,
+                                                    style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    '%${percent.toStringAsFixed(0)} pay',
+                                                    style: const TextStyle(
+                                                      color: _muted,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            Text(
+                                              '${entry.value.toStringAsFixed(0)} TL',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  })
+                                  .toList(growable: false),
+                            ),
+                    ),
+                  ),
+                  _IntegrationsPage(
+                    integrations: integrations,
+                    onSync: onSync,
+                    onCreate: onCreate,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HelpCenterPage extends StatelessWidget {
+  const _HelpCenterPage({required this.vendorLabel, required this.session});
+
+  final String vendorLabel;
+  final SpetoSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _SectionCard(
+            title: 'Yardım merkezi',
+            subtitle:
+                '$vendorLabel operasyonu için hızlı çözüm adımlarını ve destek temaslarını burada tut.',
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: const <Widget>[
+                _SummaryStatCard(
+                  label: 'Öncelik 1',
+                  value: 'Sipariş akışı',
+                  tone: _danger,
+                  note: 'Hazır ve yeni siparişleri 5 dk içinde kontrol et',
+                ),
+                _SummaryStatCard(
+                  label: 'Öncelik 2',
+                  value: 'Stok doğruluğu',
+                  tone: _warning,
+                  note: 'Kritik SKU ve manuel düzeltmeleri gözden geçir',
+                ),
+                _SummaryStatCard(
+                  label: 'Öncelik 3',
+                  value: 'Kampanya uyumu',
+                  tone: _info,
+                  note: 'Kampanya stoklarını ve indirimleri senkron tut',
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: 'Operasyon rehberi',
+            child: Column(
+              children: <Widget>[
+                _HelpTopicTile(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'Sipariş biriktiğinde',
+                  body:
+                      'Önce Yeni ve Hazırlanıyor sekmelerini aç, geciken siparişleri Hazır aşamasına taşımadan önce ödeme ve ürün adedini doğrula.',
+                ),
+                _HelpTopicTile(
+                  icon: Icons.inventory_2_outlined,
+                  title: 'Stok uyuşmazlığı olduğunda',
+                  body:
+                      'Ürünler sekmesinden SKU kartını aç, son hareketleri incele ve gerekiyorsa manuel düzeltme ya da stok girişi uygula.',
+                ),
+                _HelpTopicTile(
+                  icon: Icons.local_offer_outlined,
+                  title: 'Kampanya stok sorunu olduğunda',
+                  body:
+                      'Kampanyalar ekranında stok riski taşıyan teklifleri tespit et, sonra Ürün Yönetimi üzerinden ilgili SKU görünürlüğünü güncelle.',
+                ),
+                _HelpTopicTile(
+                  icon: Icons.support_agent_outlined,
+                  title: 'Kimden destek alınır?',
+                  body:
+                      '${session.displayName} oturumu için ilk temas noktası mağaza operasyon yöneticisidir. Teknik blokajlarda backend log ve cihaz ağı birlikte kontrol edilmeli.',
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountPage extends StatelessWidget {
+  const _AccountPage({
+    required this.session,
+    required this.vendorLabel,
+    required this.snapshot,
+    required this.offers,
+    required this.onSignOut,
+  });
+
+  final SpetoSession session;
+  final String vendorLabel;
+  final SpetoInventorySnapshot? snapshot;
+  final List<SpetoHappyHourOffer> offers;
+  final VoidCallback onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _SectionCard(
+            title: 'Hesabım',
+            subtitle: 'Oturum bilgisi, erişim kapsamı ve operasyon profili.',
+            trailing: OutlinedButton.icon(
+              onPressed: onSignOut,
+              icon: const Icon(Icons.logout_rounded),
+              label: const Text('Çıkış'),
+            ),
+            child: Row(
+              children: <Widget>[
+                CircleAvatar(
+                  radius: 34,
+                  backgroundColor: _accentSoft,
+                  foregroundColor: _accentDeep,
+                  child: Text(
+                    session.displayName.isEmpty
+                        ? '?'
+                        : session.displayName.characters.first.toUpperCase(),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        session.displayName,
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${session.email} • ${_roleLabel(session.role)}',
+                        style: const TextStyle(color: _muted),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: <Widget>[
+                          _InfoPill(label: vendorLabel),
+                          _InfoPill(
+                            label: session.phone.isEmpty
+                                ? 'Telefon yok'
+                                : session.phone,
+                          ),
+                          _InfoPill(
+                            label:
+                                '${session.vendorScopes.length} erişim kapsamı',
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: 'Hesap özeti',
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: <Widget>[
+                _SummaryStatCard(
+                  label: 'Aktif sipariş',
+                  value: '${snapshot?.openOrdersCount ?? 0}',
+                  tone: _success,
+                  note: 'Canlı operasyon yükü',
+                ),
+                _SummaryStatCard(
+                  label: 'Kritik stok',
+                  value: '${snapshot?.lowStockCount ?? 0}',
+                  tone: _warning,
+                  note: 'Müdahale bekleyen SKU',
+                ),
+                _SummaryStatCard(
+                  label: 'Aktif kampanya',
+                  value: '${offers.length}',
+                  tone: _accent,
+                  note: 'Bu mağaza için vitrinde',
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryStatCard extends StatelessWidget {
+  const _SummaryStatCard({
+    required this.label,
+    required this.value,
+    required this.tone,
+    required this.note,
+  });
+
+  final String label;
+  final String value;
+  final Color tone;
+  final String note;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: tone.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _StatusPill(
+            label: label,
+            color: tone,
+            backgroundColor: tone.withValues(alpha: 0.12),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            value,
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          Text(note, style: const TextStyle(color: _muted, height: 1.45)),
+        ],
+      ),
+    );
+  }
+}
+
+class _CampaignOfferCard extends StatelessWidget {
+  const _CampaignOfferCard({required this.offer});
+
+  final SpetoHappyHourOffer offer;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color stockTone = _stockColor(offer.stockStatus);
+    return _SurfaceCard(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _ThumbImage(imageUrl: offer.imageUrl, label: offer.title, size: 72),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    _StatusPill(
+                      label: '%${offer.discountPercent} indirim',
+                      color: _success,
+                      backgroundColor: _successSoft,
+                    ),
+                    _StatusPill(
+                      label: _stockLabel(offer.stockStatus),
+                      color: stockTone,
+                      backgroundColor: stockTone.withValues(alpha: 0.12),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  offer.title,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${offer.vendorName} • ${offer.sectionLabel}',
+                  style: const TextStyle(color: _muted),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '${offer.discountedPriceText}  yerine  ${offer.originalPriceText}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    _InfoPill(label: '${offer.claimCount} talep'),
+                    _InfoPill(label: '${offer.expiresInMinutes} dk kaldı'),
+                    if (offer.badge.isNotEmpty) _InfoPill(label: offer.badge),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RevenueOrderTile extends StatelessWidget {
+  const _RevenueOrderTile({required this.order});
+
+  final SpetoOpsOrder order;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SurfaceCard(
+      padding: const EdgeInsets.all(16),
+      tint: _panel,
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  '${order.vendor} • ${order.pickupCode}',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '${order.paymentMethod} • ${order.placedAtLabel}',
+                  style: const TextStyle(color: _muted),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            '${order.payableTotal.toStringAsFixed(0)} TL',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HelpTopicTile extends StatelessWidget {
+  const _HelpTopicTile({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: _SurfaceCard(
+        padding: const EdgeInsets.all(16),
+        tint: _panel,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: _accentSoft,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: _accentDeep),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    body,
+                    style: const TextStyle(color: _muted, height: 1.5),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -5114,186 +6734,276 @@ class _CenterStateMessage extends StatelessWidget {
   }
 }
 
-class _SidebarNav extends StatelessWidget {
+class _SidebarNav extends StatefulWidget {
   const _SidebarNav({
     required this.items,
-    required this.selectedIndex,
+    required this.selectedDestination,
     required this.onSelected,
+    required this.session,
+    required this.selectedVendorLabel,
+    required this.snapshot,
+    this.drawerMode = false,
+  });
+
+  final List<_NavItem> items;
+  final _StockDestination selectedDestination;
+  final ValueChanged<_StockDestination> onSelected;
+  final SpetoSession session;
+  final String selectedVendorLabel;
+  final SpetoInventorySnapshot? snapshot;
+  final bool drawerMode;
+
+  @override
+  State<_SidebarNav> createState() => _SidebarNavState();
+}
+
+class _SidebarNavState extends State<_SidebarNav> {
+  bool _showOverview = true;
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) {
+      return false;
+    }
+    final bool nextValue = notification.metrics.pixels <= 0.5;
+    if (nextValue != _showOverview) {
+      setState(() {
+        _showOverview = nextValue;
+      });
+    }
+    return false;
+  }
+
+  void _closeDrawerIfNeeded() {
+    if (widget.drawerMode) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: widget.drawerMode ? null : 276,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: _sidebar,
+        borderRadius: BorderRadius.circular(widget.drawerMode ? 28 : 34),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              return SizeTransition(
+                sizeFactor: animation,
+                axisAlignment: -1,
+                child: FadeTransition(opacity: animation, child: child),
+              );
+            },
+            child: _showOverview
+                ? Padding(
+                    key: const ValueKey<String>('sidebar-overview-visible'),
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _SidebarOverview(
+                      session: widget.session,
+                      selectedVendorLabel: widget.selectedVendorLabel,
+                      snapshot: widget.snapshot,
+                    ),
+                  )
+                : const SizedBox(
+                    key: ValueKey<String>('sidebar-overview-hidden'),
+                  ),
+          ),
+          Expanded(
+            child: NotificationListener<ScrollNotification>(
+              onNotification: _handleScrollNotification,
+              child: ListView.separated(
+                padding: EdgeInsets.zero,
+                itemCount: widget.items.length,
+                separatorBuilder: (_, int index) => const SizedBox(height: 8),
+                itemBuilder: (BuildContext context, int index) {
+                  final _NavItem item = widget.items[index];
+                  final bool selected =
+                      item.destination == widget.selectedDestination;
+                  return InkWell(
+                    onTap: () {
+                      _closeDrawerIfNeeded();
+                      widget.onSelected(item.destination);
+                    },
+                    borderRadius: BorderRadius.circular(18),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(18),
+                        border: selected
+                            ? Border.all(color: const Color(0x5CF3C27A))
+                            : null,
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? const Color(0x26F6C986)
+                                  : Colors.white.withValues(alpha: 0.07),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(
+                              item.icon,
+                              color: selected
+                                  ? const Color(0xFFF4D7AA)
+                                  : const Color(0xFFD4C4B8),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  item.label,
+                                  style: TextStyle(
+                                    color: selected
+                                        ? Colors.white
+                                        : const Color(0xFFE8DCCF),
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  item.description,
+                                  style: TextStyle(
+                                    color: selected
+                                        ? const Color(0xFFEADFCC)
+                                        : const Color(0xFFAE9F95),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SidebarOverview extends StatelessWidget {
+  const _SidebarOverview({
     required this.session,
     required this.selectedVendorLabel,
     required this.snapshot,
   });
 
-  final List<_NavItem> items;
-  final int selectedIndex;
-  final ValueChanged<int> onSelected;
   final SpetoSession session;
   final String selectedVendorLabel;
   final SpetoInventorySnapshot? snapshot;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 276,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: _sidebar,
-        borderRadius: BorderRadius.circular(34),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
+    return Column(
+      key: const ValueKey<String>('sidebar-overview'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: <Color>[Color(0xFFF3B660), Color(0xFFC56B1A)],
+                  ),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: const Icon(
+                  Icons.storefront_rounded,
+                  color: Colors.white,
+                  size: 19,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Speto Control',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                selectedVendorLabel,
+                style: const TextStyle(
+                  color: Color(0xFFE9DACA),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${session.displayName} • ${_roleLabel(session.role)}',
+                style: const TextStyle(
+                  color: Color(0xFFB8AAA0),
+                  fontSize: 11.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (snapshot != null) ...<Widget>[
+          const SizedBox(height: 10),
           Container(
-            padding: const EdgeInsets.all(16),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              color: Colors.white.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(18),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: <Widget>[
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: <Color>[Color(0xFFF3B660), Color(0xFFC56B1A)],
-                    ),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: const Icon(
-                    Icons.storefront_rounded,
-                    color: Colors.white,
+                Expanded(
+                  child: _SidebarMetric(
+                    label: 'Sipariş',
+                    value: '${snapshot!.openOrdersCount}',
                   ),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'Speto Control',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
+                Expanded(
+                  child: _SidebarMetric(
+                    label: 'Kritik',
+                    value: '${snapshot!.lowStockCount}',
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  selectedVendorLabel,
-                  style: const TextStyle(
-                    color: Color(0xFFE9DACA),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${session.displayName} • ${_roleLabel(session.role)}',
-                  style: const TextStyle(color: Color(0xFFB8AAA0)),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 18),
-          if (snapshot != null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    child: _SidebarMetric(
-                      label: 'Sipariş',
-                      value: '${snapshot!.openOrdersCount}',
-                    ),
-                  ),
-                  Expanded(
-                    child: _SidebarMetric(
-                      label: 'Kritik',
-                      value: '${snapshot!.lowStockCount}',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 18),
-          Expanded(
-            child: ListView.separated(
-              itemCount: items.length,
-              separatorBuilder: (_, int index) => const SizedBox(height: 8),
-              itemBuilder: (BuildContext context, int index) {
-                final _NavItem item = items[index];
-                final bool selected = index == selectedIndex;
-                return InkWell(
-                  onTap: () => onSelected(index),
-                  borderRadius: BorderRadius.circular(18),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? Colors.white.withValues(alpha: 0.12)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(18),
-                      border: selected
-                          ? Border.all(color: const Color(0x5CF3C27A))
-                          : null,
-                    ),
-                    child: Row(
-                      children: <Widget>[
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? const Color(0x26F6C986)
-                                : Colors.white.withValues(alpha: 0.07),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Icon(
-                            item.icon,
-                            color: selected
-                                ? const Color(0xFFF4D7AA)
-                                : const Color(0xFFD4C4B8),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                item.label,
-                                style: TextStyle(
-                                  color: selected
-                                      ? Colors.white
-                                      : const Color(0xFFE8DCCF),
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                item.description,
-                                style: TextStyle(
-                                  color: selected
-                                      ? const Color(0xFFEADFCC)
-                                      : const Color(0xFFAE9F95),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
         ],
-      ),
+      ],
     );
   }
 }
@@ -5314,14 +7024,16 @@ class _SidebarMetric extends StatelessWidget {
           style: const TextStyle(
             color: Color(0xFFB8AAA0),
             fontWeight: FontWeight.w700,
+            fontSize: 11,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
         Text(
           value,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
             color: Colors.white,
             fontWeight: FontWeight.w800,
+            fontSize: 18,
           ),
         ),
       ],
@@ -5344,7 +7056,7 @@ class _DashboardHero extends StatelessWidget {
   final SpetoInventorySnapshot snapshot;
   final int failedIntegrations;
   final int warningIntegrations;
-  final ValueChanged<int> onNavigate;
+  final ValueChanged<_StockDestination> onNavigate;
 
   @override
   Widget build(BuildContext context) {
@@ -5405,19 +7117,19 @@ class _DashboardHero extends StatelessWidget {
                   runSpacing: 8,
                   children: <Widget>[
                     FilledButton.tonalIcon(
-                      onPressed: () => onNavigate(1),
+                      onPressed: () => onNavigate(_StockDestination.products),
                       icon: const Icon(Icons.inventory_2_outlined),
-                      label: const Text('Envantere git'),
+                      label: const Text('Ürünlere git'),
                     ),
                     FilledButton.tonalIcon(
-                      onPressed: () => onNavigate(2),
+                      onPressed: () => onNavigate(_StockDestination.orders),
                       icon: const Icon(Icons.receipt_long_outlined),
-                      label: const Text('Sipariş tahtası'),
+                      label: const Text('Siparişler'),
                     ),
                     FilledButton.tonalIcon(
-                      onPressed: () => onNavigate(3),
-                      icon: const Icon(Icons.hub_outlined),
-                      label: const Text('Bağlantı merkezi'),
+                      onPressed: () => onNavigate(_StockDestination.revenue),
+                      icon: const Icon(Icons.account_balance_wallet_outlined),
+                      label: const Text('Gelir akışı'),
                     ),
                   ],
                 ),
@@ -7020,11 +8732,13 @@ class _StatusPill extends StatelessWidget {
     required this.label,
     required this.color,
     this.backgroundColor,
+    this.compact = false,
   });
 
   final String label;
   final Color color;
   final Color? backgroundColor;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -7034,7 +8748,10 @@ class _StatusPill extends StatelessWidget {
     return ConstrainedBox(
       constraints: BoxConstraints(maxWidth: maxWidth),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 10 : 12,
+          vertical: compact ? 6 : 8,
+        ),
         decoration: BoxDecoration(
           color: backgroundColor ?? color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(999),
@@ -7043,7 +8760,11 @@ class _StatusPill extends StatelessWidget {
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: color, fontWeight: FontWeight.w800),
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.w800,
+            fontSize: compact ? 13 : 14,
+          ),
         ),
       ),
     );
@@ -7091,10 +8812,107 @@ class _VendorScopeChoice {
   final String caption;
 }
 
+class _GlassBottomNavBar extends StatelessWidget {
+  const _GlassBottomNavBar({
+    required this.items,
+    required this.selectedDestination,
+    required this.onSelected,
+  });
+
+  final List<_NavItem> items;
+  final _StockDestination selectedDestination;
+  final ValueChanged<_StockDestination> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(32),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: <Color>[
+                Colors.white.withValues(alpha: 0.74),
+                Colors.white.withValues(alpha: 0.42),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(32),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.55)),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: Color(0x1A1E1917),
+                blurRadius: 24,
+                offset: Offset(0, 14),
+              ),
+            ],
+          ),
+          child: Row(
+            children: items
+                .map((_NavItem item) {
+                  final bool selected = item.destination == selectedDestination;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => onSelected(item.destination),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        margin: const EdgeInsets.symmetric(horizontal: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? Colors.white.withValues(alpha: 0.82)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(24),
+                          border: selected
+                              ? Border.all(color: const Color(0xFFF4D5A7))
+                              : null,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              item.icon,
+                              color: selected ? _accentDeep : _ink,
+                              size: 24,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              item.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: selected ? _ink : _muted,
+                                fontWeight: selected
+                                    ? FontWeight.w800
+                                    : FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                })
+                .toList(growable: false),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _NavItem {
-  const _NavItem(this.label, this.icon, this.description);
+  const _NavItem(this.label, this.icon, this.description, this.destination);
 
   final String label;
   final IconData icon;
   final String description;
+  final _StockDestination destination;
 }

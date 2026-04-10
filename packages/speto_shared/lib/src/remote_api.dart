@@ -6,6 +6,10 @@ import 'package:http/http.dart' as http;
 const String _spetoApiBaseUrlOverride = String.fromEnvironment(
   'SPETO_API_BASE_URL',
 );
+const String _spetoLanApiBaseUrlOverride = String.fromEnvironment(
+  'SPETO_LAN_API_BASE_URL',
+);
+const String _defaultLocalNetworkApiBaseUrl = 'http://192.168.1.2:4000/api';
 
 class SpetoRemoteApiClient {
   SpetoRemoteApiClient({
@@ -29,22 +33,65 @@ class SpetoRemoteApiClient {
     _accessToken = null;
   }
 
-  static String defaultSpetoApiBaseUrl() {
-    if (_spetoApiBaseUrlOverride.isNotEmpty) {
-      return _spetoApiBaseUrlOverride;
+  static Future<SpetoRemoteApiClient> resolveDefault({
+    http.Client? httpClient,
+    String? accessToken,
+  }) async {
+    final http.Client resolvedHttpClient = httpClient ?? http.Client();
+    final List<String> candidates = defaultSpetoApiBaseUrlCandidates();
+    for (final String candidate in candidates) {
+      final SpetoRemoteApiClient client = SpetoRemoteApiClient(
+        httpClient: resolvedHttpClient,
+        baseUrl: candidate,
+        accessToken: accessToken,
+      );
+      if (await client._canReachBackend()) {
+        return client;
+      }
     }
+    return SpetoRemoteApiClient(
+      httpClient: resolvedHttpClient,
+      baseUrl: candidates.first,
+      accessToken: accessToken,
+    );
+  }
+
+  static String defaultSpetoApiBaseUrl() {
+    return defaultSpetoApiBaseUrlCandidates().first;
+  }
+
+  static List<String> defaultSpetoApiBaseUrlCandidates() {
+    if (_spetoApiBaseUrlOverride.isNotEmpty) {
+      return <String>[_spetoApiBaseUrlOverride];
+    }
+    final String localNetworkBaseUrl = _spetoLanApiBaseUrlOverride.isNotEmpty
+        ? _spetoLanApiBaseUrlOverride
+        : _defaultLocalNetworkApiBaseUrl;
     if (kIsWeb) {
-      return 'http://127.0.0.1:4000/api';
+      return _uniqueBaseUrls(<String>[
+        'http://127.0.0.1:4000/api',
+        localNetworkBaseUrl,
+      ]);
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return 'http://10.0.2.2:4000/api';
+        return _uniqueBaseUrls(<String>[
+          'http://10.0.2.2:4000/api',
+          localNetworkBaseUrl,
+        ]);
       case TargetPlatform.iOS:
+        return _uniqueBaseUrls(<String>[
+          'http://127.0.0.1:4000/api',
+          localNetworkBaseUrl,
+        ]);
       case TargetPlatform.macOS:
       case TargetPlatform.linux:
       case TargetPlatform.windows:
       case TargetPlatform.fuchsia:
-        return 'http://127.0.0.1:4000/api';
+        return _uniqueBaseUrls(<String>[
+          'http://127.0.0.1:4000/api',
+          localNetworkBaseUrl,
+        ]);
     }
   }
 
@@ -116,8 +163,9 @@ class SpetoRemoteApiClient {
     Object? body,
   }) async {
     final Uri uri = _buildUri(path, queryParameters);
+    final bool hasBody = body != null;
     final Map<String, String> headers = <String, String>{
-      ..._jsonHeaders,
+      ..._headersForRequest(hasBody: hasBody),
       if (_accessToken != null) 'Authorization': 'Bearer $_accessToken',
     };
     final Future<http.Response> pendingResponse = switch (method) {
@@ -125,17 +173,17 @@ class SpetoRemoteApiClient {
       'PUT' => _httpClient.put(
         uri,
         headers: headers,
-        body: body == null ? null : jsonEncode(body),
+        body: hasBody ? jsonEncode(body) : null,
       ),
       'POST' => _httpClient.post(
         uri,
         headers: headers,
-        body: body == null ? null : jsonEncode(body),
+        body: hasBody ? jsonEncode(body) : null,
       ),
       'PATCH' => _httpClient.patch(
         uri,
         headers: headers,
-        body: body == null ? null : jsonEncode(body),
+        body: hasBody ? jsonEncode(body) : null,
       ),
       'DELETE' => _httpClient.delete(uri, headers: headers),
       _ => throw UnsupportedError('Unsupported method: $method'),
@@ -176,6 +224,38 @@ class SpetoRemoteApiClient {
   static String _normalizeBaseUrl(String value) {
     return value.endsWith('/') ? value : '$value/';
   }
+
+  static List<String> _uniqueBaseUrls(List<String> values) {
+    final List<String> uniqueValues = <String>[];
+    final Set<String> seen = <String>{};
+    for (final String value in values) {
+      final String trimmed = value.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+      final String normalized = _normalizeBaseUrl(trimmed);
+      if (!seen.add(normalized)) {
+        continue;
+      }
+      uniqueValues.add(trimmed);
+    }
+    return uniqueValues;
+  }
+
+  Future<bool> _canReachBackend() async {
+    try {
+      final Uri healthUri = _buildUri('health', const <String, String?>{});
+      final http.Response response = await _httpClient
+          .get(
+            healthUri,
+            headers: const <String, String>{'Accept': 'application/json'},
+          )
+          .timeout(const Duration(milliseconds: 1500));
+      return response.statusCode >= 200 && response.statusCode < 400;
+    } catch (_) {
+      return false;
+    }
+  }
 }
 
 class SpetoRemoteApiException implements Exception {
@@ -195,7 +275,13 @@ class SpetoRemoteApiException implements Exception {
   }
 }
 
-const Map<String, String> _jsonHeaders = <String, String>{
+const Map<String, String> _baseHeaders = <String, String>{
   'Accept': 'application/json',
-  'Content-Type': 'application/json',
 };
+
+Map<String, String> _headersForRequest({required bool hasBody}) {
+  return <String, String>{
+    ..._baseHeaders,
+    if (hasBody) 'Content-Type': 'application/json',
+  };
+}

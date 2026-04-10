@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../firebase/firebase_email_link_service.dart';
 import '../../src/core/models.dart';
 import '../../src/core/bootstrap.dart';
 import '../../src/core/domain_api.dart';
@@ -9,8 +8,6 @@ import '../data/default_data.dart';
 
 const int jazzNightPointsCost = 650;
 const int potteryWorkshopPointsCost = 420;
-
-enum SpetoEmailLinkCompletionFlow { registration, passwordReset }
 
 const String spetoTestOtpCode = '12345';
 
@@ -131,9 +128,7 @@ class SpetoAppState extends ChangeNotifier {
   SpetoRegistrationDraft? get pendingRegistration => _pendingRegistration;
   String? get pendingPasswordResetEmail => _passwordResetEmail;
   bool get isPasswordResetOtpVerified => _passwordResetOtpVerified;
-  bool get supportsFirebaseEmailLink =>
-      SpetoFirebaseEmailLinkService.instance.isReady;
-  bool get usesTestOtpMode => !supportsFirebaseEmailLink;
+  bool get usesTestOtpMode => true;
   String get testOtpCode => spetoTestOtpCode;
   String get displayName => _session?.displayName ?? 'Speto Kullanıcısı';
   String get avatarUrl => _session?.avatarUrl.isNotEmpty == true
@@ -359,7 +354,13 @@ class SpetoAppState extends ChangeNotifier {
   }) async {
     _passwordResetEmail = null;
     _passwordResetOtpVerified = false;
-    await _authRepository.clearPasswordResetEmail();
+    try {
+      await _authRepository.clearPasswordResetEmail();
+    } catch (error) {
+      debugPrint(
+        'Ignoring password reset state cleanup failure before registration: $error',
+      );
+    }
     _pendingRegistration = SpetoRegistrationDraft(
       fullName: fullName.trim(),
       email: email.trim(),
@@ -384,95 +385,6 @@ class SpetoAppState extends ChangeNotifier {
     } catch (_) {
       return false;
     }
-  }
-
-  Future<bool> sendRegistrationEmailLink() async {
-    final SpetoRegistrationDraft? draft = _pendingRegistration;
-    if (draft == null || !supportsFirebaseEmailLink) {
-      return false;
-    }
-    try {
-      await SpetoFirebaseEmailLinkService.instance.sendEmailLink(
-        email: draft.email,
-        purpose: SpetoEmailLinkPurpose.registration,
-      );
-      notifyListeners();
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<bool> sendPasswordResetEmailLink(String email) async {
-    final String normalizedEmail = email.trim();
-    if (normalizedEmail.isEmpty || !supportsFirebaseEmailLink) {
-      return false;
-    }
-    _pendingRegistration = null;
-    await _authRepository.writeRegistrationDraft(null);
-    final bool hasAccount = await hasAccountForEmail(normalizedEmail);
-    if (!hasAccount) {
-      _passwordResetEmail = null;
-      _passwordResetOtpVerified = false;
-      await _authRepository.clearPasswordResetEmail();
-      notifyListeners();
-      return false;
-    }
-    try {
-      await SpetoFirebaseEmailLinkService.instance.sendEmailLink(
-        email: normalizedEmail,
-        purpose: SpetoEmailLinkPurpose.passwordReset,
-      );
-      _passwordResetEmail = normalizedEmail;
-      _passwordResetOtpVerified = false;
-      await _authRepository.rememberPasswordResetEmail(normalizedEmail);
-      notifyListeners();
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<SpetoEmailLinkCompletionFlow?> completeFirebaseEmailLink(
-    String emailLink,
-  ) async {
-    final String normalizedLink = emailLink.trim();
-    final SpetoFirebaseEmailLinkService emailLinkService =
-        SpetoFirebaseEmailLinkService.instance;
-    if (!emailLinkService.isReady || !emailLinkService.isEmailLink(normalizedLink)) {
-      return null;
-    }
-
-    final SpetoRegistrationDraft? draft = _pendingRegistration;
-    final String? resetEmail =
-        _passwordResetEmail ?? await _authRepository.readPasswordResetEmail();
-
-    try {
-      if (draft != null) {
-        await emailLinkService.consumeEmailLink(
-          email: draft.email,
-          emailLink: normalizedLink,
-        );
-        await _completePendingRegistration(verificationToken: 'firebase-email-link');
-        await emailLinkService.clearSession();
-        return SpetoEmailLinkCompletionFlow.registration;
-      }
-
-      if (resetEmail != null && resetEmail.trim().isNotEmpty) {
-        _passwordResetEmail = resetEmail;
-        await emailLinkService.consumeEmailLink(
-          email: resetEmail,
-          emailLink: normalizedLink,
-        );
-        _passwordResetOtpVerified = true;
-        await emailLinkService.clearSession();
-        notifyListeners();
-        return SpetoEmailLinkCompletionFlow.passwordReset;
-      }
-    } finally {
-      await emailLinkService.clearSession();
-    }
-    return null;
   }
 
   Future<void> _completePendingRegistration({

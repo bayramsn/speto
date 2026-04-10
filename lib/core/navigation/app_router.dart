@@ -7,8 +7,6 @@ import '../../features/auth/login_screen.dart';
 import '../../features/auth/register_screen.dart';
 import '../../features/auth/student_register_screen.dart';
 import '../../features/auth/forgot_password_screen.dart';
-import '../../features/auth/email_link_pending_screen.dart';
-import '../../features/auth/email_link_complete_screen.dart';
 import '../../features/auth/otp_verification_screen.dart';
 import '../../features/auth/reset_password_screen.dart';
 import '../../features/auth/password_success_screen.dart';
@@ -43,8 +41,6 @@ class AppRoutes {
   static const String register = '/register';
   static const String studentRegister = '/student-register';
   static const String forgotPassword = '/forgot-password';
-  static const String emailLinkPending = '/email-link-pending';
-  static const String emailLinkComplete = '/auth/email-link';
   static const String otpVerification = '/otp-verification';
   static const String resetPassword = '/reset-password';
   static const String passwordSuccess = '/password-success';
@@ -90,59 +86,110 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // Auth
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
-      GoRoute(path: '/student-register', builder: (_, __) => const StudentEmailRegisterScreen()),
-      GoRoute(path: '/forgot-password', builder: (_, __) => const ForgotPasswordScreen()),
-      GoRoute(path: '/email-link-pending', builder: (_, __) => const EmailLinkPendingScreen()),
       GoRoute(
-        path: '/auth/email-link',
-        builder: (_, state) => EmailLinkCompleteScreen(
-          initialLink: state.uri.queryParameters.containsKey('oobCode')
-              ? state.uri.toString()
-              : null,
-        ),
+        path: '/student-register',
+        builder: (_, __) => const StudentEmailRegisterScreen(),
       ),
-      GoRoute(path: '/otp-verification', builder: (_, __) => const OtpVerificationScreen()),
-      GoRoute(path: '/reset-password', builder: (_, __) => const ResetPasswordScreen()),
-      GoRoute(path: '/password-success', builder: (_, __) => const PasswordSuccessScreen()),
+      GoRoute(
+        path: '/forgot-password',
+        builder: (_, __) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/otp-verification',
+        builder: (_, __) => const OtpVerificationScreen(),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        builder: (_, __) => const ResetPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/password-success',
+        builder: (_, __) => const PasswordSuccessScreen(),
+      ),
 
       // Home
       GoRoute(path: '/', builder: (_, __) => const HomeDashboardScreen()),
 
       // Marketplace
       GoRoute(path: '/market', builder: (_, __) => const MarketListScreen()),
-      GoRoute(path: '/happy-hour', builder: (_, __) => const HappyHourListScreen()),
-      GoRoute(path: '/happy-hour/detail', builder: (_, __) => const HappyHourOfferDetailScreen()),
-      GoRoute(path: '/happy-hour/checkout', builder: (_, __) => const HappyHourCheckoutScreen()),
+      GoRoute(
+        path: '/happy-hour',
+        builder: (_, __) => const HappyHourListScreen(),
+      ),
+      GoRoute(
+        path: '/happy-hour/detail',
+        builder: (_, __) => const HappyHourOfferDetailScreen(),
+      ),
+      GoRoute(
+        path: '/happy-hour/checkout',
+        builder: (_, __) => const HappyHourCheckoutScreen(),
+      ),
 
       // Restaurants
-      GoRoute(path: '/restaurants', builder: (_, __) => const RestaurantListScreen()),
+      GoRoute(
+        path: '/restaurants',
+        builder: (_, __) => const RestaurantListScreen(),
+      ),
       GoRoute(
         path: '/restaurants/:id',
         builder: (context, state) {
-          final id = state.pathParameters['id'] ??
-              (restaurantCards.isNotEmpty ? restaurantCards.first.id : defaultRestaurantCatalog().first.id);
+          final id =
+              state.pathParameters['id'] ??
+              (restaurantCards.isNotEmpty
+                  ? restaurantCards.first.id
+                  : defaultRestaurantCatalog().first.id);
           return RestaurantDetailScreen(restaurantId: id);
         },
       ),
-      GoRoute(path: '/menu-item', builder: (_, __) => const MenuItemDetailScreen()),
+      GoRoute(
+        path: '/menu-item',
+        builder: (_, __) => const MenuItemDetailScreen(),
+      ),
 
       // Events
-      GoRoute(path: '/events', builder: (_, __) => const EventsDiscoveryScreen()),
-      GoRoute(path: '/events/detail', builder: (_, __) => const EventDetailScreen()),
-      GoRoute(path: '/digital-ticket', builder: (_, __) => const DigitalTicketScreen()),
-      GoRoute(path: '/ticket-success', builder: (_, __) => const TicketSuccessScreen()),
+      GoRoute(
+        path: '/events',
+        builder: (_, __) => const EventsDiscoveryScreen(),
+      ),
+      GoRoute(
+        path: '/events/detail',
+        builder: (_, __) => const EventDetailScreen(),
+      ),
+      GoRoute(
+        path: '/digital-ticket',
+        builder: (_, __) => const DigitalTicketScreen(),
+      ),
+      GoRoute(
+        path: '/ticket-success',
+        builder: (_, __) => const TicketSuccessScreen(),
+      ),
 
       // Orders
       GoRoute(path: '/orders', builder: (_, __) => const OrderHistoryScreen()),
-      GoRoute(path: '/orders/tracking', builder: (_, __) => const OrderTrackingScreen()),
-      GoRoute(path: '/orders/receipt', builder: (_, __) => const OrderReceiptScreen()),
+      GoRoute(
+        path: '/orders/tracking',
+        builder: (_, __) => const OrderTrackingScreen(),
+      ),
+      GoRoute(
+        path: '/orders/receipt',
+        builder: (_, __) => const OrderReceiptScreen(),
+      ),
 
       // Profile
       GoRoute(path: '/pro-points', builder: (_, __) => const ProPointsScreen()),
       GoRoute(path: '/addresses', builder: (_, __) => const AddressesScreen()),
-      GoRoute(path: '/payment-methods', builder: (_, __) => const PaymentMethodsScreen()),
-      GoRoute(path: '/account-settings', builder: (_, __) => const AccountSettingsScreen()),
-      GoRoute(path: '/help-center', builder: (_, __) => const HelpCenterScreen()),
+      GoRoute(
+        path: '/payment-methods',
+        builder: (_, __) => const PaymentMethodsScreen(),
+      ),
+      GoRoute(
+        path: '/account-settings',
+        builder: (_, __) => const AccountSettingsScreen(),
+      ),
+      GoRoute(
+        path: '/help-center',
+        builder: (_, __) => const HelpCenterScreen(),
+      ),
       GoRoute(path: '/app-map', builder: (_, __) => const AppMapScreen()),
     ],
   );

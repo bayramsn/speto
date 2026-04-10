@@ -65,7 +65,8 @@ class SpetoBootstrap {
   }
 
   static Future<SpetoBootstrap> persistent() async {
-    final SpetoRemoteApiClient apiClient = SpetoRemoteApiClient();
+    final SpetoRemoteApiClient apiClient =
+        await SpetoRemoteApiClient.resolveDefault();
     final RemoteSpetoAuthRepository remoteAuthRepository =
         RemoteSpetoAuthRepository(apiClient);
     final RemoteSpetoCommerceRepository remoteCommerceRepository =

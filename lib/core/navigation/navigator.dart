@@ -9,8 +9,6 @@ import '../../features/auth/login_screen.dart';
 import '../../features/auth/register_screen.dart';
 import '../../features/auth/student_register_screen.dart';
 import '../../features/auth/forgot_password_screen.dart';
-import '../../features/auth/email_link_pending_screen.dart';
-import '../../features/auth/email_link_complete_screen.dart';
 import '../../features/auth/otp_verification_screen.dart';
 import '../../features/auth/reset_password_screen.dart';
 import '../../features/auth/password_success_screen.dart';
@@ -58,10 +56,6 @@ Widget buildSpetoScreen(SpetoScreen screen) {
       return const StudentEmailRegisterScreen();
     case SpetoScreen.forgotPassword:
       return const ForgotPasswordScreen();
-    case SpetoScreen.emailLinkPending:
-      return const EmailLinkPendingScreen();
-    case SpetoScreen.emailLinkComplete:
-      return const EmailLinkCompleteScreen();
     case SpetoScreen.otpVerification:
       return const OtpVerificationScreen();
     case SpetoScreen.resetPassword:

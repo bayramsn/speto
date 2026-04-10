@@ -73,11 +73,18 @@ Varsayilan API adresleri:
 
 - Web ve desktop: `http://127.0.0.1:4000/api`
 - Android emulator: `http://10.0.2.2:4000/api`
+- Fiziksel telefon fallback: `http://192.168.1.2:4000/api`
 
 Farkli bir backend adresi kullanacaksaniz `SPETO_API_BASE_URL` override edebilirsiniz:
 
 ```bash
 flutter run --dart-define=SPETO_API_BASE_URL=https://your-api.example.com/api
+```
+
+Lokal ag IP'niz degisirse fiziksel cihaz fallback adresini de override edebilirsiniz:
+
+```bash
+flutter run --dart-define=SPETO_LAN_API_BASE_URL=http://192.168.1.2:4000/api
 ```
 
 ### 3. Operasyon uygulamasini calistirin

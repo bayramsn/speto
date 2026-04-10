@@ -25,7 +25,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final SpetoAppState appState = SpetoAppScope.of(context);
-    final bool usesEmailLink = appState.supportsFirebaseEmailLink;
     return SpetoScreenScaffold(
       title: '',
       actions: <Widget>[
@@ -65,14 +64,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              usesEmailLink
-                  ? 'E-posta adresinizi girin. Hesabınızı doğrulamak ve yeni şifre belirlemek için giriş linkini hemen gönderelim.'
-                  : 'E-posta adresinizi girin. Hesabınızı doğrulamak için 5 haneli güvenlik kodunu hemen gönderelim.',
+              'E-posta adresinizi girin. Hesabınızı doğrulamak için 5 haneli güvenlik kodunu hemen gönderelim.',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: Palette.soft,
-                height: 1.6,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(color: Palette.soft, height: 1.6),
             ),
             const SizedBox(height: 32),
             LabeledField(
@@ -83,7 +79,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
             const SizedBox(height: 24),
             SpetoPrimaryButton(
-              label: usesEmailLink ? 'LİNKİ GÖNDER' : 'KODU GÖNDER',
+              label: 'KODU GÖNDER',
               icon: Icons.arrow_forward_rounded,
               onTap: () async {
                 final String email = _emailController.text.trim();
@@ -95,25 +91,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   );
                   return;
                 }
-                final bool requested = usesEmailLink
-                    ? await appState.sendPasswordResetEmailLink(email)
-                    : await appState.requestPasswordReset(email: email);
-                final bool fallbackToOtp =
-                    usesEmailLink && !requested
-                        ? await appState.requestPasswordReset(email: email)
-                        : false;
+                final bool requested = await appState.requestPasswordReset(
+                  email: email,
+                );
                 if (!requested) {
                   if (!context.mounted) {
-                    return;
-                  }
-                  if (fallbackToOtp) {
-                    SpetoToast.show(
-                      context,
-                      message:
-                          'Mail link kotası dolu. Şifre yenilemeye kod ile devam ediliyor.',
-                      icon: Icons.info_outline_rounded,
-                    );
-                    openScreen(context, SpetoScreen.otpVerification);
                     return;
                   }
                   SpetoToast.show(
@@ -126,19 +108,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 if (!context.mounted) {
                   return;
                 }
-                openScreen(
-                  context,
-                  usesEmailLink
-                      ? SpetoScreen.emailLinkPending
-                      : SpetoScreen.otpVerification,
-                );
+                openScreen(context, SpetoScreen.otpVerification);
               },
             ),
             const SizedBox(height: 30),
             Text(
-              usesEmailLink
-                  ? 'Bağlantı ulaşmadıysa maili kontrol et veya yeniden gönder.'
-                  : 'Bağlantı ulaşmadıysa müşteri hizmetleri ile görüş.',
+              'Bağlantı ulaşmadıysa müşteri hizmetleri ile görüş.',
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: Colors.white60),
