@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsArray,
   IsEmail,
   IsIn,
   IsObject,
@@ -34,6 +35,16 @@ class OperatorRegisterBusinessDto {
   @IsString()
   imageUrl?: string;
 
+  @ApiPropertyOptional({ example: 'Istanbul' })
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @ApiPropertyOptional({ example: 'Kadikoy' })
+  @IsOptional()
+  @IsString()
+  district?: string;
+
   @ApiProperty({ example: 'Ana teslim noktasi' })
   @IsString()
   @MinLength(3)
@@ -48,6 +59,32 @@ class OperatorRegisterBusinessDto {
   @IsString()
   @MinLength(3)
   workingHoursLabel!: string;
+
+  @ApiPropertyOptional({
+    example: [
+      {
+        label: 'Pazartesi',
+        shortLabel: 'Pzt',
+        isOpen: true,
+        openTime: '09:00',
+        closeTime: '22:00',
+      },
+    ],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsObject({ each: true })
+  workingDays?: Record<string, unknown>[];
+
+  @ApiPropertyOptional({ example: '1234567890' })
+  @IsOptional()
+  @IsString()
+  taxNumber?: string;
+
+  @ApiPropertyOptional({ example: 'Kadikoy' })
+  @IsOptional()
+  @IsString()
+  taxOffice?: string;
 }
 
 class OperatorRegisterProfileDto {
@@ -77,10 +114,11 @@ class OperatorRegisterBankAccountDto {
   @MinLength(3)
   holderName!: string;
 
-  @ApiProperty({ example: 'Ziraat Bankasi' })
+  @ApiPropertyOptional({ example: 'Ziraat Bankasi' })
+  @IsOptional()
   @IsString()
   @MinLength(2)
-  bankName!: string;
+  bankName?: string;
 
   @ApiProperty({ example: 'TR120006200001000000000001' })
   @IsString()
@@ -118,6 +156,16 @@ class OperatorRegisterNotificationsDto {
   @ApiProperty({ example: false })
   @IsBoolean()
   campaignTips!: boolean;
+
+  @ApiPropertyOptional({ example: false })
+  @IsOptional()
+  @IsBoolean()
+  sms?: boolean;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional()
+  @IsBoolean()
+  push?: boolean;
 }
 
 export class OperatorRegisterDto {

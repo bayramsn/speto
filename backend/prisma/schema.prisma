@@ -155,6 +155,10 @@ model Vendor {
   name              String
   slug              String                  @unique
   category          String
+  city              String?
+  district          String?
+  taxNumber         String?
+  taxOffice         String?
   storefrontId      String?                 @unique
   storefrontType    StorefrontType?
   subtitle          String?
@@ -168,6 +172,7 @@ model Vendor {
   etaMin            Int?
   etaMax            Int?
   workingHoursLabel String?
+  workingDays       Json?
   reviewCountLabel  String?
   announcement      String?
   bundleTitle       String?
