@@ -80,6 +80,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       return;
     }
+    final bool hasExistingAccount = await appState.hasAccountForEmail(
+      _emailController.text,
+    );
+    if (hasExistingAccount) {
+      if (!mounted) {
+        return;
+      }
+      SpetoToast.show(
+        context,
+        message:
+            'Bu e-posta zaten kayıtlı. Giriş yapmayı deneyin veya farklı bir e-posta kullanın.',
+        icon: Icons.info_outline_rounded,
+      );
+      return;
+    }
     await appState.startRegistration(
       fullName: _nameController.text,
       email: _emailController.text,
@@ -88,10 +103,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ? 'social-${widget.socialProviderKey}'
           : _passwordController.text,
     );
+    final SpetoRegistrationOtpVerificationResult result = await appState
+        .verifyOtpCode(appState.testOtpCode);
     if (!mounted) {
       return;
     }
-    openScreen(context, SpetoScreen.otpVerification);
+    if (result != SpetoRegistrationOtpVerificationResult.verified) {
+      final String message = switch (result) {
+        SpetoRegistrationOtpVerificationResult.emailAlreadyRegistered =>
+          'Bu e-posta zaten kayıtlı. Giriş yapmayı deneyin veya farklı bir e-posta kullanın.',
+        SpetoRegistrationOtpVerificationResult.unavailable ||
+        SpetoRegistrationOtpVerificationResult.invalidCode =>
+          'Kayıt tamamlanamadı. Lütfen tekrar deneyin.',
+        SpetoRegistrationOtpVerificationResult.verified => '',
+      };
+      SpetoToast.show(
+        context,
+        message: message,
+        icon: Icons.info_outline_rounded,
+      );
+      return;
+    }
+    openRootScreen(context, SpetoScreen.home);
   }
 
   Future<void> _continueWithSocialProvider(

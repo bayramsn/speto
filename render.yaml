@@ -26,7 +26,7 @@ services:
       - key: REFRESH_TOKEN_TTL_DAYS
         value: 30
       - key: ENABLE_DEMO_SEED
-        value: false
+        value: true
       - key: ENABLE_DEV_CLIENT_STATE
         value: false
       - key: OTP_TEST_MODE

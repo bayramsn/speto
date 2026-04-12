@@ -65,6 +65,19 @@ class _StudentEmailRegisterScreenState
       );
       return;
     }
+    final bool hasExistingAccount = await appState.hasAccountForEmail(email);
+    if (hasExistingAccount) {
+      if (!mounted) {
+        return;
+      }
+      SpetoToast.show(
+        context,
+        message:
+            'Bu e-posta zaten kayıtlı. Giriş yapmayı deneyin veya farklı bir e-posta kullanın.',
+        icon: Icons.info_outline_rounded,
+      );
+      return;
+    }
 
     await appState.startRegistration(
       fullName: _nameController.text,
@@ -72,10 +85,28 @@ class _StudentEmailRegisterScreenState
       phone: _phoneController.text,
       password: _passwordController.text,
     );
+    final SpetoRegistrationOtpVerificationResult result = await appState
+        .verifyOtpCode(appState.testOtpCode);
     if (!mounted) {
       return;
     }
-    openScreen(context, SpetoScreen.otpVerification);
+    if (result != SpetoRegistrationOtpVerificationResult.verified) {
+      final String message = switch (result) {
+        SpetoRegistrationOtpVerificationResult.emailAlreadyRegistered =>
+          'Bu e-posta zaten kayıtlı. Giriş yapmayı deneyin veya farklı bir e-posta kullanın.',
+        SpetoRegistrationOtpVerificationResult.unavailable ||
+        SpetoRegistrationOtpVerificationResult.invalidCode =>
+          'Kayıt tamamlanamadı. Lütfen tekrar deneyin.',
+        SpetoRegistrationOtpVerificationResult.verified => '',
+      };
+      SpetoToast.show(
+        context,
+        message: message,
+        icon: Icons.info_outline_rounded,
+      );
+      return;
+    }
+    openRootScreen(context, SpetoScreen.home);
   }
 
   @override

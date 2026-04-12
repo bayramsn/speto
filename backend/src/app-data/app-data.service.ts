@@ -966,6 +966,16 @@ export class AppDataService {
     const slug = this.slugify(name);
     const vendorId = `vendor-${slug}`;
     const normalizedEmail = this.normalizeEmail(payload.operator.email);
+    const workingDays = this.toOperatorWorkingDays(payload.business.workingDays);
+    const bankName = payload.bankAccount.bankName?.trim() || 'Banka bilgisi';
+    const notificationPreferences = {
+      newOrders: payload.notifications.newOrders,
+      cancellations: payload.notifications.cancellations,
+      lowStock: payload.notifications.lowStock,
+      campaignTips: payload.notifications.campaignTips,
+      sms: payload.notifications.sms ?? false,
+      push: payload.notifications.push ?? true,
+    };
     let operatorId = '';
 
     await this.prisma.$transaction(async (tx) => {
@@ -983,9 +993,16 @@ export class AppDataService {
           name,
           slug,
           category: payload.business.category.trim(),
+          city: payload.business.city?.trim() || null,
+          district: payload.business.district?.trim() || null,
+          taxNumber: payload.business.taxNumber?.trim() || null,
+          taxOffice: payload.business.taxOffice?.trim() || null,
           storefrontId: vendorId,
           storefrontType,
           displayOrder: 999,
+          ...(workingDays.length > 0
+            ? { workingDays: workingDays as unknown as Prisma.InputJsonValue }
+            : {}),
           ...this.toCatalogVendorUpdateData({
             subtitle: payload.business.subtitle,
             imageUrl: payload.business.imageUrl,
@@ -1041,8 +1058,8 @@ export class AppDataService {
           termsAcceptedAt: new Date(),
           privacyAcceptedAt: new Date(),
           marketingOptIn: payload.consents.marketingOptIn,
-          notificationsEnabled: Object.values(payload.notifications).some(Boolean),
-          opsNotificationPreferences: payload.notifications as unknown as Prisma.JsonObject,
+          notificationsEnabled: Object.values(notificationPreferences).some(Boolean),
+          opsNotificationPreferences: notificationPreferences,
         },
       });
 
@@ -1050,7 +1067,7 @@ export class AppDataService {
         data: {
           vendorId,
           holderName: payload.bankAccount.holderName.trim(),
-          bankName: payload.bankAccount.bankName.trim(),
+          bankName,
           iban: payload.bankAccount.iban.trim(),
           isDefault: true,
         },
@@ -3467,8 +3484,6 @@ export class AppDataService {
           });
         }
 
-        await this.ensureVendorOperatorAccounts(tx);
-
         for (const address of DEMO_ADDRESSES) {
           await tx.savedPlace.upsert({
             where: { id: address.id },
@@ -5345,6 +5360,33 @@ export class AppDataService {
         .filter((entry) => entry.length > 0);
     }
     return [];
+  }
+
+  private toOperatorWorkingDays(value: Record<string, unknown>[] | undefined) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value
+      .map((entry) => {
+        const label = typeof entry['label'] === 'string' ? entry['label'].trim() : '';
+        const shortLabel =
+          typeof entry['shortLabel'] === 'string' ? entry['shortLabel'].trim() : '';
+        const openTime =
+          typeof entry['openTime'] === 'string' ? entry['openTime'].trim() : '';
+        const closeTime =
+          typeof entry['closeTime'] === 'string' ? entry['closeTime'].trim() : '';
+        if (!label || !openTime || !closeTime) {
+          return null;
+        }
+        return {
+          label,
+          shortLabel,
+          isOpen: entry['isOpen'] === true,
+          openTime,
+          closeTime,
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry != null);
   }
 
   private toJsonStringArray(value: Prisma.JsonValue | null | undefined) {
