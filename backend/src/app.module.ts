@@ -17,11 +17,13 @@ import { OpsModule } from './ops/ops.module';
 import { OffersModule } from './offers/offers.module';
 import { OrdersModule } from './orders/orders.module';
 import { ProfileModule } from './profile/profile.module';
+import { SecurityModule } from './security/security.module';
 import { SupportModule } from './support/support.module';
 import { WalletModule } from './wallet/wallet.module';
 
 @Module({
   imports: [
+    SecurityModule,
     AppDataModule,
     HealthModule,
     AuthModule,

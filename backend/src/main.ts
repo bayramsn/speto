@@ -47,7 +47,19 @@ async function bootstrap() {
   );
 
   app.setGlobalPrefix('api');
-  app.enableCors();
+  app.enableCors({
+    origin: (origin, callback) => {
+      if (origin == null || origin.trim().length == 0) {
+        callback(null, true);
+        return;
+      }
+      const allowedOrigins = resolveAllowedCorsOrigins();
+      callback(null, allowedOrigins.has(origin));
+    },
+    credentials: false,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Accept', 'Authorization', 'Content-Type', 'x-speto-webhook-secret'],
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -60,6 +72,7 @@ async function bootstrap() {
     .setTitle('Speto Backend')
     .setDescription('Pickup-only backend for Speto')
     .setVersion('0.1.0')
+    .addBearerAuth()
     .build();
   const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('docs', app, swaggerDocument);
@@ -69,3 +82,27 @@ async function bootstrap() {
 }
 
 void bootstrap();
+
+function resolveAllowedCorsOrigins() {
+  const configuredOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+  const appEnv = (process.env.APP_ENV ?? process.env.NODE_ENV ?? 'development')
+    .trim()
+    .toLowerCase();
+  if (appEnv == 'production') {
+    return new Set<string>(configuredOrigins);
+  }
+  return new Set<string>([
+    ...configuredOrigins,
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:4000',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:8080',
+    'http://localhost:3000',
+    'http://localhost:4000',
+    'http://localhost:5173',
+    'http://localhost:8080',
+  ]);
+}

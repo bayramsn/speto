@@ -1,9 +1,11 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 
+import { Public } from '../security/public.decorator';
 import { OffersService } from './offers.service';
 
 @ApiTags('offers')
+@Public()
 @Controller('offers')
 export class OffersController {
   constructor(private readonly offersService: OffersService) {}

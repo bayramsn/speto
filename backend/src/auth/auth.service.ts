@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 import { AppDataService } from '../app-data/app-data.service';
 import { LoginDto } from './dto/login.dto';
+import { OperatorRegisterDto } from './dto/operator-register.dto';
 import { RegisterDto } from './dto/register.dto';
 
 @Injectable()
@@ -14,6 +15,10 @@ export class AuthService {
 
   login(payload: LoginDto) {
     return this.appDataService.login(payload.email, payload.password);
+  }
+
+  operatorRegister(payload: OperatorRegisterDto) {
+    return this.appDataService.registerOperator(payload);
   }
 
   requestPasswordReset(email: string) {
@@ -30,6 +35,14 @@ export class AuthService {
 
   verifyPasswordResetOtp(email: string, code: string) {
     return this.appDataService.verifyPasswordResetOtp(email, code);
+  }
+
+  refresh(refreshToken: string) {
+    return this.appDataService.refreshSession(refreshToken);
+  }
+
+  logout(refreshToken?: string) {
+    return this.appDataService.logout(refreshToken);
   }
 
   capabilities() {

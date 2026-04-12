@@ -66,6 +66,26 @@ enum SyncRunStatus {
   FAILED
 }
 
+enum PayoutStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+enum CampaignKind {
+  HAPPY_HOUR
+  DISCOUNT
+  CLEARANCE
+  BUNDLE
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
 enum ContentBlockType {
   HOME_HERO
   QUICK_FILTER
@@ -73,27 +93,32 @@ enum ContentBlockType {
 }
 
 model User {
-  id                   String              @id @default(cuid())
-  email                String              @unique
-  password             String
-  displayName          String
-  phone                String?
-  role                 Role                @default(CUSTOMER)
-  vendorId             String?
-  studentVerifiedAt    DateTime?
-  notificationsEnabled Boolean             @default(true)
-  avatarUrl            String?
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
-  favorites            Favorite[]
-  orderRatings         OrderRating[]
-  addresses            SavedPlace[]
-  orders               Order[]
-  paymentMethods       PaymentMethod[]
-  tickets              Ticket[]
-  walletEntries        WalletLedgerEntry[]
-  supportTickets       SupportTicket[]
-  vendor               Vendor?             @relation("VendorOperators", fields: [vendorId], references: [id])
+  id                         String              @id @default(cuid())
+  email                      String              @unique
+  passwordHash               String              @map("password")
+  displayName                String
+  phone                      String?
+  role                       Role                @default(CUSTOMER)
+  vendorId                   String?
+  studentVerifiedAt          DateTime?
+  termsAcceptedAt            DateTime?
+  privacyAcceptedAt          DateTime?
+  marketingOptIn             Boolean             @default(false)
+  opsNotificationPreferences Json?
+  notificationsEnabled       Boolean             @default(true)
+  avatarUrl                  String?
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
+  favorites                  Favorite[]
+  orderRatings               OrderRating[]
+  addresses                  SavedPlace[]
+  orders                     Order[]
+  paymentMethods             PaymentMethod[]
+  tickets                    Ticket[]
+  walletEntries              WalletLedgerEntry[]
+  supportTickets             SupportTicket[]
+  refreshSessions            RefreshSession[]
+  vendor                     Vendor?             @relation("VendorOperators", fields: [vendorId], references: [id])
 }
 
 model SavedPlace {
@@ -165,6 +190,9 @@ model Vendor {
   inventory         InventoryStock[]
   movements         InventoryMovement[]
   integrations      IntegrationConnection[]
+  bankAccounts      VendorBankAccount[]
+  payouts           VendorPayout[]
+  campaigns         VendorCampaign[]
   operators         User[]                  @relation("VendorOperators")
 }
 
@@ -381,15 +409,28 @@ model OrderRating {
 }
 
 model PasswordResetOtp {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   email      String
   purpose    String
   codeHash   String
   expiresAt  DateTime
   consumedAt DateTime?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   @@index([email, purpose, createdAt])
+}
+
+model RefreshSession {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 model InventoryStock {
@@ -450,4 +491,51 @@ model IntegrationSyncRun {
   startedAt      DateTime              @default(now())
   completedAt    DateTime?
   connection     IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+}
+
+model VendorBankAccount {
+  id         String         @id @default(cuid())
+  vendorId   String
+  holderName String
+  bankName   String
+  iban       String
+  isDefault  Boolean        @default(false)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  vendor     Vendor         @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  payouts    VendorPayout[]
+}
+
+model VendorPayout {
+  id            String            @id @default(cuid())
+  vendorId      String
+  bankAccountId String
+  amount        Decimal           @db.Decimal(10, 2)
+  status        PayoutStatus      @default(PENDING)
+  note          String?
+  requestedAt   DateTime          @default(now())
+  completedAt   DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  vendor        Vendor            @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  bankAccount   VendorBankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+}
+
+model VendorCampaign {
+  id              String         @id @default(cuid())
+  vendorId        String
+  kind            CampaignKind
+  status          CampaignStatus @default(DRAFT)
+  title           String
+  description     String?
+  startsAt        DateTime?
+  endsAt          DateTime?
+  scheduleLabel   String?
+  badgeLabel      String?
+  discountPercent Int?
+  discountedPrice Decimal?       @db.Decimal(10, 2)
+  productIds      Json?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  vendor          Vendor         @relation(fields: [vendorId], references: [id], onDelete: Cascade)
 }

@@ -1,11 +1,14 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Role as PrismaRole } from '@prisma/client';
 import { ApiTags } from '@nestjs/swagger';
 
+import { Roles } from '../security/roles.decorator';
 import { AdjustInventoryDto } from './dto/adjust-inventory.dto';
 import { RestockInventoryDto } from './dto/restock-inventory.dto';
 import { InventoryService } from './inventory.service';
 
 @ApiTags('inventory')
+@Roles(PrismaRole.ADMIN, PrismaRole.VENDOR)
 @Controller('inventory')
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}

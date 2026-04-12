@@ -28,6 +28,10 @@ Swagger çıktısı `http://localhost:4000/docs` altında yayınlanır.
 
 `DATABASE_URL` için örnek değer [backend/.env.example](/Users/bayramsenbay/Downloads/speto/backend/.env.example) içinde bulunur. Varsayılan local portlar çakışmayı önlemek için `55432` (Postgres) ve `6380` (Redis) olarak ayarlanmıştır. Backend ilk başarılı bağlantıda demo vendor, ürün, stok, sipariş ve entegrasyon verilerini Postgres'e seed eder.
 
+## Ücretsiz canlı kurulum
+
+Render Free Web Service + Neon Free Postgres dağıtımı için [backend/DEPLOYMENT.md](/Users/bayramsenbay/Downloads/speto/backend/DEPLOYMENT.md) dosyasını izleyin. Render Docker build ayarı repo kökü context ve `backend/Dockerfile` path'iyle yapılmalıdır; backend runtime catalog manifest için repo kökündeki `assets/` verisini de image içine alır.
+
 ## OTP / E-posta ayarları
 
 Şifre sıfırlama OTP akışı Resend ile e-posta gönderebilir. Local geliştirme için `.env` içine şu alanlar eklenir:

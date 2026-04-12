@@ -7,28 +7,39 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import {
+  CampaignKind as PrismaCampaignKind,
+  CampaignStatus as PrismaCampaignStatus,
   ContentBlockType as PrismaContentBlockType,
   FulfillmentMode as PrismaFulfillmentMode,
   IntegrationHealth as PrismaIntegrationHealth,
   IntegrationType as PrismaIntegrationType,
   InventoryMovementType as PrismaInventoryMovementType,
   OrderStatus as PrismaOrderStatus,
+  PayoutStatus as PrismaPayoutStatus,
   Prisma,
+  RefreshSession as PrismaRefreshSession,
   Role as PrismaRole,
   StorefrontType as PrismaStorefrontType,
   SupportStatus as PrismaSupportStatus,
   SyncRunStatus as PrismaSyncRunStatus,
 } from '@prisma/client';
 import { createHash, randomInt, randomUUID } from 'node:crypto';
+import * as bcrypt from 'bcrypt';
 
 import { RegisterDto } from '../auth/dto/register.dto';
+import { OperatorRegisterDto } from '../auth/dto/operator-register.dto';
 import { FulfillmentMode } from '../common/enums/fulfillment-mode.enum';
+import { CreateVendorBankAccountDto } from '../ops/dto/create-vendor-bank-account.dto';
+import { CreateVendorCampaignDto } from '../ops/dto/create-vendor-campaign.dto';
+import { CreateVendorPayoutDto } from '../ops/dto/create-vendor-payout.dto';
+import { UpdateVendorCampaignDto } from '../ops/dto/update-vendor-campaign.dto';
 import { CreateCheckoutSessionDto } from '../orders/dto/create-checkout-session.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestContextService } from './request-context.service';
 import { CreateAddressDto } from '../profile/dto/create-address.dto';
 import { CreatePaymentMethodDto } from '../profile/dto/create-payment-method.dto';
 import { UpdateProfileDto } from '../profile/dto/update-profile.dto';
+import { JwtTokenService } from '../security/jwt-token.service';
 import { CreateSupportTicketDto } from '../support/dto/create-support-ticket.dto';
 import { RedeemTicketDto } from '../wallet/dto/redeem-ticket.dto';
 import { loadCatalogManifest } from '../catalog/catalog-manifest';
@@ -52,6 +63,9 @@ export type InventoryMovementType =
 export type IntegrationType = 'POS' | 'ERP';
 export type IntegrationHealth = 'healthy' | 'warning' | 'failed';
 export type SyncRunStatus = 'idle' | 'running' | 'success' | 'failed';
+export type PayoutStatus = 'pending' | 'paid' | 'failed';
+export type CampaignKind = 'HAPPY_HOUR' | 'DISCOUNT' | 'CLEARANCE' | 'BUNDLE';
+export type CampaignStatus = 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'COMPLETED';
 
 export interface AppUser {
   id: string;
@@ -138,6 +152,63 @@ export interface SupportTicket {
   status: string;
 }
 
+export interface VendorBankAccount {
+  id: string;
+  vendorId: string;
+  holderName: string;
+  bankName: string;
+  iban: string;
+  maskedIban: string;
+  isDefault: boolean;
+}
+
+export interface VendorPayout {
+  id: string;
+  vendorId: string;
+  bankAccountId: string;
+  amount: number;
+  status: PayoutStatus;
+  note: string;
+  requestedAtLabel: string;
+  completedAtLabel: string;
+}
+
+export interface VendorFinanceSummary {
+  vendorId: string;
+  availableBalance: number;
+  pendingBalance: number;
+  lastPayoutAt: string;
+  lastPayoutAmount: number;
+  bankAccounts: VendorBankAccount[];
+}
+
+export interface VendorCampaign {
+  id: string;
+  vendorId: string;
+  title: string;
+  description: string;
+  kind: CampaignKind;
+  status: CampaignStatus;
+  scheduleLabel: string;
+  badgeLabel: string;
+  discountPercent: number;
+  discountedPrice: number;
+  startsAt: string;
+  endsAt: string;
+  productIds: string[];
+  productTitles: string[];
+  storefrontType: 'RESTAURANT' | 'MARKET';
+}
+
+export interface VendorCampaignSummary {
+  vendorId: string;
+  activeCount: number;
+  draftCount: number;
+  pausedCount: number;
+  criticalProductCount: number;
+  campaigns: VendorCampaign[];
+}
+
 interface VendorRecord {
   id: string;
   name: string;
@@ -208,7 +279,7 @@ interface IntegrationConnection {
   skuMappings: Record<string, string>;
 }
 
-interface EventCatalogItem {
+interface _EventCatalogItem {
   id: string;
   title: string;
   venue: string;
@@ -219,7 +290,7 @@ interface EventCatalogItem {
   pointsCost: number;
 }
 
-interface RestaurantCatalogItem {
+interface _RestaurantCatalogItem {
   id: string;
   vendorId: string;
   title: string;
@@ -240,7 +311,7 @@ interface StockStatusPayload {
   canPurchase: boolean;
 }
 
-interface AccountDomainState {
+interface _AccountDomainState {
   addresses: Address[];
   paymentMethods: PaymentMethod[];
   activeOrders: Order[];
@@ -295,7 +366,7 @@ const TR_LOCALE = 'tr-TR';
 const TIME_ZONE = 'Europe/Istanbul';
 const DEFAULT_PASSWORD_RESET_TEST_CODE = '12345';
 
-const VENDOR_MARKETING: Record<
+const _VENDOR_MARKETING: Record<
   string,
   {
     etaMin: number;
@@ -328,7 +399,7 @@ const VENDOR_MARKETING: Record<
   },
 };
 
-const DEMO_VENDORS: VendorRecord[] = [
+const _DEMO_VENDORS: VendorRecord[] = [
   {
     id: 'vendor-burger-yiyelim',
     name: 'Burger Yiyelim',
@@ -355,7 +426,7 @@ const DEMO_VENDORS: VendorRecord[] = [
   },
 ];
 
-const DEMO_PRODUCTS = [
+const _DEMO_PRODUCTS = [
   {
     id: 'mega-burger-menu',
     vendorId: 'vendor-burger-yiyelim',
@@ -505,7 +576,7 @@ const DEMO_PRODUCTS = [
   },
 ] as const;
 
-const DEMO_INTEGRATIONS = [
+const _DEMO_INTEGRATIONS = [
   {
     id: 'int-burger-001',
     vendorId: 'vendor-burger-yiyelim',
@@ -556,7 +627,7 @@ const DEMO_INTEGRATIONS = [
   },
 ] as const;
 
-const DEMO_EVENTS = [
+const _DEMO_EVENTS = [
   {
     id: 'event-galata-jazz',
     vendorId: 'vendor-burger-yiyelim',
@@ -814,7 +885,7 @@ const catalogVendorInclude = {
   },
 } satisfies Prisma.VendorInclude;
 
-type UserRecord = Prisma.UserGetPayload<{}>;
+type UserRecord = Prisma.UserGetPayload<Record<string, never>>;
 type OrderRecord = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
 type StockRecord = Prisma.InventoryStockGetPayload<{ include: typeof stockInclude }>;
 type MovementRecord = Prisma.InventoryMovementGetPayload<{ include: typeof movementInclude }>;
@@ -823,15 +894,23 @@ type IntegrationRecord = Prisma.IntegrationConnectionGetPayload<{
 }>;
 type TicketRecord = Prisma.TicketGetPayload<{ include: typeof ticketInclude }>;
 type CatalogVendorRecord = Prisma.VendorGetPayload<{ include: typeof catalogVendorInclude }>;
-type ContentBlockRecord = Prisma.ContentBlockGetPayload<{}>;
+type ContentBlockRecord = Prisma.ContentBlockGetPayload<Record<string, never>>;
+type _RefreshSessionRecord = PrismaRefreshSession;
 
 @Injectable()
 export class AppDataService {
   private initializationPromise: Promise<void> | null = null;
   private readonly passwordResetOtpTestMode =
-    (process.env.OTP_TEST_MODE ?? 'true').trim().toLowerCase() === 'true';
+    (process.env.OTP_TEST_MODE ?? 'false').trim().toLowerCase() === 'true';
   private readonly passwordResetOtpTestCode = this.normalizeOtpCode(
     process.env.OTP_TEST_CODE,
+  );
+  private readonly enableDemoSeed =
+    (process.env.ENABLE_DEMO_SEED ?? 'false').trim().toLowerCase() === 'true';
+  private readonly refreshTokenTtlDays = this.parsePositiveIntegerEnv(
+    process.env.REFRESH_TOKEN_TTL_DAYS,
+    30,
+    'REFRESH_TOKEN_TTL_DAYS',
   );
   private readonly resendApiKey = (process.env.RESEND_API_KEY ?? '').trim();
   private readonly resendApiBaseUrl = (
@@ -844,6 +923,7 @@ export class AppDataService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly requestContext: RequestContextService,
+    private readonly jwtTokenService: JwtTokenService,
   ) {}
 
   async register(payload: RegisterDto) {
@@ -860,7 +940,7 @@ export class AppDataService {
     const user = await this.prisma.user.create({
       data: {
         email: normalizedEmail,
-        password: payload.password,
+        passwordHash: await this.hashPassword(payload.password),
         displayName: payload.displayName,
         phone: payload.phone,
         role: PrismaRole.CUSTOMER,
@@ -872,13 +952,127 @@ export class AppDataService {
     return this.buildSessionResponse(user);
   }
 
+  async registerOperator(payload: OperatorRegisterDto) {
+    await this.ensureInitialized();
+    if (!payload.consents.termsAccepted || !payload.consents.privacyAccepted) {
+      throw new BadRequestException('Zorunlu sozlesme onaylari verilmelidir');
+    }
+
+    const storefrontType =
+      payload.storefrontType === 'MARKET'
+        ? PrismaStorefrontType.MARKET
+        : PrismaStorefrontType.RESTAURANT;
+    const name = payload.business.name.trim();
+    const slug = this.slugify(name);
+    const vendorId = `vendor-${slug}`;
+    const normalizedEmail = this.normalizeEmail(payload.operator.email);
+    let operatorId = '';
+
+    await this.prisma.$transaction(async (tx) => {
+      const existingVendor = await tx.vendor.findUnique({
+        where: { id: vendorId },
+        select: { id: true },
+      });
+      if (existingVendor) {
+        throw new BadRequestException(`Vendor ${vendorId} zaten mevcut`);
+      }
+
+      await tx.vendor.create({
+        data: {
+          id: vendorId,
+          name,
+          slug,
+          category: payload.business.category.trim(),
+          storefrontId: vendorId,
+          storefrontType,
+          displayOrder: 999,
+          ...this.toCatalogVendorUpdateData({
+            subtitle: payload.business.subtitle,
+            imageUrl: payload.business.imageUrl,
+            workingHoursLabel: payload.business.workingHoursLabel,
+            meta: `${payload.business.category.trim()} • Gel-Al`,
+            heroTitle: name,
+            heroSubtitle:
+              (payload.business.subtitle?.trim().length ?? 0) > 0
+                ? payload.business.subtitle!.trim()
+                : `${payload.business.category.trim()} operasyonu`,
+          }),
+        },
+      });
+
+      await tx.pickupPoint.create({
+        data: {
+          vendorId,
+          label: payload.business.pickupPointLabel.trim(),
+          address: payload.business.pickupPointAddress.trim(),
+        },
+      });
+
+      await tx.catalogSection.create({
+        data: {
+          vendorId,
+          key: storefrontType === PrismaStorefrontType.MARKET ? 'genel-market' : 'genel-menu',
+          label: storefrontType === PrismaStorefrontType.MARKET ? 'Genel Raf' : 'Genel Menu',
+          displayOrder: 0,
+          isActive: true,
+        },
+      });
+
+      await this.upsertVendorOperator(tx, {
+        vendorId,
+        email: normalizedEmail,
+        password: payload.operator.password,
+        displayName: payload.operator.displayName.trim(),
+        phone: payload.operator.phone.trim(),
+      });
+
+      const operator = await tx.user.findUnique({
+        where: { email: normalizedEmail },
+        select: { id: true },
+      });
+      if (!operator) {
+        throw new InternalServerErrorException('Operator olusturulamadi');
+      }
+      operatorId = operator.id;
+
+      await tx.user.update({
+        where: { id: operator.id },
+        data: {
+          termsAcceptedAt: new Date(),
+          privacyAcceptedAt: new Date(),
+          marketingOptIn: payload.consents.marketingOptIn,
+          notificationsEnabled: Object.values(payload.notifications).some(Boolean),
+          opsNotificationPreferences: payload.notifications as unknown as Prisma.JsonObject,
+        },
+      });
+
+      await tx.vendorBankAccount.create({
+        data: {
+          vendorId,
+          holderName: payload.bankAccount.holderName.trim(),
+          bankName: payload.bankAccount.bankName.trim(),
+          iban: payload.bankAccount.iban.trim(),
+          isDefault: true,
+        },
+      });
+    });
+
+    const operator = await this.prisma.user.findUnique({
+      where: { id: operatorId },
+    });
+    if (!operator) {
+      throw new InternalServerErrorException('Operator oturumu olusturulamadi');
+    }
+    return this.buildSessionResponse(operator);
+  }
+
   async login(email: string, password: string) {
     await this.ensureInitialized();
     const normalizedEmail = this.normalizeEmail(email);
     const user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
-    if (!user || user.password !== password) {
+    if (!user || !(await this.verifyPassword(password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -983,6 +1177,12 @@ export class AppDataService {
       return { success: false };
     }
 
+    const requestUser = await this.currentRequestUser();
+    const canUpdateFromSession =
+      requestUser != null &&
+      (requestUser.id === user.id ||
+        requestUser.role === PrismaRole.ADMIN ||
+        requestUser.role === PrismaRole.SUPPORT);
     const verifiedOtp = await this.prisma.passwordResetOtp.findFirst({
       where: {
         email: normalizedEmail,
@@ -992,20 +1192,79 @@ export class AppDataService {
       },
       orderBy: { consumedAt: 'desc' },
     });
-    if (!verifiedOtp) {
+    if (!canUpdateFromSession && !verifiedOtp) {
       return { success: false };
     }
 
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { email: normalizedEmail },
-        data: { password },
+        data: { passwordHash: await this.hashPassword(password) },
+      });
+      await tx.refreshSession.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date() },
       });
       await tx.passwordResetOtp.deleteMany({
         where: { email: normalizedEmail, purpose: 'PASSWORD_RESET' },
       });
     });
 
+    return { success: true };
+  }
+
+  async refreshSession(refreshToken: string) {
+    await this.ensureInitialized();
+    const normalizedToken = refreshToken.trim();
+    if (normalizedToken.length === 0) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const session = await this.prisma.refreshSession.findUnique({
+      where: { tokenHash: this.hashRefreshToken(normalizedToken) },
+    });
+    if (!session) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (session.revokedAt != null || session.expiresAt.getTime() <= Date.now()) {
+      await this.revokeRefreshSession(session.id);
+      throw new UnauthorizedException('Refresh token expired');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: session.userId },
+    });
+    if (!user) {
+      await this.revokeRefreshSession(session.id);
+      throw new UnauthorizedException('Refresh session is no longer valid');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.refreshSession.update({
+        where: { id: session.id },
+        data: {
+          revokedAt: new Date(),
+          lastUsedAt: new Date(),
+        },
+      });
+      return this.buildSessionResponse(user, tx);
+    });
+  }
+
+  async logout(refreshToken?: string) {
+    await this.ensureInitialized();
+    const normalizedToken = refreshToken?.trim() ?? '';
+    if (normalizedToken.length === 0) {
+      return { success: true };
+    }
+    const session = await this.prisma.refreshSession.findUnique({
+      where: { tokenHash: this.hashRefreshToken(normalizedToken) },
+      select: { id: true },
+    });
+    if (session) {
+      await this.revokeRefreshSession(session.id);
+    }
     return { success: true };
   }
 
@@ -1016,12 +1275,13 @@ export class AppDataService {
       oauthProviders: ['google', 'apple'],
       roles: ['CUSTOMER', 'ADMIN', 'VENDOR'],
       stockAppEnabled: true,
+      otpTestMode: this.passwordResetOtpTestMode,
     };
   }
 
   async getBootstrap() {
     await this.ensureInitialized();
-    const current = await this.findUserFromAccessToken(this.requestContext.accessToken);
+    const current = await this.currentRequestUser();
     return {
       capabilities: this.getCapabilities(),
       contentVersion: await this.getContentVersion(),
@@ -1085,7 +1345,7 @@ export class AppDataService {
     await this.prisma.user.create({
       data: {
         email: replacementEmail,
-        password: randomUUID(),
+        passwordHash: await this.hashPassword(randomUUID()),
         displayName: 'Speto Kullanıcısı',
         phone: '',
         role: PrismaRole.CUSTOMER,
@@ -1321,12 +1581,15 @@ export class AppDataService {
 
   async listHappyHourOffers() {
     await this.ensureInitialized();
-    const vendors = await this.prisma.vendor.findMany({
-      where: { isActive: true },
-      include: catalogVendorInclude,
-      orderBy: [{ isFeatured: 'desc' }, { displayOrder: 'asc' }, { name: 'asc' }],
-    });
-    return this.buildHappyHourOffers(vendors);
+    const [vendors, campaignOffers] = await Promise.all([
+      this.prisma.vendor.findMany({
+        where: { isActive: true },
+        include: catalogVendorInclude,
+        orderBy: [{ isFeatured: 'desc' }, { displayOrder: 'asc' }, { name: 'asc' }],
+      }),
+      this.buildCampaignHappyHourOffers(),
+    ]);
+    return [...campaignOffers, ...this.buildHappyHourOffers(vendors)];
   }
 
   async getHappyHourOfferDetail(offerId: string) {
@@ -1576,7 +1839,8 @@ export class AppDataService {
               operatorEmail ||
               existing.operators[0]?.email ||
               `ops+${existing.slug}@speto.app`,
-            password: operatorPassword || existing.operators[0]?.password || 'vendor123',
+            password: operatorPassword || undefined,
+            existingPasswordHash: existing.operators[0]?.passwordHash,
             displayName:
               operatorDisplayName ||
               existing.operators[0]?.displayName ||
@@ -2810,6 +3074,346 @@ export class AppDataService {
     return this.toSyncRunPayload(result, connectionId);
   }
 
+  async listVendorBankAccounts(vendorId?: string) {
+    await this.ensureInitialized();
+    const current = await this.requireCurrentUser();
+    this.assertOpsAccess(current);
+
+    const allowedVendorIds = await this.resolveVendorScope(current, vendorId);
+    const accounts = await this.prisma.vendorBankAccount.findMany({
+      where: {
+        ...(allowedVendorIds.length > 0 ? { vendorId: { in: allowedVendorIds } } : {}),
+      },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+    });
+    return accounts.map((account) => this.toVendorBankAccount(account));
+  }
+
+  async createVendorBankAccount(payload: CreateVendorBankAccountDto) {
+    await this.ensureInitialized();
+    const current = await this.requireCurrentUser();
+    this.assertOpsAccess(current);
+    this.assertVendorAccess(current, payload.vendorId);
+
+    const existingVendor = await this.prisma.vendor.findUnique({
+      where: { id: payload.vendorId },
+      select: { id: true },
+    });
+    if (!existingVendor) {
+      throw new NotFoundException(`Vendor ${payload.vendorId} not found`);
+    }
+
+    const existingCount = await this.prisma.vendorBankAccount.count({
+      where: { vendorId: payload.vendorId },
+    });
+    const isDefault = payload.isDefault ?? existingCount === 0;
+    if (isDefault) {
+      await this.prisma.vendorBankAccount.updateMany({
+        where: { vendorId: payload.vendorId, isDefault: true },
+        data: { isDefault: false },
+      });
+    }
+
+    const account = await this.prisma.vendorBankAccount.create({
+      data: {
+        vendorId: payload.vendorId,
+        holderName: payload.holderName.trim(),
+        bankName: payload.bankName.trim(),
+        iban: payload.iban.trim(),
+        isDefault,
+      },
+    });
+    return this.toVendorBankAccount(account);
+  }
+
+  async createVendorPayout(payload: CreateVendorPayoutDto) {
+    await this.ensureInitialized();
+    const current = await this.requireCurrentUser();
+    this.assertOpsAccess(current);
+    this.assertVendorAccess(current, payload.vendorId);
+
+    const account = await this.prisma.vendorBankAccount.findUnique({
+      where: { id: payload.bankAccountId },
+    });
+    if (!account || account.vendorId !== payload.vendorId) {
+      throw new BadRequestException('Gecersiz banka hesabi');
+    }
+
+    const summary = await this.getVendorFinanceSummary(payload.vendorId);
+    if (payload.amount <= 0) {
+      throw new BadRequestException('Payout amount must be positive');
+    }
+    if (payload.amount > summary.availableBalance) {
+      throw new BadRequestException('Yetersiz bakiye');
+    }
+
+    const payout = await this.prisma.vendorPayout.create({
+      data: {
+        vendorId: payload.vendorId,
+        bankAccountId: payload.bankAccountId,
+        amount: payload.amount,
+        status: PrismaPayoutStatus.PAID,
+        note: payload.note?.trim() || null,
+        completedAt: new Date(),
+      },
+    });
+    return this.toVendorPayout(payout);
+  }
+
+  async getVendorFinanceSummary(vendorId?: string) {
+    await this.ensureInitialized();
+    const current = await this.requireCurrentUser();
+    this.assertOpsAccess(current);
+
+    const allowedVendorIds = await this.resolveVendorScope(current, vendorId);
+    const targetVendorId = vendorId ?? allowedVendorIds[0] ?? '';
+    if (!targetVendorId) {
+      return {
+        vendorId: '',
+        availableBalance: 0,
+        pendingBalance: 0,
+        lastPayoutAt: '',
+        lastPayoutAmount: 0,
+        bankAccounts: [],
+      } satisfies VendorFinanceSummary;
+    }
+
+    const [orders, payouts, bankAccounts] = await Promise.all([
+      this.prisma.order.findMany({
+        where: {
+          vendorId: targetVendorId,
+          status: PrismaOrderStatus.COMPLETED,
+        },
+        select: { totalAmount: true },
+      }),
+      this.prisma.vendorPayout.findMany({
+        where: { vendorId: targetVendorId },
+        orderBy: { requestedAt: 'desc' },
+      }),
+      this.prisma.vendorBankAccount.findMany({
+        where: { vendorId: targetVendorId },
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      }),
+    ]);
+
+    const grossRevenue = orders.reduce(
+      (total, order) => total + Number(order.totalAmount),
+      0,
+    );
+    const paidAmount = payouts
+      .filter((payout) => payout.status === PrismaPayoutStatus.PAID)
+      .reduce((total, payout) => total + Number(payout.amount), 0);
+    const pendingBalance = payouts
+      .filter((payout) => payout.status === PrismaPayoutStatus.PENDING)
+      .reduce((total, payout) => total + Number(payout.amount), 0);
+    const lastPaidPayout = payouts.find(
+      (payout) => payout.status === PrismaPayoutStatus.PAID,
+    );
+
+    return {
+      vendorId: targetVendorId,
+      availableBalance: Math.max(0, grossRevenue - paidAmount - pendingBalance),
+      pendingBalance,
+      lastPayoutAt: lastPaidPayout?.completedAt?.toISOString() ?? '',
+      lastPayoutAmount: lastPaidPayout ? Number(lastPaidPayout.amount) : 0,
+      bankAccounts: bankAccounts.map((account) => this.toVendorBankAccount(account)),
+    } satisfies VendorFinanceSummary;
+  }
+
+  async listVendorCampaigns(vendorId?: string) {
+    await this.ensureInitialized();
+    const current = await this.requireCurrentUser();
+    this.assertOpsAccess(current);
+
+    const allowedVendorIds = await this.resolveVendorScope(current, vendorId);
+    const campaigns = await this.prisma.vendorCampaign.findMany({
+      where: {
+        ...(allowedVendorIds.length > 0 ? { vendorId: { in: allowedVendorIds } } : {}),
+      },
+      include: {
+        vendor: {
+          select: {
+            id: true,
+            storefrontType: true,
+          },
+        },
+      },
+      orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+    return this.toVendorCampaignPayloads(campaigns);
+  }
+
+  async createVendorCampaign(payload: CreateVendorCampaignDto) {
+    await this.ensureInitialized();
+    const current = await this.requireCurrentUser();
+    this.assertOpsAccess(current);
+    this.assertVendorAccess(current, payload.vendorId);
+
+    const vendor = await this.prisma.vendor.findUnique({
+      where: { id: payload.vendorId },
+      select: { id: true },
+    });
+    if (!vendor) {
+      throw new NotFoundException(`Vendor ${payload.vendorId} not found`);
+    }
+
+    const productIds = await this.resolveCampaignProductIds(
+      payload.vendorId,
+      payload.productIds,
+    );
+    const campaign = await this.prisma.vendorCampaign.create({
+      data: {
+        vendorId: payload.vendorId,
+        kind: payload.kind as PrismaCampaignKind,
+        status: (payload.status ?? 'ACTIVE') as PrismaCampaignStatus,
+        title: payload.title.trim(),
+        description: payload.description?.trim() || null,
+        startsAt: payload.startsAt ? new Date(payload.startsAt) : null,
+        endsAt: payload.endsAt ? new Date(payload.endsAt) : null,
+        scheduleLabel: payload.scheduleLabel?.trim() || null,
+        badgeLabel: payload.badgeLabel?.trim() || null,
+        discountPercent: payload.discountPercent ?? null,
+        discountedPrice: payload.discountedPrice ?? null,
+        productIds,
+      },
+      include: {
+        vendor: {
+          select: {
+            id: true,
+            storefrontType: true,
+          },
+        },
+      },
+    });
+    return (await this.toVendorCampaignPayloads([campaign]))[0];
+  }
+
+  async updateVendorCampaign(campaignId: string, payload: UpdateVendorCampaignDto) {
+    await this.ensureInitialized();
+    const current = await this.requireCurrentUser();
+    this.assertOpsAccess(current);
+
+    const existing = await this.prisma.vendorCampaign.findUnique({
+      where: { id: campaignId },
+      include: {
+        vendor: {
+          select: { id: true, storefrontType: true },
+        },
+      },
+    });
+    if (!existing) {
+      throw new NotFoundException(`Campaign ${campaignId} not found`);
+    }
+    this.assertVendorAccess(current, existing.vendorId);
+
+    const nextProductIds =
+      payload.productIds == null
+        ? undefined
+        : await this.resolveCampaignProductIds(existing.vendorId, payload.productIds);
+
+    const updated = await this.prisma.vendorCampaign.update({
+      where: { id: campaignId },
+      data: {
+        ...(payload.kind ? { kind: payload.kind as PrismaCampaignKind } : {}),
+        ...(payload.status ? { status: payload.status as PrismaCampaignStatus } : {}),
+        ...(payload.title != null ? { title: payload.title.trim() } : {}),
+        ...(payload.description != null
+          ? { description: payload.description.trim() || null }
+          : {}),
+        ...(payload.startsAt != null
+          ? { startsAt: payload.startsAt ? new Date(payload.startsAt) : null }
+          : {}),
+        ...(payload.endsAt != null
+          ? { endsAt: payload.endsAt ? new Date(payload.endsAt) : null }
+          : {}),
+        ...(payload.scheduleLabel != null
+          ? { scheduleLabel: payload.scheduleLabel.trim() || null }
+          : {}),
+        ...(payload.badgeLabel != null
+          ? { badgeLabel: payload.badgeLabel.trim() || null }
+          : {}),
+        ...(payload.discountPercent !== undefined
+          ? { discountPercent: payload.discountPercent }
+          : {}),
+        ...(payload.discountedPrice !== undefined
+          ? { discountedPrice: payload.discountedPrice }
+          : {}),
+        ...(nextProductIds !== undefined ? { productIds: nextProductIds } : {}),
+      },
+      include: {
+        vendor: {
+          select: {
+            id: true,
+            storefrontType: true,
+          },
+        },
+      },
+    });
+    return (await this.toVendorCampaignPayloads([updated]))[0];
+  }
+
+  async toggleVendorCampaign(campaignId: string) {
+    await this.ensureInitialized();
+    const current = await this.requireCurrentUser();
+    this.assertOpsAccess(current);
+
+    const existing = await this.prisma.vendorCampaign.findUnique({
+      where: { id: campaignId },
+      include: {
+        vendor: {
+          select: {
+            id: true,
+            storefrontType: true,
+          },
+        },
+      },
+    });
+    if (!existing) {
+      throw new NotFoundException(`Campaign ${campaignId} not found`);
+    }
+    this.assertVendorAccess(current, existing.vendorId);
+
+    const nextStatus =
+      existing.status === PrismaCampaignStatus.ACTIVE
+        ? PrismaCampaignStatus.PAUSED
+        : PrismaCampaignStatus.ACTIVE;
+    const updated = await this.prisma.vendorCampaign.update({
+      where: { id: campaignId },
+      data: { status: nextStatus },
+      include: {
+        vendor: {
+          select: {
+            id: true,
+            storefrontType: true,
+          },
+        },
+      },
+    });
+    return (await this.toVendorCampaignPayloads([updated]))[0];
+  }
+
+  async getVendorCampaignSummary(vendorId?: string) {
+    await this.ensureInitialized();
+    const current = await this.requireCurrentUser();
+    this.assertOpsAccess(current);
+
+    const allowedVendorIds = await this.resolveVendorScope(current, vendorId);
+    const targetVendorId = vendorId ?? allowedVendorIds[0] ?? '';
+    const [campaigns, inventoryItems] = await Promise.all([
+      this.listVendorCampaigns(targetVendorId || undefined),
+      targetVendorId ? this.listInventoryItems(targetVendorId) : Promise.resolve([]),
+    ]);
+
+    return {
+      vendorId: targetVendorId,
+      activeCount: campaigns.filter((campaign) => campaign.status === 'ACTIVE').length,
+      draftCount: campaigns.filter((campaign) => campaign.status === 'DRAFT').length,
+      pausedCount: campaigns.filter((campaign) => campaign.status === 'PAUSED').length,
+      criticalProductCount: inventoryItems.filter((item) => item.stockStatus.lowStock).length,
+      campaigns,
+    } satisfies VendorCampaignSummary;
+  }
+
   private async ensureInitialized() {
     if (this.initializationPromise) {
       return this.initializationPromise;
@@ -2829,12 +3433,17 @@ export class AppDataService {
       async (tx) => {
         await this.syncCatalogManifestSeed(tx);
 
+        if (!this.enableDemoSeed) {
+          return;
+        }
+
         for (const user of DEMO_USERS) {
+          const passwordHash = await this.hashPassword(user.password);
           await tx.user.upsert({
             where: { id: user.id },
             update: {
               email: user.email,
-              password: user.password,
+              passwordHash,
               displayName: user.displayName,
               phone: user.phone,
               role: user.role,
@@ -2846,7 +3455,7 @@ export class AppDataService {
             create: {
               id: user.id,
               email: user.email,
-              password: user.password,
+              passwordHash,
               displayName: user.displayName,
               phone: user.phone,
               role: user.role,
@@ -3748,41 +4357,106 @@ export class AppDataService {
     );
   }
 
-  private async buildSessionResponse(user: UserRecord) {
+  private async buildSessionResponse(
+    user: UserRecord,
+    tx: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
     const profile = await this.toAppUser(user);
+    const accessToken = await this.jwtTokenService.issueAccessToken({
+      userId: profile.id,
+      email: profile.email,
+      role: user.role,
+      vendorId: user.vendorId ?? null,
+    });
+    const refreshSession = await this.createRefreshSession(user.id, tx);
     return {
       user: profile,
       tokens: {
-        accessToken: `access-${profile.id}`,
-        refreshToken: `refresh-${profile.id}`,
+        accessToken: accessToken.token,
+        refreshToken: refreshSession.token,
+        accessTokenExpiresAt: accessToken.expiresAt.toISOString(),
+        refreshTokenExpiresAt: refreshSession.expiresAt.toISOString(),
       },
     };
   }
 
-  private async requireCurrentUser() {
+  private async currentRequestUser() {
     await this.ensureInitialized();
-    const requestScopedUser = await this.findUserFromAccessToken(
-      this.requestContext.accessToken,
-    );
+    const userId = this.requestContext.userId;
+    if (!userId) {
+      return null;
+    }
+    return this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+  }
+
+  private async requireCurrentUser() {
+    const requestScopedUser = await this.currentRequestUser();
     if (requestScopedUser) {
       return requestScopedUser;
     }
     throw new UnauthorizedException('No active session');
   }
 
-  private async findUserFromAccessToken(accessToken?: string) {
-    if (!accessToken?.startsWith('access-')) {
-      return null;
-    }
-
-    const userId = accessToken.slice('access-'.length).trim();
-    if (!userId) {
-      return null;
-    }
-
-    return this.prisma.user.findUnique({
-      where: { id: userId },
+  private async createRefreshSession(
+    userId: string,
+    tx: Prisma.TransactionClient | PrismaService,
+  ) {
+    const token = this.generateRefreshToken();
+    const expiresAt = new Date(
+      Date.now() + this.refreshTokenTtlDays * 24 * 60 * 60 * 1000,
+    );
+    await tx.refreshSession.create({
+      data: {
+        userId,
+        tokenHash: this.hashRefreshToken(token),
+        expiresAt,
+      },
     });
+    return {
+      token,
+      expiresAt,
+    };
+  }
+
+  private async revokeRefreshSession(sessionId: string) {
+    await this.prisma.refreshSession.updateMany({
+      where: { id: sessionId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  private generateRefreshToken() {
+    return `${randomUUID()}${randomUUID()}`.replaceAll('-', '');
+  }
+
+  private hashRefreshToken(refreshToken: string) {
+    return createHash('sha256').update(refreshToken.trim()).digest('hex');
+  }
+
+  private async hashPassword(password: string) {
+    return bcrypt.hash(password, 12);
+  }
+
+  private async verifyPassword(password: string, passwordHash: string) {
+    return bcrypt.compare(password, passwordHash);
+  }
+
+  private parsePositiveIntegerEnv(
+    rawValue: string | undefined,
+    fallback: number,
+    key: string,
+  ) {
+    const normalized = rawValue?.trim();
+    if (normalized == null || normalized.length == 0) {
+      return fallback;
+    }
+    const parsed = Number.parseInt(normalized, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      throw new Error(`${key} must be a positive integer`);
+    }
+    return parsed;
   }
 
   private async resolveVendorScope(user: UserRecord, vendorId?: string) {
@@ -4400,20 +5074,20 @@ export class AppDataService {
       vendorSubtitle: vendor.subtitle ?? vendor.category,
       title: product.title,
       subtitle:
-        Boolean(product.displaySubtitle?.trim().length)
+        (product.displaySubtitle?.trim().length ?? 0) > 0
           ? product.displaySubtitle!.trim()
           : `${vendor.name} • ${sectionLabel}`,
       description:
-        Boolean(product.description?.trim().length)
+        (product.description?.trim().length ?? 0) > 0
           ? product.description!.trim()
           : `${vendor.name} için hazırlanan ${sectionLabel.toLowerCase()} fırsatı.`,
       imageUrl:
         product.imageUrl ??
         vendor.imageUrl ??
         'https://images.unsplash.com/photo-1561758033-d89a9ad46330?auto=format&fit=crop&w=1200&q=80',
-      badge: Boolean(product.displayBadge?.trim().length)
+      badge: (product.displayBadge?.trim().length ?? 0) > 0
         ? product.displayBadge!.trim()
-        : Boolean(vendor.promoLabel?.trim().length)
+        : (vendor.promoLabel?.trim().length ?? 0) > 0
           ? vendor.promoLabel!.trim()
           : 'Happy Hour Özel',
       discountedPrice,
@@ -4473,11 +5147,11 @@ export class AppDataService {
       await this.upsertVendorOperator(tx, {
         vendorId: vendor.id,
         email: `ops+${vendor.slug}@speto.app`,
-        password: 'vendor123',
-        displayName: `${vendor.name} Operasyon`,
-        phone: '',
-      });
-    }
+      password: 'vendor123',
+      displayName: `${vendor.name} Operasyon`,
+      phone: '',
+    });
+  }
   }
 
   private async upsertVendorOperator(
@@ -4485,7 +5159,8 @@ export class AppDataService {
     payload: {
       vendorId: string;
       email: string;
-      password: string;
+      password?: string;
+      existingPasswordHash?: string | null;
       displayName: string;
       phone: string;
       existingOperatorId?: string;
@@ -4500,12 +5175,20 @@ export class AppDataService {
       throw new BadRequestException('Bu e-posta başka bir mağaza kullanıcısında kayıtlı');
     }
 
+    const passwordHash =
+      payload.password != null && payload.password.trim().length > 0
+        ? await this.hashPassword(payload.password)
+        : payload.existingPasswordHash?.trim() ?? '';
+    if (passwordHash.length === 0) {
+      throw new BadRequestException('Vendor operator password is required');
+    }
+
     if (payload.existingOperatorId) {
       await tx.user.update({
         where: { id: payload.existingOperatorId },
         data: {
           email: normalizedEmail,
-          password: payload.password,
+          passwordHash,
           displayName: payload.displayName,
           phone: payload.phone,
           role: PrismaRole.VENDOR,
@@ -4520,7 +5203,7 @@ export class AppDataService {
       await tx.user.update({
         where: { id: existingByEmail.id },
         data: {
-          password: payload.password,
+          passwordHash,
           displayName: payload.displayName,
           phone: payload.phone,
           role: PrismaRole.VENDOR,
@@ -4534,7 +5217,7 @@ export class AppDataService {
     await tx.user.create({
       data: {
         email: normalizedEmail,
-        password: payload.password,
+        passwordHash,
         displayName: payload.displayName,
         phone: payload.phone,
         role: PrismaRole.VENDOR,
@@ -4590,6 +5273,7 @@ export class AppDataService {
   private toCatalogVendorUpdateData(payload: Record<string, unknown>) {
     return {
       ...(typeof payload['name'] === 'string' ? { name: payload['name'] } : {}),
+      ...(typeof payload['category'] === 'string' ? { category: payload['category'] } : {}),
       ...(typeof payload['subtitle'] === 'string' ? { subtitle: payload['subtitle'] } : {}),
       ...(typeof payload['meta'] === 'string' ? { metaLabel: payload['meta'] } : {}),
       ...(typeof payload['image'] === 'string' ? { imageUrl: payload['image'] } : {}),
@@ -4668,6 +5352,278 @@ export class AppDataService {
       return [];
     }
     return value.map((entry) => String(entry));
+  }
+
+  private maskIban(iban: string) {
+    const normalized = iban.replace(/\s+/g, '');
+    if (normalized.length <= 8) {
+      return normalized;
+    }
+    return `${normalized.slice(0, 4)} **** **** ${normalized.slice(-4)}`;
+  }
+
+  private toVendorBankAccount(account: {
+    id: string;
+    vendorId: string;
+    holderName: string;
+    bankName: string;
+    iban: string;
+    isDefault: boolean;
+  }): VendorBankAccount {
+    return {
+      id: account.id,
+      vendorId: account.vendorId,
+      holderName: account.holderName,
+      bankName: account.bankName,
+      iban: account.iban,
+      maskedIban: this.maskIban(account.iban),
+      isDefault: account.isDefault,
+    };
+  }
+
+  private toVendorPayout(payout: {
+    id: string;
+    vendorId: string;
+    bankAccountId: string;
+    amount: Prisma.Decimal | number;
+    status: PrismaPayoutStatus;
+    note: string | null;
+    requestedAt: Date;
+    completedAt: Date | null;
+  }): VendorPayout {
+    return {
+      id: payout.id,
+      vendorId: payout.vendorId,
+      bankAccountId: payout.bankAccountId,
+      amount: Number(payout.amount),
+      status:
+        payout.status === PrismaPayoutStatus.PAID
+          ? 'paid'
+          : payout.status === PrismaPayoutStatus.FAILED
+            ? 'failed'
+            : 'pending',
+      note: payout.note ?? '',
+      requestedAtLabel: this.formatDateLabel(payout.requestedAt),
+      completedAtLabel: payout.completedAt ? this.formatDateLabel(payout.completedAt) : '',
+    };
+  }
+
+  private async toVendorCampaignPayloads(
+    campaigns: Array<
+      Prisma.VendorCampaignGetPayload<{
+        include: {
+          vendor: {
+            select: {
+              id: true;
+              storefrontType: true;
+            };
+          };
+        };
+      }>
+    >,
+  ): Promise<VendorCampaign[]> {
+    const productIds = Array.from(
+      new Set(
+        campaigns.flatMap((campaign) => this.toJsonStringArray(campaign.productIds)),
+      ),
+    );
+    const products = productIds.length
+      ? await this.prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: {
+            id: true,
+            title: true,
+          },
+        })
+      : [];
+    const titleByProductId = new Map(products.map((product) => [product.id, product.title]));
+
+    return campaigns.map((campaign) => {
+      const selectedProductIds = this.toJsonStringArray(campaign.productIds);
+      return {
+        id: campaign.id,
+        vendorId: campaign.vendorId,
+        title: campaign.title,
+        description: campaign.description ?? '',
+        kind: campaign.kind as CampaignKind,
+        status: campaign.status as CampaignStatus,
+        scheduleLabel: campaign.scheduleLabel ?? '',
+        badgeLabel: campaign.badgeLabel ?? '',
+        discountPercent: campaign.discountPercent ?? 0,
+        discountedPrice: campaign.discountedPrice ? Number(campaign.discountedPrice) : 0,
+        startsAt: campaign.startsAt?.toISOString() ?? '',
+        endsAt: campaign.endsAt?.toISOString() ?? '',
+        productIds: selectedProductIds,
+        productTitles: selectedProductIds.map(
+          (productId) => titleByProductId.get(productId) ?? productId,
+        ),
+        storefrontType: campaign.vendor.storefrontType ?? PrismaStorefrontType.RESTAURANT,
+      };
+    });
+  }
+
+  private async resolveCampaignProductIds(vendorId: string, productIds?: string[]) {
+    const normalizedIds = Array.from(
+      new Set(
+        (productIds ?? [])
+          .map((productId) => productId.trim())
+          .filter((productId) => productId.length > 0),
+      ),
+    );
+    if (normalizedIds.length === 0) {
+      return [] as string[];
+    }
+
+    const matchingProducts = await this.prisma.product.findMany({
+      where: {
+        vendorId,
+        id: { in: normalizedIds },
+      },
+      select: { id: true },
+    });
+    if (matchingProducts.length !== normalizedIds.length) {
+      throw new BadRequestException('Kampanya urunleri secili magazaya ait olmali');
+    }
+    return normalizedIds;
+  }
+
+  private async buildCampaignHappyHourOffers(): Promise<HappyHourOfferPayload[]> {
+    const campaigns = await this.prisma.vendorCampaign.findMany({
+      where: {
+        kind: PrismaCampaignKind.HAPPY_HOUR,
+        status: PrismaCampaignStatus.ACTIVE,
+        vendor: { isActive: true },
+      },
+      include: {
+        vendor: {
+          select: {
+            id: true,
+            name: true,
+            subtitle: true,
+            category: true,
+            imageUrl: true,
+            promoLabel: true,
+            distanceLabel: true,
+            workingHoursLabel: true,
+            pickupPoints: {
+              where: { isActive: true },
+              orderBy: { createdAt: 'asc' },
+              select: {
+                id: true,
+                label: true,
+                address: true,
+              },
+            },
+            inventory: {
+              include: {
+                product: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    const selectedProductIds = Array.from(
+      new Set(campaigns.flatMap((campaign) => this.toJsonStringArray(campaign.productIds))),
+    );
+    if (selectedProductIds.length === 0) {
+      return [];
+    }
+
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: selectedProductIds } },
+      select: {
+        id: true,
+        vendorId: true,
+        title: true,
+        description: true,
+        imageUrl: true,
+        displaySubtitle: true,
+        displayBadge: true,
+        unitPrice: true,
+        catalogSection: {
+          select: {
+            label: true,
+          },
+        },
+      },
+    });
+    const productById = new Map(products.map((product) => [product.id, product]));
+
+    return campaigns.flatMap((campaign, campaignIndex) => {
+      const vendor = campaign.vendor;
+      const pickupPoint = vendor.pickupPoints[0];
+      return this.toJsonStringArray(campaign.productIds).flatMap((productId, productIndex) => {
+        const product = productById.get(productId);
+        if (!product || product.vendorId !== campaign.vendorId) {
+          return [];
+        }
+
+        const originalPrice = Number(product.unitPrice);
+        const discountedPrice =
+          campaign.discountedPrice != null
+            ? Number(campaign.discountedPrice)
+            : campaign.discountPercent != null
+              ? Number((originalPrice * (1 - campaign.discountPercent / 100)).toFixed(2))
+              : originalPrice;
+        const discountPercent =
+          campaign.discountPercent != null
+            ? campaign.discountPercent
+            : originalPrice > 0
+              ? Math.max(0, Math.round((1 - discountedPrice / originalPrice) * 100))
+              : 0;
+        const remainingMinutes = campaign.endsAt
+          ? Math.max(
+              5,
+              Math.round((campaign.endsAt.getTime() - Date.now()) / (1000 * 60)),
+            )
+          : 60;
+
+        return [
+          {
+            id: `campaign:${campaign.id}:${product.id}`,
+            productId: product.id,
+            vendorId: vendor.id,
+            vendorName: vendor.name,
+            vendorSubtitle: vendor.subtitle ?? vendor.category,
+            title: product.title,
+            subtitle:
+              campaign.scheduleLabel ??
+              product.displaySubtitle ??
+              `${vendor.name} happy hour kampanyasi`,
+            description:
+              campaign.description ??
+              product.description ??
+              `${vendor.name} icin ozel happy hour firsati.`,
+            imageUrl:
+              product.imageUrl ??
+              vendor.imageUrl ??
+              'https://images.unsplash.com/photo-1561758033-d89a9ad46330?auto=format&fit=crop&w=1200&q=80',
+            badge:
+              campaign.badgeLabel ??
+              product.displayBadge ??
+              vendor.promoLabel ??
+              'Happy Hour',
+            discountedPrice,
+            discountedPriceText: `${discountedPrice.toFixed(0)} TL`,
+            originalPrice,
+            originalPriceText: `${originalPrice.toFixed(0)} TL`,
+            discountPercent,
+            expiresInMinutes: remainingMinutes,
+            rewardPoints: 30 + campaignIndex * 10 + productIndex * 5,
+            claimCount: 10 + campaignIndex * 6 + productIndex * 3,
+            locationTitle: pickupPoint?.label ?? `${vendor.name} teslim noktasi`,
+            locationSubtitle:
+              pickupPoint?.address ??
+              `${vendor.distanceLabel ?? '1.2 km'} • ${vendor.workingHoursLabel ?? '09:00-23:00'}`,
+            sectionLabel: product.catalogSection?.label ?? 'Kampanya',
+            stockStatus: this.toStockStatusPayloadForProduct(product.id, vendor.inventory),
+          },
+        ];
+      });
+    });
   }
 
   private toStockStatusPayloadForProduct(

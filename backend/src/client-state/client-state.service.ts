@@ -7,9 +7,7 @@ export class ClientStateService {
   private session: JsonObject | null = null;
   private registrationDraft: JsonObject | null = null;
   private passwordResetEmail: string | null = null;
-  private readonly accountPasswords = new Map<string, string>([
-    ['bayram@example.com', 'password123'],
-  ]);
+  private readonly accountPasswords = new Map<string, string>();
   private readonly commerceSnapshots = new Map<string, JsonObject>();
 
   readSession() {

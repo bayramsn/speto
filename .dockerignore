@@ -1,0 +1,16 @@
+**/.dart_tool
+**/.DS_Store
+**/.env
+**/.flutter-plugins-dependencies
+**/.pub
+**/.pub-cache
+**/build
+**/coverage
+**/dist
+**/node_modules
+.claude
+.git
+.playwright-cli
+android/app/debug
+android/app/profile
+android/app/release
