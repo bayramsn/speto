@@ -86,6 +86,26 @@ enum CampaignStatus {
   COMPLETED
 }
 
+enum VendorApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum AdminNotificationStatus {
+  DRAFT
+  SCHEDULED
+  SENT
+}
+
+enum AdminNotificationAudience {
+  ALL_USERS
+  ALL_BUSINESSES
+  ALL_VENDORS
+  CUSTOM
+}
+
 enum ContentBlockType {
   HOME_HERO
   QUICK_FILTER
@@ -100,6 +120,11 @@ model User {
   phone                      String?
   role                       Role                @default(CUSTOMER)
   vendorId                   String?
+  isSuspended                Boolean             @default(false)
+  suspendedReason            String?
+  isBanned                   Boolean             @default(false)
+  bannedReason               String?
+  lastLoginAt                DateTime?
   studentVerifiedAt          DateTime?
   termsAcceptedAt            DateTime?
   privacyAcceptedAt          DateTime?
@@ -118,6 +143,10 @@ model User {
   walletEntries              WalletLedgerEntry[]
   supportTickets             SupportTicket[]
   refreshSessions            RefreshSession[]
+  adminRefreshSessions       AdminRefreshSession[]
+  adminAuditLogs             AdminAuditLog[]
+  createdNotifications       AdminNotification[]
+  updatedSettings            PlatformSetting[]
   vendor                     Vendor?             @relation("VendorOperators", fields: [vendorId], references: [id])
 }
 
@@ -184,6 +213,8 @@ model Vendor {
   studentFriendly   Boolean                 @default(false)
   isFeatured        Boolean                 @default(false)
   isActive          Boolean                 @default(true)
+  approvalStatus    VendorApprovalStatus    @default(APPROVED)
+  suspendedReason   String?
   createdAt         DateTime                @default(now())
   updatedAt         DateTime                @default(now()) @updatedAt
   pickupPoints      PickupPoint[]
@@ -436,6 +467,59 @@ model RefreshSession {
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+model AdminRefreshSession {
+  id          String   @id @default(cuid())
+  adminUserId String
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime?
+  adminUser   User     @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId, createdAt])
+}
+
+model AdminAuditLog {
+  id          String   @id @default(cuid())
+  adminUserId String
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  adminUser   User     @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId, createdAt])
+  @@index([entityType, createdAt])
+}
+
+model PlatformSetting {
+  id               String   @id @default(cuid())
+  key              String   @unique
+  value            Json
+  updatedAt        DateTime @updatedAt
+  updatedByAdminId String?
+  updatedByAdmin   User?    @relation(fields: [updatedByAdminId], references: [id], onDelete: SetNull)
+}
+
+model AdminNotification {
+  id               String                    @id @default(cuid())
+  title            String
+  body             String
+  audience         AdminNotificationAudience @default(ALL_USERS)
+  status           AdminNotificationStatus   @default(DRAFT)
+  scheduledAt      DateTime?
+  sentAt           DateTime?
+  payload          Json?
+  createdByAdminId String
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  createdByAdmin   User                      @relation(fields: [createdByAdminId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
 }
 
 model InventoryStock {

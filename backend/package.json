@@ -5,6 +5,9 @@
   "description": "Pickup-only backend for Speto",
   "scripts": {
     "build": "nest build",
+    "admin:build": "tsc -p admin_backend/tsconfig.build.json",
+    "admin:start": "node admin_backend/dist/main.js",
+    "admin:start:dev": "ts-node --project admin_backend/tsconfig.json admin_backend/src/main.ts",
     "start": "node dist/main",
     "start:dev": "nest start --watch",
     "lint": "eslint \"src/**/*.ts\"",

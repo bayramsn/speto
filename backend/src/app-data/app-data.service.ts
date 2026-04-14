@@ -683,8 +683,8 @@ const DEMO_USERS = [
   },
   {
     id: 'usr_vendor_001',
-    email: 'burger@speto.app',
-    password: 'vendor123',
+    email: 'restoran@sepetpro.app',
+    password: 'Restoran123!',
     displayName: 'Burger Yiyelim Operasyon',
     phone: '+90 555 010 20 30',
     role: PrismaRole.VENDOR,
@@ -695,8 +695,8 @@ const DEMO_USERS = [
   },
   {
     id: 'usr_vendor_002',
-    email: 'market@speto.app',
-    password: 'vendor123',
+    email: 'market@sepetpro.app',
+    password: 'Market123!',
     displayName: 'Migros Jet Operasyon',
     phone: '+90 555 040 50 60',
     role: PrismaRole.VENDOR,
@@ -704,6 +704,18 @@ const DEMO_USERS = [
     studentVerifiedAt: null,
     notificationsEnabled: true,
     avatarUrl: 'https://i.pravatar.cc/150?img=28',
+  },
+  {
+    id: 'usr_vendor_003',
+    email: 'kafe@sepetpro.app',
+    password: 'Kafe123!',
+    displayName: 'Kampüs Kafe Operasyon',
+    phone: '+90 555 070 80 90',
+    role: PrismaRole.VENDOR,
+    vendorId: 'vendor-kampus-kafe',
+    studentVerifiedAt: null,
+    notificationsEnabled: true,
+    avatarUrl: 'https://i.pravatar.cc/150?img=44',
   },
 ] as const;
 
@@ -790,27 +802,903 @@ const DEMO_ORDERS = [
     ],
   },
   {
-    id: 'ord_demo_000',
+    id: 'ord_demo_002',
     userId: 'usr_customer_001',
-    vendorId: 'vendor-pizza-bulls',
-    pickupPointId: 'pickup-pizza-bulls',
-    status: PrismaOrderStatus.COMPLETED,
-    pickupCode: 'PZ88',
-    etaLabel: 'Tamamlandı',
-    subtotal: 219,
-    discountAmount: 10,
-    totalAmount: 209,
-    promoCode: 'KAMPUS10',
+    vendorId: 'vendor-migros-jet',
+    pickupPointId: 'pickup-migros-jet',
+    status: PrismaOrderStatus.READY,
+    pickupCode: 'MG24',
+    etaLabel: 'Hazır',
+    subtotal: 157,
+    discountAmount: 12,
+    totalAmount: 145,
+    promoCode: 'JET12',
     paymentMethodId: 'pm_demo_001',
-    createdAt: new Date('2026-10-23T21:10:00+03:00'),
+    createdAt: new Date('2026-10-24T16:55:00+03:00'),
     items: [
       {
-        id: 'ord_demo_000_item_1',
-        productId: 'product-restaurant-pizza-bulls-pepperoni-pizza',
-        title: 'Pepperoni Pizza',
+        id: 'ord_demo_002_item_1',
+        productId: 'market-product-migros-jet-gunluk-sut',
+        title: 'Günlük Süt',
         quantity: 1,
-        unitPrice: 219,
+        unitPrice: 36,
       },
+      {
+        id: 'ord_demo_002_item_2',
+        productId: 'market-product-migros-jet-yumurta',
+        title: 'Yumurta',
+        quantity: 1,
+        unitPrice: 84,
+      },
+      {
+        id: 'ord_demo_002_item_3',
+        productId: 'market-product-migros-jet-paket-ekmek-tam-bugday-cavdar',
+        title: 'Paket Ekmek (Tam buğday/Çavdar)',
+        quantity: 1,
+        unitPrice: 32,
+      },
+    ],
+  },
+  {
+    id: 'ord_demo_003',
+    userId: 'usr_customer_001',
+    vendorId: 'vendor-kampus-kafe',
+    pickupPointId: 'pickup-kampus-kafe',
+    status: PrismaOrderStatus.ACCEPTED,
+    pickupCode: 'KF18',
+    etaLabel: '9 dk',
+    subtotal: 250,
+    discountAmount: 20,
+    totalAmount: 230,
+    promoCode: 'KAFE20',
+    paymentMethodId: 'pm_demo_001',
+    createdAt: new Date('2026-10-24T15:40:00+03:00'),
+    items: [
+      {
+        id: 'ord_demo_003_item_1',
+        productId: 'market-product-kampus-kafe-flat-white',
+        title: 'Flat White',
+        quantity: 1,
+        unitPrice: 95,
+      },
+      {
+        id: 'ord_demo_003_item_2',
+        productId: 'market-product-kampus-kafe-croissant-sandvic',
+        title: 'Tereyağlı Kruvasan Sandviç',
+        quantity: 1,
+        unitPrice: 135,
+      },
+    ],
+  },
+  {
+    id: 'ord_demo_004',
+    userId: 'usr_customer_001',
+    vendorId: 'vendor-burger-yiyelim',
+    pickupPointId: 'pickup-burger-yiyelim',
+    status: PrismaOrderStatus.COMPLETED,
+    pickupCode: 'BK77',
+    etaLabel: 'Tamamlandı',
+    subtotal: 268,
+    discountAmount: 19,
+    totalAmount: 249,
+    promoCode: 'AKSAM19',
+    paymentMethodId: 'pm_demo_001',
+    createdAt: new Date('2026-10-23T20:35:00+03:00'),
+    items: [
+      {
+        id: 'ord_demo_004_item_1',
+        productId: 'product-restaurant-burger-yiyelim-steakhouse-burger',
+        title: 'Steakhouse Burger',
+        quantity: 1,
+        unitPrice: 189,
+      },
+      {
+        id: 'ord_demo_004_item_2',
+        productId: 'product-restaurant-burger-yiyelim-cheddar-patates',
+        title: 'Cheddar Patates',
+        quantity: 1,
+        unitPrice: 79,
+      },
+    ],
+  },
+  {
+    id: 'ord_demo_005',
+    userId: 'usr_customer_001',
+    vendorId: 'vendor-migros-jet',
+    pickupPointId: 'pickup-migros-jet',
+    status: PrismaOrderStatus.COMPLETED,
+    pickupCode: 'MG52',
+    etaLabel: 'Tamamlandı',
+    subtotal: 196,
+    discountAmount: 11,
+    totalAmount: 185,
+    promoCode: 'SEPET11',
+    paymentMethodId: 'pm_demo_001',
+    createdAt: new Date('2026-10-22T18:15:00+03:00'),
+    items: [
+      {
+        id: 'ord_demo_005_item_1',
+        productId: 'market-product-migros-jet-paketli-humus',
+        title: 'Paketli Humus',
+        quantity: 1,
+        unitPrice: 44,
+      },
+      {
+        id: 'ord_demo_005_item_2',
+        productId: 'market-product-migros-jet-soguk-sandvic-ucgen-paket',
+        title: 'Soğuk Sandviç (Üçgen paket)',
+        quantity: 1,
+        unitPrice: 47,
+      },
+      {
+        id: 'ord_demo_005_item_3',
+        productId: 'market-product-migros-jet-cilek',
+        title: 'Çilek',
+        quantity: 1,
+        unitPrice: 59,
+      },
+      {
+        id: 'ord_demo_005_item_4',
+        productId: 'market-product-migros-jet-ayran',
+        title: 'Ayran',
+        quantity: 1,
+        unitPrice: 18,
+      },
+      {
+        id: 'ord_demo_005_item_5',
+        productId: 'market-product-migros-jet-paket-simit',
+        title: 'Paket Simit',
+        quantity: 1,
+        unitPrice: 29,
+      },
+    ],
+  },
+  {
+    id: 'ord_demo_006',
+    userId: 'usr_customer_001',
+    vendorId: 'vendor-kampus-kafe',
+    pickupPointId: 'pickup-kampus-kafe',
+    status: PrismaOrderStatus.COMPLETED,
+    pickupCode: 'KF61',
+    etaLabel: 'Tamamlandı',
+    subtotal: 272,
+    discountAmount: 22,
+    totalAmount: 250,
+    promoCode: 'DERS22',
+    paymentMethodId: 'pm_demo_001',
+    createdAt: new Date('2026-10-21T14:10:00+03:00'),
+    items: [
+      {
+        id: 'ord_demo_006_item_1',
+        productId: 'market-product-kampus-kafe-cold-brew',
+        title: 'Cold Brew',
+        quantity: 1,
+        unitPrice: 105,
+      },
+      {
+        id: 'ord_demo_006_item_2',
+        productId: 'market-product-kampus-kafe-san-sebastian',
+        title: 'San Sebastian Cheesecake',
+        quantity: 1,
+        unitPrice: 145,
+      },
+    ],
+  },
+] as const;
+
+const DEMO_BURGER_SHOWCASE_SECTIONS = [
+  {
+    id: 'section-restaurant-burger-yiyelim-wrapler',
+    key: 'wrapler',
+    label: 'Wrapler',
+    displayOrder: 5,
+    products: [
+      {
+        id: 'product-restaurant-burger-yiyelim-crispy-chicken-wrap',
+        title: 'Crispy Chicken Wrap',
+        description: 'Çıtır tavuk, cheddar ve ranch sos ile hazırlanan kampüs boy wrap.',
+        unitPrice: 159,
+        image:
+          'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 1,
+      },
+      {
+        id: 'product-restaurant-burger-yiyelim-smoked-bbq-wrap',
+        title: 'Smoked BBQ Wrap',
+        description: 'Füme et, barbekü sos ve taze slaw ile sarılır.',
+        unitPrice: 169,
+        image:
+          'https://images.unsplash.com/photo-1530469912745-a215c6b256ea?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 2,
+      },
+      {
+        id: 'product-restaurant-burger-yiyelim-mexican-beef-wrap',
+        title: 'Mexican Beef Wrap',
+        description: 'Dana jülyen, jalapeno ve acı mayo ile hızlı öğün seçeneği.',
+        unitPrice: 175,
+        image:
+          'https://images.unsplash.com/photo-1626700051175-6818013e1d4f?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 3,
+      },
+      {
+        id: 'product-restaurant-burger-yiyelim-halloumi-wrap',
+        title: 'Halloumi Wrap',
+        description: 'Izgara hellim, köz biber ve roka ile vejetaryen alternatif.',
+        unitPrice: 149,
+        image:
+          'https://images.unsplash.com/photo-1511690078903-71dc5a49f5e3?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 4,
+      },
+    ],
+  },
+  {
+    id: 'section-restaurant-burger-yiyelim-tatlilar',
+    key: 'tatlilar',
+    label: 'Tatlılar',
+    displayOrder: 6,
+    products: [
+      {
+        id: 'product-restaurant-burger-yiyelim-lotus-cheesecake',
+        title: 'Lotus Cheesecake',
+        description: 'Bisküvi tabanı ve lotus kreması ile soğuk servis edilir.',
+        unitPrice: 115,
+        image:
+          'https://images.unsplash.com/photo-1533134242443-d4fd215305ad?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 1,
+      },
+      {
+        id: 'product-restaurant-burger-yiyelim-double-choco-cookie',
+        title: 'Double Choco Cookie',
+        description: 'Sıcak servis edilen yoğun çikolatalı cookie.',
+        unitPrice: 72,
+        image:
+          'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 2,
+      },
+      {
+        id: 'product-restaurant-burger-yiyelim-salted-caramel-brownie',
+        title: 'Salted Caramel Brownie',
+        description: 'Tuzlu karamel soslu yumuşak brownie dilimi.',
+        unitPrice: 89,
+        image:
+          'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 3,
+      },
+      {
+        id: 'product-restaurant-burger-yiyelim-vanilyali-milkshake',
+        title: 'Vanilyalı Milkshake',
+        description: 'Yoğun vanilya aromalı kalın kıvamlı milkshake.',
+        unitPrice: 96,
+        image:
+          'https://images.unsplash.com/photo-1579954115563-e72bf1381629?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 4,
+      },
+    ],
+  },
+  {
+    id: 'section-restaurant-burger-yiyelim-sos-ve-mini',
+    key: 'sos-ve-mini',
+    label: 'Sos & Mini',
+    displayOrder: 7,
+    products: [
+      {
+        id: 'product-restaurant-burger-yiyelim-truffle-mayo-dip',
+        title: 'Truffle Mayo Dip',
+        description: 'Trüf aromalı mayonez ile premium dip sos.',
+        unitPrice: 32,
+        image:
+          'https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 1,
+      },
+      {
+        id: 'product-restaurant-burger-yiyelim-buffalo-sauce-cup',
+        title: 'Buffalo Sos Cup',
+        description: 'Acı severler için tek kullanımlık buffalo sos.',
+        unitPrice: 28,
+        image:
+          'https://images.unsplash.com/photo-1473093226795-af9932fe5856?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 2,
+      },
+      {
+        id: 'product-restaurant-burger-yiyelim-cajun-patates',
+        title: 'Cajun Patates',
+        description: 'Baharatlı cajun kaplaması ile çıtır patates.',
+        unitPrice: 84,
+        image:
+          'https://images.unsplash.com/photo-1630384060421-cb20d0e0649d?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 3,
+      },
+      {
+        id: 'product-restaurant-burger-yiyelim-mini-nugget-box',
+        title: 'Mini Nugget Box',
+        description: '6 parça nugget ve iki dip sos eşliğinde gelir.',
+        unitPrice: 94,
+        image:
+          'https://images.unsplash.com/photo-1562967914-608f82629710?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 4,
+      },
+    ],
+  },
+] as const;
+
+const DEMO_CAFE_VENDOR = {
+  id: 'vendor-kampus-kafe',
+  storefrontId: 'kampus-kafe',
+  storefrontType: PrismaStorefrontType.MARKET,
+  name: 'Kampüs Kafe',
+  slug: 'kampus-kafe',
+  category: 'Kafe',
+  subtitle: 'Kahve, tatlı ve hızlı kampüs molası',
+  metaLabel: 'Happy Hour • 9 dk hazır',
+  imageUrl:
+    'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&w=1200&q=80',
+  badge: 'Kafe',
+  rewardLabel: 'Happy Hour',
+  promoLabel: 'Kahve ve tatlı molası',
+  ratingValue: 4.9,
+  distanceLabel: '0.2 km',
+  etaMin: 7,
+  etaMax: 10,
+  workingHoursLabel: '07:30-00:00',
+  reviewCountLabel: '164',
+  announcement: 'Kahve ve soğuk dolap ürünleri sipariş anına göre hazırlanır.',
+  bundleTitle: 'Ders Arası Kafe Paketi',
+  bundleDescription: 'Kahve, tatlı ve sandviçten oluşan hızlı kampüs menüsü.',
+  bundlePrice: '189 TL',
+  heroTitle: 'Kampüs Kafe ile ders arasında kısa mola ver',
+  heroSubtitle: 'Kahve, sandviç ve tatlılar hazır olduğunda mağazadan teslim alınır.',
+  displayOrder: 102,
+  studentFriendly: true,
+  isFeatured: true,
+  isActive: true,
+  pickupPointId: 'pickup-kampus-kafe',
+} as const;
+
+const DEMO_CAFE_HIGHLIGHTS = [
+  {
+    id: 'highlight-kampus-kafe-1',
+    label: 'Barista kahveler',
+    icon: 'local_cafe_outlined',
+    displayOrder: 1,
+  },
+  {
+    id: 'highlight-kampus-kafe-2',
+    label: 'Tatlı vitrini',
+    icon: 'cake_outlined',
+    displayOrder: 2,
+  },
+  {
+    id: 'highlight-kampus-kafe-3',
+    label: 'Ders arası hızlı al',
+    icon: 'bolt_rounded',
+    displayOrder: 3,
+  },
+] as const;
+
+const DEMO_CAFE_SECTIONS = [
+  {
+    id: 'section-kampus-kafe-kahveler',
+    key: 'kahveler',
+    label: 'Kahveler',
+    displayOrder: 1,
+    products: [
+      {
+        id: 'market-product-kampus-kafe-flat-white',
+        title: 'Flat White',
+        description: 'Çift shot espresso ve mikro köpüklü süt ile hazırlanır.',
+        unitPrice: 95,
+        image:
+          'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 1,
+      },
+      {
+        id: 'market-product-kampus-kafe-cortado',
+        title: 'Cortado',
+        description: 'Dengeli espresso ve süt oranıyla küçük hacimli kahve.',
+        unitPrice: 88,
+        image:
+          'https://images.unsplash.com/photo-1517701604599-bb29b565090c?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 2,
+      },
+      {
+        id: 'market-product-kampus-kafe-filter-kahve',
+        title: 'Filtre Kahve',
+        description: 'Günün çekirdek seçimi ile yavaş demleme filtre kahve.',
+        unitPrice: 82,
+        image:
+          'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 3,
+      },
+      {
+        id: 'market-product-kampus-kafe-mocha',
+        title: 'Mocha',
+        description: 'Espresso, süt ve bitter çikolata ile tatlı kahve deneyimi.',
+        unitPrice: 108,
+        image:
+          'https://images.unsplash.com/photo-1572442388796-11668a67e53d?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 4,
+      },
+    ],
+  },
+  {
+    id: 'section-kampus-kafe-soguk-icecekler',
+    key: 'soguk-icecekler',
+    label: 'Soğuk İçecekler',
+    displayOrder: 2,
+    products: [
+      {
+        id: 'market-product-kampus-kafe-iced-latte',
+        title: 'Iced Latte',
+        description: 'Buz üzerinde çift shot latte ve hafif vanilya notası.',
+        unitPrice: 98,
+        image:
+          'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 1,
+      },
+      {
+        id: 'market-product-kampus-kafe-berry-lemonade',
+        title: 'Berry Lemonade',
+        description: 'Yaban mersini ve limon ile hazırlanan ferahlatıcı içecek.',
+        unitPrice: 86,
+        image:
+          'https://images.unsplash.com/photo-1497534446932-c925b458314e?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 2,
+      },
+      {
+        id: 'market-product-kampus-kafe-matcha-tonic',
+        title: 'Matcha Tonic',
+        description: 'Soda ve matcha ile canlı asiditeli soğuk içecek.',
+        unitPrice: 112,
+        image:
+          'https://images.unsplash.com/photo-1515823064-d6e0c04616a7?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 3,
+      },
+      {
+        id: 'market-product-kampus-kafe-cold-brew',
+        title: 'Cold Brew',
+        description: '14 saat soğuk demleme ile yoğun ama yumuşak içim.',
+        unitPrice: 105,
+        image:
+          'https://images.unsplash.com/photo-1517701550927-30cf4ba1fdf2?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 4,
+      },
+    ],
+  },
+  {
+    id: 'section-kampus-kafe-sandvicler',
+    key: 'sandvicler',
+    label: 'Sandviçler',
+    displayOrder: 3,
+    products: [
+      {
+        id: 'market-product-kampus-kafe-croissant-sandvic',
+        title: 'Tereyağlı Kruvasan Sandviç',
+        description: 'Hindi füme, cheddar ve roka ile hazırlanır.',
+        unitPrice: 135,
+        image:
+          'https://images.unsplash.com/photo-1555507036-ab794f575c59?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 1,
+      },
+      {
+        id: 'market-product-kampus-kafe-avocado-bagel',
+        title: 'Avokadolu Bagel',
+        description: 'Labne, avokado ve limon kabuğu ile hafif seçenek.',
+        unitPrice: 142,
+        image:
+          'https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 2,
+      },
+      {
+        id: 'market-product-kampus-kafe-mozzarella-focaccia',
+        title: 'Mozzarella Focaccia',
+        description: 'Mozzarella, pesto ve kurutulmuş domates dolgulu focaccia.',
+        unitPrice: 148,
+        image:
+          'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 3,
+      },
+      {
+        id: 'market-product-kampus-kafe-tavuklu-wrap',
+        title: 'Tavuklu Wrap',
+        description: 'Izgara tavuk, iceberg ve ballı hardal sos ile sarılır.',
+        unitPrice: 154,
+        image:
+          'https://images.unsplash.com/photo-1626700051175-6818013e1d4f?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 4,
+      },
+    ],
+  },
+  {
+    id: 'section-kampus-kafe-tatlilar',
+    key: 'tatlilar',
+    label: 'Tatlılar',
+    displayOrder: 4,
+    products: [
+      {
+        id: 'market-product-kampus-kafe-san-sebastian',
+        title: 'San Sebastian Cheesecake',
+        description: 'Kremamsı dokulu ve sıcak çikolata soslu servis edilir.',
+        unitPrice: 145,
+        image:
+          'https://images.unsplash.com/photo-1533134242443-d4fd215305ad?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 1,
+      },
+      {
+        id: 'market-product-kampus-kafe-frambuazli-cheesecake',
+        title: 'Frambuazlı Cheesecake',
+        description: 'Hafif ekşi meyve sosuyla serin tatlı alternatifi.',
+        unitPrice: 138,
+        image:
+          'https://images.unsplash.com/photo-1488477181946-6428a0291777?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 2,
+      },
+      {
+        id: 'market-product-kampus-kafe-cookie',
+        title: 'Büyük Boy Cookie',
+        description: 'Yoğun bitter damla çikolatalı günlük kurabiye.',
+        unitPrice: 68,
+        image:
+          'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 3,
+      },
+      {
+        id: 'market-product-kampus-kafe-tiramisu-bardak',
+        title: 'Tiramisu Bardak',
+        description: 'Mascarpone kremalı tek porsiyon tiramisu.',
+        unitPrice: 129,
+        image:
+          'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 4,
+      },
+    ],
+  },
+  {
+    id: 'section-kampus-kafe-atistirmaliklar',
+    key: 'atistirmaliklar',
+    label: 'Atıştırmalıklar',
+    displayOrder: 5,
+    products: [
+      {
+        id: 'market-product-kampus-kafe-granola-bowl',
+        title: 'Granola Bowl',
+        description: 'Yoğurt, bal ve kırmızı meyve granolası ile gelir.',
+        unitPrice: 118,
+        image:
+          'https://images.unsplash.com/photo-1514996937319-344454492b37?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 1,
+      },
+      {
+        id: 'market-product-kampus-kafe-protein-bar',
+        title: 'Protein Bar',
+        description: 'Yulaf, fındık ve bitter çikolata ile hazırlanan bar.',
+        unitPrice: 54,
+        image:
+          'https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 2,
+      },
+      {
+        id: 'market-product-kampus-kafe-meyve-kasesi',
+        title: 'Meyve Kasesi',
+        description: 'Çilek, muz ve kivi ile günlük hazırlanır.',
+        unitPrice: 92,
+        image:
+          'https://images.unsplash.com/photo-1490474418585-ba9bad8fd0ea?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 3,
+      },
+      {
+        id: 'market-product-kampus-kafe-mini-quiche',
+        title: 'Mini Quiche',
+        description: 'Peynirli ve ıspanaklı tek porsiyon sıcak atıştırmalık.',
+        unitPrice: 88,
+        image:
+          'https://images.unsplash.com/photo-1565895405138-6c3a1555da6a?auto=format&fit=crop&w=1200&q=80',
+        displayOrder: 4,
+      },
+    ],
+  },
+] as const;
+
+const DEMO_VENDOR_BANK_ACCOUNTS = [
+  {
+    id: 'bank_demo_restaurant_001',
+    vendorId: 'vendor-burger-yiyelim',
+    holderName: 'Burger Yiyelim Gıda Ltd. Şti.',
+    bankName: 'Yapi Kredi',
+    iban: 'TR930006700000000001234501',
+    isDefault: true,
+  },
+  {
+    id: 'bank_demo_market_001',
+    vendorId: 'vendor-migros-jet',
+    holderName: 'Migros Jet Mahalle Hizmetleri A.Ş.',
+    bankName: 'Garanti BBVA',
+    iban: 'TR240006200000000004567890',
+    isDefault: true,
+  },
+  {
+    id: 'bank_demo_cafe_001',
+    vendorId: 'vendor-kampus-kafe',
+    holderName: 'Kampus Kafe Gida ve Hizmetler Ltd. Şti.',
+    bankName: 'Akbank',
+    iban: 'TR750004600000000007654321',
+    isDefault: true,
+  },
+] as const;
+
+const DEMO_VENDOR_PAYOUTS = [
+  {
+    id: 'payout_demo_restaurant_001',
+    vendorId: 'vendor-burger-yiyelim',
+    bankAccountId: 'bank_demo_restaurant_001',
+    amount: 120,
+    status: PrismaPayoutStatus.PAID,
+    note: 'Gün sonu aktarımı',
+    requestedAt: new Date('2026-10-23T23:30:00+03:00'),
+    completedAt: new Date('2026-10-24T00:10:00+03:00'),
+  },
+  {
+    id: 'payout_demo_market_001',
+    vendorId: 'vendor-migros-jet',
+    bankAccountId: 'bank_demo_market_001',
+    amount: 140,
+    status: PrismaPayoutStatus.PAID,
+    note: 'Günlük ciro aktarımı',
+    requestedAt: new Date('2026-10-22T22:45:00+03:00'),
+    completedAt: new Date('2026-10-22T23:15:00+03:00'),
+  },
+  {
+    id: 'payout_demo_cafe_001',
+    vendorId: 'vendor-kampus-kafe',
+    bankAccountId: 'bank_demo_cafe_001',
+    amount: 90,
+    status: PrismaPayoutStatus.PAID,
+    note: 'Öğle servisi kapanışı',
+    requestedAt: new Date('2026-10-21T18:10:00+03:00'),
+    completedAt: new Date('2026-10-21T18:40:00+03:00'),
+  },
+] as const;
+
+const DEMO_VENDOR_CAMPAIGNS = [
+  {
+    id: 'campaign-demo-burger-1',
+    vendorId: 'vendor-burger-yiyelim',
+    kind: PrismaCampaignKind.HAPPY_HOUR,
+    status: PrismaCampaignStatus.ACTIVE,
+    title: 'Öğle Molası Burger Menüleri',
+    description: 'Öğle arasında hızlı hazırlanıp teslim alınan burger seçkisi.',
+    scheduleLabel: '11:30 - 14:00',
+    badgeLabel: 'Öğle Menüsü',
+    discountPercent: 18,
+    discountedPrice: null as number | null,
+    productIds: [
+      'product-restaurant-burger-yiyelim-double-whopper-menu',
+      'product-restaurant-burger-yiyelim-steakhouse-burger',
+    ],
+  },
+  {
+    id: 'campaign-demo-burger-2',
+    vendorId: 'vendor-burger-yiyelim',
+    kind: PrismaCampaignKind.HAPPY_HOUR,
+    status: PrismaCampaignStatus.ACTIVE,
+    title: 'Wrap Hattı Kısa Süreli Fırsat',
+    description: 'Ders çıkışında hızlı alınacak wrap ve mini nugget paketi.',
+    scheduleLabel: '14:00 - 16:00',
+    badgeLabel: 'Kampüs Hattı',
+    discountPercent: 20,
+    discountedPrice: null as number | null,
+    productIds: [
+      'product-restaurant-burger-yiyelim-crispy-chicken-wrap',
+      'product-restaurant-burger-yiyelim-mini-nugget-box',
+    ],
+  },
+  {
+    id: 'campaign-demo-burger-3',
+    vendorId: 'vendor-burger-yiyelim',
+    kind: PrismaCampaignKind.HAPPY_HOUR,
+    status: PrismaCampaignStatus.ACTIVE,
+    title: 'Patates ve Sos İkilisi',
+    description: 'Yan ürünleri tek sepette tamamlayan hızlı kampanya.',
+    scheduleLabel: '16:00 - 18:00',
+    badgeLabel: 'Yan Lezzet',
+    discountPercent: 22,
+    discountedPrice: null as number | null,
+    productIds: [
+      'product-restaurant-burger-yiyelim-cajun-patates',
+      'product-restaurant-burger-yiyelim-buffalo-sauce-cup',
+    ],
+  },
+  {
+    id: 'campaign-demo-burger-4',
+    vendorId: 'vendor-burger-yiyelim',
+    kind: PrismaCampaignKind.HAPPY_HOUR,
+    status: PrismaCampaignStatus.ACTIVE,
+    title: 'Tatlı Molası Menüleri',
+    description: 'Cheesecake ve milkshake ile akşamüstü için tatlı mola.',
+    scheduleLabel: '18:00 - 20:00',
+    badgeLabel: 'Tatlı Saat',
+    discountPercent: 17,
+    discountedPrice: null as number | null,
+    productIds: [
+      'product-restaurant-burger-yiyelim-lotus-cheesecake',
+      'product-restaurant-burger-yiyelim-vanilyali-milkshake',
+    ],
+  },
+  {
+    id: 'campaign-demo-burger-5',
+    vendorId: 'vendor-burger-yiyelim',
+    kind: PrismaCampaignKind.HAPPY_HOUR,
+    status: PrismaCampaignStatus.ACTIVE,
+    title: 'Gece Kapanış Fırsatı',
+    description: 'Kapanışa yakın saatlerde seçili wrap ve patateslerde avantaj.',
+    scheduleLabel: '20:00 - 22:30',
+    badgeLabel: 'Gece',
+    discountPercent: 24,
+    discountedPrice: null as number | null,
+    productIds: [
+      'product-restaurant-burger-yiyelim-mexican-beef-wrap',
+      'product-restaurant-burger-yiyelim-cheddar-patates',
+    ],
+  },
+  {
+    id: 'campaign-demo-market-1',
+    vendorId: 'vendor-migros-jet',
+    kind: PrismaCampaignKind.HAPPY_HOUR,
+    status: PrismaCampaignStatus.ACTIVE,
+    title: 'Kahvaltı Koşusu',
+    description: 'Süt, yumurta ve ekmekten oluşan sabah hazırlık paketi.',
+    scheduleLabel: '07:30 - 10:30',
+    badgeLabel: 'Sabah Hazır',
+    discountPercent: 15,
+    discountedPrice: null as number | null,
+    productIds: [
+      'market-product-migros-jet-gunluk-sut',
+      'market-product-migros-jet-yumurta',
+      'market-product-migros-jet-paket-ekmek-tam-bugday-cavdar',
+    ],
+  },
+  {
+    id: 'campaign-demo-market-2',
+    vendorId: 'vendor-migros-jet',
+    kind: PrismaCampaignKind.HAPPY_HOUR,
+    status: PrismaCampaignStatus.ACTIVE,
+    title: 'Fit Ara Öğün',
+    description: 'Kefir ve meyveyle hazırlanan hafif tüketim sepeti.',
+    scheduleLabel: '10:30 - 12:00',
+    badgeLabel: 'Fit',
+    discountPercent: 16,
+    discountedPrice: null as number | null,
+    productIds: [
+      'market-product-migros-jet-kefir',
+      'market-product-migros-jet-cilek',
+    ],
+  },
+  {
+    id: 'campaign-demo-market-3',
+    vendorId: 'vendor-migros-jet',
+    kind: PrismaCampaignKind.HAPPY_HOUR,
+    status: PrismaCampaignStatus.ACTIVE,
+    title: 'Hazır Atıştırmalık Sepeti',
+    description: 'Humus ve soğuk sandviç ile hızlı alınacak kampüs paketi.',
+    scheduleLabel: '12:00 - 15:00',
+    badgeLabel: 'Hazır Raf',
+    discountPercent: 19,
+    discountedPrice: null as number | null,
+    productIds: [
+      'market-product-migros-jet-paketli-humus',
+      'market-product-migros-jet-soguk-sandvic-ucgen-paket',
+    ],
+  },
+  {
+    id: 'campaign-demo-market-4',
+    vendorId: 'vendor-migros-jet',
+    kind: PrismaCampaignKind.HAPPY_HOUR,
+    status: PrismaCampaignStatus.ACTIVE,
+    title: 'Ders Arası Simit Ayran',
+    description: 'Kısa mola için hızlı teslim paket atıştırmalığı.',
+    scheduleLabel: '15:00 - 17:00',
+    badgeLabel: 'Ara Öğün',
+    discountPercent: 21,
+    discountedPrice: null as number | null,
+    productIds: [
+      'market-product-migros-jet-ayran',
+      'market-product-migros-jet-paket-simit',
+    ],
+  },
+  {
+    id: 'campaign-demo-market-5',
+    vendorId: 'vendor-migros-jet',
+    kind: PrismaCampaignKind.HAPPY_HOUR,
+    status: PrismaCampaignStatus.ACTIVE,
+    title: 'Taze Manav Kutusu',
+    description: 'Domates, salatalık ve çilekle günlük taze sebze-meyve kutusu.',
+    scheduleLabel: '17:00 - 20:00',
+    badgeLabel: 'Taze',
+    discountPercent: 14,
+    discountedPrice: null as number | null,
+    productIds: [
+      'market-product-migros-jet-domates-salkim',
+      'market-product-migros-jet-salatalik',
+      'market-product-migros-jet-cilek',
+    ],
+  },
+  {
+    id: 'campaign-demo-cafe-1',
+    vendorId: 'vendor-kampus-kafe',
+    kind: PrismaCampaignKind.HAPPY_HOUR,
+    status: PrismaCampaignStatus.ACTIVE,
+    title: 'Sabah Flat White Kulübü',
+    description: 'Sabah saatlerinde kahve ve kruvasan ile hızlı başlangıç paketi.',
+    scheduleLabel: '08:00 - 10:30',
+    badgeLabel: 'Sabah Kahvesi',
+    discountPercent: 18,
+    discountedPrice: null as number | null,
+    productIds: [
+      'market-product-kampus-kafe-flat-white',
+      'market-product-kampus-kafe-croissant-sandvic',
+    ],
+  },
+  {
+    id: 'campaign-demo-cafe-2',
+    vendorId: 'vendor-kampus-kafe',
+    kind: PrismaCampaignKind.HAPPY_HOUR,
+    status: PrismaCampaignStatus.ACTIVE,
+    title: 'Tatlı ve Cold Brew',
+    description: 'Soğuk demleme kahve ile cheesecake ikilisi.',
+    scheduleLabel: '10:30 - 13:00',
+    badgeLabel: 'Tatlı Molası',
+    discountPercent: 20,
+    discountedPrice: null as number | null,
+    productIds: [
+      'market-product-kampus-kafe-cold-brew',
+      'market-product-kampus-kafe-san-sebastian',
+    ],
+  },
+  {
+    id: 'campaign-demo-cafe-3',
+    vendorId: 'vendor-kampus-kafe',
+    kind: PrismaCampaignKind.HAPPY_HOUR,
+    status: PrismaCampaignStatus.ACTIVE,
+    title: 'Sınav Haftası Yakıtı',
+    description: 'Filtre kahve ve protein bar ile konsantrasyon paketi.',
+    scheduleLabel: '13:00 - 16:00',
+    badgeLabel: 'Sınav Haftası',
+    discountPercent: 16,
+    discountedPrice: null as number | null,
+    productIds: [
+      'market-product-kampus-kafe-filter-kahve',
+      'market-product-kampus-kafe-protein-bar',
+    ],
+  },
+  {
+    id: 'campaign-demo-cafe-4',
+    vendorId: 'vendor-kampus-kafe',
+    kind: PrismaCampaignKind.HAPPY_HOUR,
+    status: PrismaCampaignStatus.ACTIVE,
+    title: 'Fresh Campus Serisi',
+    description: 'Limonata ve meyve kasesi ile serin kampüs fırsatı.',
+    scheduleLabel: '16:00 - 18:00',
+    badgeLabel: 'Fresh',
+    discountPercent: 17,
+    discountedPrice: null as number | null,
+    productIds: [
+      'market-product-kampus-kafe-berry-lemonade',
+      'market-product-kampus-kafe-meyve-kasesi',
+    ],
+  },
+  {
+    id: 'campaign-demo-cafe-5',
+    vendorId: 'vendor-kampus-kafe',
+    kind: PrismaCampaignKind.HAPPY_HOUR,
+    status: PrismaCampaignStatus.ACTIVE,
+    title: 'Brunch Stop',
+    description: 'Bagel ve iced latte ile akşamüstü ders çıkışı molası.',
+    scheduleLabel: '18:00 - 21:00',
+    badgeLabel: 'Brunch',
+    discountPercent: 22,
+    discountedPrice: null as number | null,
+    productIds: [
+      'market-product-kampus-kafe-avocado-bagel',
+      'market-product-kampus-kafe-iced-latte',
     ],
   },
 ] as const;
@@ -1092,6 +1980,7 @@ export class AppDataService {
     if (!user || !(await this.verifyPassword(password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid email or password');
     }
+    this.assertAccountActive(user);
 
     return this.buildSessionResponse(user);
   }
@@ -1598,15 +2487,7 @@ export class AppDataService {
 
   async listHappyHourOffers() {
     await this.ensureInitialized();
-    const [vendors, campaignOffers] = await Promise.all([
-      this.prisma.vendor.findMany({
-        where: { isActive: true },
-        include: catalogVendorInclude,
-        orderBy: [{ isFeatured: 'desc' }, { displayOrder: 'asc' }, { name: 'asc' }],
-      }),
-      this.buildCampaignHappyHourOffers(),
-    ]);
-    return [...campaignOffers, ...this.buildHappyHourOffers(vendors)];
+    return this.buildCampaignHappyHourOffers();
   }
 
   async getHappyHourOfferDetail(offerId: string) {
@@ -2066,7 +2947,9 @@ export class AppDataService {
 
     let catalogSectionId =
       typeof payload['catalogSectionId'] === 'string' ? payload['catalogSectionId'].trim() : '';
-    if (!catalogSectionId) {
+    const hasSectionLabel =
+      typeof payload['sectionLabel'] === 'string' && payload['sectionLabel'].trim().length > 0;
+    if (!catalogSectionId && !hasSectionLabel) {
       catalogSectionId = vendor.sections[0]?.id ?? '';
     }
 
@@ -3454,6 +4337,8 @@ export class AppDataService {
           return;
         }
 
+        await this.seedShowcaseVendorCatalog(tx);
+
         for (const user of DEMO_USERS) {
           const passwordHash = await this.hashPassword(user.password);
           await tx.user.upsert({
@@ -3557,109 +4442,112 @@ export class AppDataService {
           });
         }
 
-      const burgerSkus = await tx.product.findMany({
-        where: {
-          vendorId: 'vendor-burger-yiyelim',
-          catalogSectionId: { not: null },
-          isVisibleInApp: true,
-        },
-        orderBy: { displayOrder: 'asc' },
-        select: { sku: true, externalCode: true },
-        take: 3,
-      });
-      const migrosSkus = await tx.product.findMany({
-        where: {
-          vendorId: 'vendor-migros-jet',
-          catalogSectionId: { not: null },
-          isVisibleInApp: true,
-        },
-        orderBy: { displayOrder: 'asc' },
-        select: { sku: true, externalCode: true },
-        take: 4,
-      });
+        await this.seedDemoVendorFinance(tx);
+        await this.seedDemoVendorCampaigns(tx);
 
-      const integrations = [
-        {
-          id: 'int-burger-001',
-          vendorId: 'vendor-burger-yiyelim',
-          name: 'Burger POS Bridge',
-          provider: 'Nebim POS',
-          type: PrismaIntegrationType.POS,
-          baseUrl: 'https://pos.burgeryiyelim.local',
-          locationId: 'loc-burger-yiyelim-pickup',
-          health: PrismaIntegrationHealth.HEALTHY,
-          skuMappings: Object.fromEntries(
-            burgerSkus.map((item) => [item.externalCode ?? item.sku, item.sku]),
-          ),
-          syncStatus: PrismaSyncRunStatus.SUCCESS,
-          processedCount: burgerSkus.length,
-          errorMessage: null as string | null,
-        },
-        {
-          id: 'int-market-001',
-          vendorId: 'vendor-migros-jet',
-          name: 'Migros Jet ERP Feed',
-          provider: 'Logo ERP',
-          type: PrismaIntegrationType.ERP,
-          baseUrl: 'https://erp.migrosjet.local',
-          locationId: 'loc-migros-jet-pickup',
-          health: PrismaIntegrationHealth.WARNING,
-          skuMappings: Object.fromEntries(
-            migrosSkus.map((item) => [item.externalCode ?? item.sku, item.sku]),
-          ),
-          syncStatus: PrismaSyncRunStatus.FAILED,
-          processedCount: Math.max(1, migrosSkus.length - 1),
-          errorMessage: 'Timeout during cold storage feed sync',
-        },
-      ];
-
-      for (const integration of integrations) {
-        await tx.integrationConnection.upsert({
-          where: { id: integration.id },
-          update: {
-            vendorId: integration.vendorId,
-            name: integration.name,
-            provider: integration.provider,
-            type: integration.type,
-            baseUrl: integration.baseUrl,
-            locationId: integration.locationId,
-            health: integration.health,
-            skuMappings: integration.skuMappings,
+        const burgerSkus = await tx.product.findMany({
+          where: {
+            vendorId: 'vendor-burger-yiyelim',
+            catalogSectionId: { not: null },
+            isVisibleInApp: true,
           },
-          create: {
-            id: integration.id,
-            vendorId: integration.vendorId,
-            name: integration.name,
-            provider: integration.provider,
-            type: integration.type,
-            baseUrl: integration.baseUrl,
-            locationId: integration.locationId,
-            health: integration.health,
-            skuMappings: integration.skuMappings,
+          orderBy: { displayOrder: 'asc' },
+          select: { sku: true, externalCode: true },
+          take: 3,
+        });
+        const migrosSkus = await tx.product.findMany({
+          where: {
+            vendorId: 'vendor-migros-jet',
+            catalogSectionId: { not: null },
+            isVisibleInApp: true,
           },
+          orderBy: { displayOrder: 'asc' },
+          select: { sku: true, externalCode: true },
+          take: 4,
         });
 
-        await tx.integrationSyncRun.upsert({
-          where: { id: `sync-${integration.id}` },
-          update: {
-            connectionId: integration.id,
-            status: integration.syncStatus,
-            processedCount: integration.processedCount,
-            errorMessage: integration.errorMessage,
-            startedAt: new Date('2026-04-09T10:45:00+03:00'),
-            completedAt: new Date('2026-04-09T10:46:00+03:00'),
+        const integrations = [
+          {
+            id: 'int-burger-001',
+            vendorId: 'vendor-burger-yiyelim',
+            name: 'Burger POS Bridge',
+            provider: 'Nebim POS',
+            type: PrismaIntegrationType.POS,
+            baseUrl: 'https://pos.burgeryiyelim.local',
+            locationId: 'loc-burger-yiyelim-pickup',
+            health: PrismaIntegrationHealth.HEALTHY,
+            skuMappings: Object.fromEntries(
+              burgerSkus.map((item) => [item.externalCode ?? item.sku, item.sku]),
+            ),
+            syncStatus: PrismaSyncRunStatus.SUCCESS,
+            processedCount: burgerSkus.length,
+            errorMessage: null as string | null,
           },
-          create: {
-            id: `sync-${integration.id}`,
-            connectionId: integration.id,
-            status: integration.syncStatus,
-            processedCount: integration.processedCount,
-            errorMessage: integration.errorMessage,
-            startedAt: new Date('2026-04-09T10:45:00+03:00'),
-            completedAt: new Date('2026-04-09T10:46:00+03:00'),
+          {
+            id: 'int-market-001',
+            vendorId: 'vendor-migros-jet',
+            name: 'Migros Jet ERP Feed',
+            provider: 'Logo ERP',
+            type: PrismaIntegrationType.ERP,
+            baseUrl: 'https://erp.migrosjet.local',
+            locationId: 'loc-migros-jet-pickup',
+            health: PrismaIntegrationHealth.WARNING,
+            skuMappings: Object.fromEntries(
+              migrosSkus.map((item) => [item.externalCode ?? item.sku, item.sku]),
+            ),
+            syncStatus: PrismaSyncRunStatus.FAILED,
+            processedCount: Math.max(1, migrosSkus.length - 1),
+            errorMessage: 'Timeout during cold storage feed sync',
           },
-        });
-      }
+        ];
+
+        for (const integration of integrations) {
+          await tx.integrationConnection.upsert({
+            where: { id: integration.id },
+            update: {
+              vendorId: integration.vendorId,
+              name: integration.name,
+              provider: integration.provider,
+              type: integration.type,
+              baseUrl: integration.baseUrl,
+              locationId: integration.locationId,
+              health: integration.health,
+              skuMappings: integration.skuMappings,
+            },
+            create: {
+              id: integration.id,
+              vendorId: integration.vendorId,
+              name: integration.name,
+              provider: integration.provider,
+              type: integration.type,
+              baseUrl: integration.baseUrl,
+              locationId: integration.locationId,
+              health: integration.health,
+              skuMappings: integration.skuMappings,
+            },
+          });
+
+          await tx.integrationSyncRun.upsert({
+            where: { id: `sync-${integration.id}` },
+            update: {
+              connectionId: integration.id,
+              status: integration.syncStatus,
+              processedCount: integration.processedCount,
+              errorMessage: integration.errorMessage,
+              startedAt: new Date('2026-04-09T10:45:00+03:00'),
+              completedAt: new Date('2026-04-09T10:46:00+03:00'),
+            },
+            create: {
+              id: `sync-${integration.id}`,
+              connectionId: integration.id,
+              status: integration.syncStatus,
+              processedCount: integration.processedCount,
+              errorMessage: integration.errorMessage,
+              startedAt: new Date('2026-04-09T10:45:00+03:00'),
+              completedAt: new Date('2026-04-09T10:46:00+03:00'),
+            },
+          });
+        }
       },
       {
         maxWait: 30_000,
@@ -4161,6 +5049,369 @@ export class AppDataService {
     }
   }
 
+  private async seedShowcaseVendorCatalog(tx: Prisma.TransactionClient) {
+    await tx.vendor.upsert({
+      where: { id: DEMO_CAFE_VENDOR.id },
+      update: {
+        name: DEMO_CAFE_VENDOR.name,
+        slug: DEMO_CAFE_VENDOR.slug,
+        category: DEMO_CAFE_VENDOR.category,
+        storefrontId: DEMO_CAFE_VENDOR.storefrontId,
+        storefrontType: DEMO_CAFE_VENDOR.storefrontType,
+        subtitle: DEMO_CAFE_VENDOR.subtitle,
+        metaLabel: DEMO_CAFE_VENDOR.metaLabel,
+        imageUrl: DEMO_CAFE_VENDOR.imageUrl,
+        badge: DEMO_CAFE_VENDOR.badge,
+        rewardLabel: DEMO_CAFE_VENDOR.rewardLabel,
+        promoLabel: DEMO_CAFE_VENDOR.promoLabel,
+        ratingValue: DEMO_CAFE_VENDOR.ratingValue,
+        distanceLabel: DEMO_CAFE_VENDOR.distanceLabel,
+        etaMin: DEMO_CAFE_VENDOR.etaMin,
+        etaMax: DEMO_CAFE_VENDOR.etaMax,
+        workingHoursLabel: DEMO_CAFE_VENDOR.workingHoursLabel,
+        reviewCountLabel: DEMO_CAFE_VENDOR.reviewCountLabel,
+        announcement: DEMO_CAFE_VENDOR.announcement,
+        bundleTitle: DEMO_CAFE_VENDOR.bundleTitle,
+        bundleDescription: DEMO_CAFE_VENDOR.bundleDescription,
+        bundlePrice: DEMO_CAFE_VENDOR.bundlePrice,
+        heroTitle: DEMO_CAFE_VENDOR.heroTitle,
+        heroSubtitle: DEMO_CAFE_VENDOR.heroSubtitle,
+        displayOrder: DEMO_CAFE_VENDOR.displayOrder,
+        studentFriendly: DEMO_CAFE_VENDOR.studentFriendly,
+        isFeatured: DEMO_CAFE_VENDOR.isFeatured,
+        isActive: DEMO_CAFE_VENDOR.isActive,
+      },
+      create: {
+        id: DEMO_CAFE_VENDOR.id,
+        name: DEMO_CAFE_VENDOR.name,
+        slug: DEMO_CAFE_VENDOR.slug,
+        category: DEMO_CAFE_VENDOR.category,
+        storefrontId: DEMO_CAFE_VENDOR.storefrontId,
+        storefrontType: DEMO_CAFE_VENDOR.storefrontType,
+        subtitle: DEMO_CAFE_VENDOR.subtitle,
+        metaLabel: DEMO_CAFE_VENDOR.metaLabel,
+        imageUrl: DEMO_CAFE_VENDOR.imageUrl,
+        badge: DEMO_CAFE_VENDOR.badge,
+        rewardLabel: DEMO_CAFE_VENDOR.rewardLabel,
+        promoLabel: DEMO_CAFE_VENDOR.promoLabel,
+        ratingValue: DEMO_CAFE_VENDOR.ratingValue,
+        distanceLabel: DEMO_CAFE_VENDOR.distanceLabel,
+        etaMin: DEMO_CAFE_VENDOR.etaMin,
+        etaMax: DEMO_CAFE_VENDOR.etaMax,
+        workingHoursLabel: DEMO_CAFE_VENDOR.workingHoursLabel,
+        reviewCountLabel: DEMO_CAFE_VENDOR.reviewCountLabel,
+        announcement: DEMO_CAFE_VENDOR.announcement,
+        bundleTitle: DEMO_CAFE_VENDOR.bundleTitle,
+        bundleDescription: DEMO_CAFE_VENDOR.bundleDescription,
+        bundlePrice: DEMO_CAFE_VENDOR.bundlePrice,
+        heroTitle: DEMO_CAFE_VENDOR.heroTitle,
+        heroSubtitle: DEMO_CAFE_VENDOR.heroSubtitle,
+        displayOrder: DEMO_CAFE_VENDOR.displayOrder,
+        studentFriendly: DEMO_CAFE_VENDOR.studentFriendly,
+        isFeatured: DEMO_CAFE_VENDOR.isFeatured,
+        isActive: DEMO_CAFE_VENDOR.isActive,
+      },
+    });
+
+    await tx.pickupPoint.upsert({
+      where: { id: DEMO_CAFE_VENDOR.pickupPointId },
+      update: {
+        vendorId: DEMO_CAFE_VENDOR.id,
+        label: `${DEMO_CAFE_VENDOR.name} Gel-Al Noktası`,
+        address: `${DEMO_CAFE_VENDOR.name} ana pickup tezgahı`,
+        isActive: true,
+      },
+      create: {
+        id: DEMO_CAFE_VENDOR.pickupPointId,
+        vendorId: DEMO_CAFE_VENDOR.id,
+        label: `${DEMO_CAFE_VENDOR.name} Gel-Al Noktası`,
+        address: `${DEMO_CAFE_VENDOR.name} ana pickup tezgahı`,
+        isActive: true,
+      },
+    });
+
+    await tx.vendorHighlight.deleteMany({
+      where: { vendorId: DEMO_CAFE_VENDOR.id },
+    });
+    for (const highlight of DEMO_CAFE_HIGHLIGHTS) {
+      await tx.vendorHighlight.create({
+        data: {
+          id: highlight.id,
+          vendorId: DEMO_CAFE_VENDOR.id,
+          label: highlight.label,
+          iconKey: highlight.icon,
+          displayOrder: highlight.displayOrder,
+        },
+      });
+    }
+
+    await this.upsertShowcaseSectionsAndProducts(tx, {
+      vendorId: DEMO_CAFE_VENDOR.id,
+      vendorTitle: DEMO_CAFE_VENDOR.name,
+      storefrontId: DEMO_CAFE_VENDOR.storefrontId,
+      sections: DEMO_CAFE_SECTIONS,
+      featuredSectionLabels: ['Kahveler'],
+    });
+    await this.upsertShowcaseSectionsAndProducts(tx, {
+      vendorId: 'vendor-burger-yiyelim',
+      vendorTitle: 'Burger Yiyelim',
+      storefrontId: 'restaurant-burger-yiyelim',
+      sections: DEMO_BURGER_SHOWCASE_SECTIONS,
+    });
+  }
+
+  private async upsertShowcaseSectionsAndProducts(
+    tx: Prisma.TransactionClient,
+    payload: {
+      vendorId: string;
+      vendorTitle: string;
+      storefrontId: string;
+      sections: readonly {
+        id: string;
+        key: string;
+        label: string;
+        displayOrder: number;
+        products: readonly {
+          id: string;
+          title: string;
+          description: string;
+          unitPrice: number;
+          image: string;
+          displayOrder: number;
+        }[];
+      }[];
+      featuredSectionLabels?: readonly string[];
+    },
+  ) {
+    const locationId = this.seedLocationIdForVendor(payload.vendorId);
+    const locationLabel = `${payload.vendorTitle} Ön Tezgah`;
+    const featuredSectionLabels = new Set(payload.featuredSectionLabels ?? []);
+
+    for (const section of payload.sections) {
+      await tx.catalogSection.upsert({
+        where: { id: section.id },
+        update: {
+          vendorId: payload.vendorId,
+          key: section.key,
+          label: section.label,
+          displayOrder: section.displayOrder,
+          isActive: true,
+        },
+        create: {
+          id: section.id,
+          vendorId: payload.vendorId,
+          key: section.key,
+          label: section.label,
+          displayOrder: section.displayOrder,
+          isActive: true,
+        },
+      });
+
+      for (const product of section.products) {
+        const sku = this.seedSkuForProduct(product.id);
+        const externalCode = this.seedExternalCodeForProduct(product.id);
+        const reorderLevel = this.seedReorderLevelForProduct(product.id);
+        const isFeatured = featuredSectionLabels.has(section.label);
+        await tx.product.upsert({
+          where: { id: product.id },
+          update: {
+            vendorId: payload.vendorId,
+            catalogSectionId: section.id,
+            title: product.title,
+            description: product.description,
+            unitPrice: product.unitPrice,
+            imageUrl: product.image,
+            kind: section.label,
+            sku,
+            barcode: this.seedBarcodeForProduct(product.id),
+            externalCode,
+            displaySubtitle: product.description,
+            displayBadge: isFeatured ? section.label : null,
+            displayOrder: product.displayOrder,
+            isFeatured,
+            isVisibleInApp: true,
+            searchKeywords: [product.title, section.label, payload.vendorTitle],
+            legacyAliases: this.seedLegacyAliases(
+              product.id,
+              product.title,
+              payload.storefrontId,
+            ),
+            trackStock: true,
+            reorderLevel,
+            isArchived: false,
+            isActive: true,
+          },
+          create: {
+            id: product.id,
+            vendorId: payload.vendorId,
+            catalogSectionId: section.id,
+            title: product.title,
+            description: product.description,
+            unitPrice: product.unitPrice,
+            imageUrl: product.image,
+            kind: section.label,
+            sku,
+            barcode: this.seedBarcodeForProduct(product.id),
+            externalCode,
+            displaySubtitle: product.description,
+            displayBadge: isFeatured ? section.label : null,
+            displayOrder: product.displayOrder,
+            isFeatured,
+            isVisibleInApp: true,
+            searchKeywords: [product.title, section.label, payload.vendorTitle],
+            legacyAliases: this.seedLegacyAliases(
+              product.id,
+              product.title,
+              payload.storefrontId,
+            ),
+            trackStock: true,
+            reorderLevel,
+            isArchived: false,
+            isActive: true,
+          },
+        });
+
+        const onHand = this.seedStockLevelForProduct(product.id);
+        await tx.inventoryStock.upsert({
+          where: {
+            productId_locationId: {
+              productId: product.id,
+              locationId,
+            },
+          },
+          update: {
+            vendorId: payload.vendorId,
+            locationLabel,
+            onHand,
+            reserved: 0,
+          },
+          create: {
+            productId: product.id,
+            vendorId: payload.vendorId,
+            locationId,
+            locationLabel,
+            onHand,
+            reserved: 0,
+          },
+        });
+
+        await tx.inventoryMovement.upsert({
+          where: { id: `mv_seed_${product.id}` },
+          update: {
+            productId: product.id,
+            vendorId: payload.vendorId,
+            type: PrismaInventoryMovementType.RESTOCK,
+            quantityDelta: onHand,
+            previousOnHand: 0,
+            nextOnHand: onHand,
+            previousReserved: 0,
+            nextReserved: 0,
+            note: 'Showcase seed stock',
+          },
+          create: {
+            id: `mv_seed_${product.id}`,
+            productId: product.id,
+            vendorId: payload.vendorId,
+            type: PrismaInventoryMovementType.RESTOCK,
+            quantityDelta: onHand,
+            previousOnHand: 0,
+            nextOnHand: onHand,
+            previousReserved: 0,
+            nextReserved: 0,
+            note: 'Showcase seed stock',
+          },
+        });
+      }
+    }
+  }
+
+  private async seedDemoVendorFinance(tx: Prisma.TransactionClient) {
+    for (const account of DEMO_VENDOR_BANK_ACCOUNTS) {
+      await tx.vendorBankAccount.upsert({
+        where: { id: account.id },
+        update: {
+          vendorId: account.vendorId,
+          holderName: account.holderName,
+          bankName: account.bankName,
+          iban: account.iban,
+          isDefault: account.isDefault,
+        },
+        create: {
+          id: account.id,
+          vendorId: account.vendorId,
+          holderName: account.holderName,
+          bankName: account.bankName,
+          iban: account.iban,
+          isDefault: account.isDefault,
+        },
+      });
+    }
+
+    for (const payout of DEMO_VENDOR_PAYOUTS) {
+      await tx.vendorPayout.upsert({
+        where: { id: payout.id },
+        update: {
+          vendorId: payout.vendorId,
+          bankAccountId: payout.bankAccountId,
+          amount: new Prisma.Decimal(payout.amount),
+          status: payout.status,
+          note: payout.note,
+          requestedAt: payout.requestedAt,
+          completedAt: payout.completedAt,
+        },
+        create: {
+          id: payout.id,
+          vendorId: payout.vendorId,
+          bankAccountId: payout.bankAccountId,
+          amount: new Prisma.Decimal(payout.amount),
+          status: payout.status,
+          note: payout.note,
+          requestedAt: payout.requestedAt,
+          completedAt: payout.completedAt,
+        },
+      });
+    }
+  }
+
+  private async seedDemoVendorCampaigns(tx: Prisma.TransactionClient) {
+    for (const campaign of DEMO_VENDOR_CAMPAIGNS) {
+      await tx.vendorCampaign.upsert({
+        where: { id: campaign.id },
+        update: {
+          vendorId: campaign.vendorId,
+          kind: campaign.kind,
+          status: campaign.status,
+          title: campaign.title,
+          description: campaign.description,
+          scheduleLabel: campaign.scheduleLabel,
+          badgeLabel: campaign.badgeLabel,
+          discountPercent: campaign.discountPercent,
+          discountedPrice:
+            campaign.discountedPrice == null
+              ? null
+              : new Prisma.Decimal(campaign.discountedPrice),
+          productIds: campaign.productIds,
+        },
+        create: {
+          id: campaign.id,
+          vendorId: campaign.vendorId,
+          kind: campaign.kind,
+          status: campaign.status,
+          title: campaign.title,
+          description: campaign.description,
+          scheduleLabel: campaign.scheduleLabel,
+          badgeLabel: campaign.badgeLabel,
+          discountPercent: campaign.discountPercent,
+          discountedPrice:
+            campaign.discountedPrice == null
+              ? null
+              : new Prisma.Decimal(campaign.discountedPrice),
+          productIds: campaign.productIds,
+        },
+      });
+    }
+  }
+
   private seedLocationIdForVendor(vendorId: string) {
     return `loc-${vendorId.replace('vendor-', '')}-pickup`;
   }
@@ -4376,6 +5627,11 @@ export class AppDataService {
     user: UserRecord,
     tx: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
+    this.assertAccountActive(user);
+    await tx.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
     const profile = await this.toAppUser(user);
     const accessToken = await this.jwtTokenService.issueAccessToken({
       userId: profile.id,
@@ -4409,9 +5665,16 @@ export class AppDataService {
   private async requireCurrentUser() {
     const requestScopedUser = await this.currentRequestUser();
     if (requestScopedUser) {
+      this.assertAccountActive(requestScopedUser);
       return requestScopedUser;
     }
     throw new UnauthorizedException('No active session');
+  }
+
+  private assertAccountActive(user: UserRecord) {
+    if (user.isBanned || user.isSuspended) {
+      throw new UnauthorizedException('Account is not active');
+    }
   }
 
   private async createRefreshSession(

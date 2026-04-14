@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@theme {
+  --color-on-surface: #191c1d;
+  --color-on-secondary: #ffffff;
+  --color-on-primary-fixed-variant: #005228;
+  --color-secondary: #485c97;
+  --color-primary-fixed: #6bfe9c;
+  --color-on-secondary-fixed-variant: #2f447d;
+  --color-error-container: #ffdad6;
+  --color-on-surface-variant: #3d4a3e;
+  --color-on-tertiary-container: #772e14;
+  --color-on-tertiary-fixed: #390c00;
+  --color-surface-container-high: #e7e8e9;
+  --color-on-tertiary: #ffffff;
+  --color-on-primary: #ffffff;
+  --color-tertiary-fixed-dim: #ffb59d;
+  --color-tertiary-container: #ff9875;
+  --color-on-background: #191c1d;
+  --color-inverse-surface: #2e3132;
+  --color-on-primary-fixed: #00210c;
+  --color-outline-variant: #bbcbbb;
+  --color-on-error-container: #93000a;
+  --color-surface-variant: #e1e3e4;
+  --color-primary-fixed-dim: #4ae183;
+  --color-surface: #f8f9fa;
+  --color-secondary-fixed-dim: #b4c5ff;
+  --color-on-secondary-fixed: #00174b;
+  --color-inverse-primary: #4ae183;
+  --color-surface-tint: #006d37;
+  --color-surface-container-low: #f3f4f5;
+  --color-on-tertiary-fixed-variant: #793015;
+  --color-secondary-container: #a8bcfe;
+  --color-surface-container-highest: #e1e3e4;
+  --color-surface-bright: #f8f9fa;
+  --color-outline: #6c7b6d;
+  --color-surface-container: #edeeef;
+  --color-primary: #006d37;
+  --color-tertiary-fixed: #ffdbd0;
+  --color-tertiary: #98472a;
+  --color-error: #ba1a1a;
+  --color-surface-dim: #d9dadb;
+  --color-primary-container: #2ecc71;
+  --color-on-primary-container: #005027;
+  --color-on-secondary-container: #364a84;
+  --color-on-error: #ffffff;
+  --color-surface-container-lowest: #ffffff;
+  --color-background: #f8f9fa;
+  --color-secondary-fixed: #dbe1ff;
+  --color-inverse-on-surface: #f0f1f2;
+
+  --font-headline: "Plus Jakarta Sans", sans-serif;
+  --font-body: "Manrope", sans-serif;
+  --font-label: "Manrope", sans-serif;
+  --font-sans: "Manrope", sans-serif;
+
+  --radius-xxl: 1.5rem;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-body);
+    background-color: var(--color-background);
+    color: var(--color-on-surface);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  .font-headline, .headline, h1, h2, h3 {
+    font-family: var(--font-headline);
+  }
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
