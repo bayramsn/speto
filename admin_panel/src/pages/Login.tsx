@@ -1,15 +1,15 @@
 import { useState, type FC } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { useAdminAuth } from '../auth/AdminAuthContext';
+import { useAdminAuth } from '../auth/adminAuth';
 import { AdminApiError } from '../lib/adminApi';
 
 export const Login: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAdminAuth();
-  const [email, setEmail] = useState('admin@speto.app');
-  const [password, setPassword] = useState('admin123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -42,8 +42,8 @@ export const Login: FC = () => {
             SepetPro
           </div>
           <div className="hidden md:flex gap-6 items-center">
-            <a className="text-slate-600 font-medium hover:text-emerald-600 transition-colors" href="#">Destek</a>
-            <a className="text-slate-600 font-medium hover:text-emerald-600 transition-colors" href="#">Güvenlik</a>
+            <a className="text-slate-600 font-medium hover:text-emerald-600 transition-colors" href="mailto:destek@sepetpro.app">Destek</a>
+            <a className="text-slate-600 font-medium hover:text-emerald-600 transition-colors" href="mailto:security@sepetpro.app">Güvenlik</a>
           </div>
         </div>
       </header>
@@ -89,7 +89,7 @@ export const Login: FC = () => {
               <div className="space-y-2">
                 <div className="flex justify-between items-center ml-1">
                   <label className="block text-sm font-semibold text-on-surface-variant" htmlFor="password">Şifre</label>
-                  <a className="text-xs font-bold text-primary hover:text-primary-container transition-colors" href="#">Şifremi Unuttum</a>
+                  <span className="text-xs font-bold text-primary">Admin desteğiyle sıfırlanır</span>
                 </div>
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline pointer-events-none text-[20px]">lock</span>
@@ -125,7 +125,7 @@ export const Login: FC = () => {
             {/* Help Link */}
             <div className="mt-8 pt-8 border-t border-surface-variant flex items-center justify-center">
               <p className="text-sm text-on-surface-variant">
-                Yardıma mı ihtiyacınız var? <a className="font-bold text-emerald-700 hover:underline" href="#">Destek Merkezi</a>
+                Yardıma mı ihtiyacınız var? <a className="font-bold text-emerald-700 hover:underline" href="mailto:destek@sepetpro.app">Destek Merkezi</a>
               </p>
             </div>
           </div>
@@ -141,9 +141,9 @@ export const Login: FC = () => {
             © 2024 SepetPro Editorial Business Management
           </div>
           <div className="flex gap-6 items-center">
-            <a className="text-slate-500 hover:text-emerald-700 transition-colors opacity-80 hover:opacity-100 font-body text-sm" href="#">Gizlilik Politikası</a>
-            <a className="text-slate-500 hover:text-emerald-700 transition-colors opacity-80 hover:opacity-100 font-body text-sm" href="#">Kullanım Koşulları</a>
-            <a className="text-slate-500 hover:text-emerald-700 transition-colors opacity-80 hover:opacity-100 font-body text-sm" href="#">İletişim</a>
+            <span className="text-slate-500 font-body text-sm">Gizlilik Politikası</span>
+            <span className="text-slate-500 font-body text-sm">Kullanım Koşulları</span>
+            <a className="text-slate-500 hover:text-emerald-700 transition-colors opacity-80 hover:opacity-100 font-body text-sm" href="mailto:destek@sepetpro.app">İletişim</a>
           </div>
         </div>
       </footer>

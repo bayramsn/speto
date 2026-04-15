@@ -55,6 +55,9 @@ DATABASE_URL=postgresql://USER:PASSWORD@HOST/DB?sslmode=require
 CORS_ALLOWED_ORIGINS=
 RESEND_API_KEY=
 ADMIN_CORS_ALLOWED_ORIGINS=
+ADMIN_REFRESH_COOKIE_SAMESITE=None
+ADMIN_UPLOAD_PROVIDER=
+ADMIN_NOTIFICATION_PROVIDER=
 ```
 
 The Blueprint generates `JWT_ACCESS_SECRET`, `INTEGRATION_WEBHOOK_SECRET`, and
@@ -63,7 +66,10 @@ reset emails are not needed yet.
 
 For a Flutter web origin, add the exact HTTPS origins to `CORS_ALLOWED_ORIGINS`
 as a comma-separated list. For the admin web panel, add the exact HTTPS origins
-to `ADMIN_CORS_ALLOWED_ORIGINS`.
+to `ADMIN_CORS_ALLOWED_ORIGINS`. Production admin auth uses the HttpOnly
+`speto_admin_refresh` cookie; for cross-site panel/backend deployments keep
+`ADMIN_REFRESH_COOKIE_SAMESITE=None` so the browser sends the cookie with
+credentialed requests.
 
 Render Free Web Services sleep after inactivity and wake on the next request.
 The Flutter shared API client waits on `/api/health` for explicit remote API

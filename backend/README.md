@@ -50,7 +50,9 @@ RESEND_FROM_EMAIL="Speto <onboarding@resend.dev>"
 
 ## Demo operasyon hesapları
 
-- `admin@speto.app / admin123`
+- `admin@speto.app / admin123` yalnız `ENABLE_DEMO_SEED=true` local/demo
+  seed ortamı içindir; production admin kullanıcısı ayrı ve güçlü parola ile
+  oluşturulmalıdır.
 - `burger@speto.app / vendor123`
 - `market@speto.app / vendor123`
 

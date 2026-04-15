@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { useAdminAuth } from '../auth/AdminAuthContext';
+import { useAdminAuth } from '../auth/adminAuth';
 import { EmptyState, LoadingState, MetricCard, PageHeader, Panel, StatusBadge } from '../components/ui';
 import { formatCurrency, formatDate, orderStatusLabel, orderStatusTone } from '../lib/formatters';
 import type { DashboardSummary } from '../lib/types';

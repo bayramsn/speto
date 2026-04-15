@@ -1,6 +1,9 @@
 import type { AdminSession } from './types';
 
 const env = import.meta.env as Record<string, string | undefined>;
+export type AdminHttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+export type AdminQueryValue = string | number | boolean | null | undefined;
+export type AdminQuery = Record<string, AdminQueryValue>;
 
 function resolveAdminApiBaseUrl() {
   const configured = env.VITE_ADMIN_API_BASE_URL || env.ADMIN_API_BASE_URL;
@@ -30,9 +33,11 @@ export class AdminApiError extends Error {
 export async function adminApiRequest<T>(
   path: string,
   options: {
-    method?: 'GET' | 'POST' | 'PATCH';
+    method?: AdminHttpMethod;
     body?: unknown;
+    query?: AdminQuery;
     accessToken?: string;
+    responseType?: 'json' | 'text' | 'blob';
   } = {},
 ): Promise<T> {
   if (!ADMIN_API_BASE_URL) {
@@ -42,17 +47,25 @@ export async function adminApiRequest<T>(
     );
   }
 
-  const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
+  const url = new URL(`${ADMIN_API_BASE_URL}${path}`);
+  for (const [key, value] of Object.entries(options.query ?? {})) {
+    if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(key, String(value));
+    }
+  }
+
+  const response = await fetch(url.toString(), {
     method: options.method ?? 'GET',
     headers: {
       Accept: 'application/json',
-      'Content-Type': 'application/json',
+      ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
       ...(options.accessToken
         ? {
             Authorization: `Bearer ${options.accessToken}`,
           }
         : {}),
     },
+    credentials: 'include',
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
 
@@ -73,6 +86,12 @@ export async function adminApiRequest<T>(
 
   if (response.status === 204) {
     return undefined as T;
+  }
+  if (options.responseType === 'blob') {
+    return (await response.blob()) as T;
+  }
+  if (options.responseType === 'text') {
+    return (await response.text()) as T;
   }
   return (await response.json()) as T;
 }

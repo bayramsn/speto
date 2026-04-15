@@ -15,6 +15,7 @@ import {
   Prisma,
   Role as PrismaRole,
   StorefrontType,
+  SupportPriority,
   SupportStatus,
   User as PrismaUser,
   VendorApprovalStatus,
@@ -162,7 +163,8 @@ export class AdminService {
       ];
     }
 
-    const businesses = await this.prisma.vendor.findMany({
+    const paging = this.parsePaging(query);
+    const findArgs = {
       where,
       include: {
         operators: {
@@ -177,13 +179,19 @@ export class AdminService {
           },
         },
       },
-      orderBy: [{ displayOrder: 'asc' }, { createdAt: 'desc' }],
-      take: this.parseTake(query.take ?? query.limit, 250),
-    });
+      orderBy: [{ displayOrder: 'asc' as const }, { createdAt: 'desc' as const }],
+      take: paging?.pageSize ?? this.parseTake(query.take ?? query.limit, 250),
+      ...(paging ? { skip: (paging.page - 1) * paging.pageSize } : {}),
+    };
+    const [businesses, total] = await Promise.all([
+      this.prisma.vendor.findMany(findArgs),
+      paging ? this.prisma.vendor.count({ where }) : Promise.resolve(0),
+    ]);
     const activeOrderCounts = await this.getOpenOrderCountByVendor();
-    return businesses.map((business) =>
+    const items = businesses.map((business) =>
       this.toBusinessListItem(business, activeOrderCounts.get(business.id) ?? 0),
     );
+    return paging ? this.toPagedResponse(items, total, paging) : items;
   }
 
   async createBusiness(adminUser: PrismaUser, payload: JsonRecord) {
@@ -227,7 +235,10 @@ export class AdminService {
 
       const operatorEmail = this.optionalString(payload.operatorEmail);
       if (operatorEmail) {
-        const password = this.optionalString(payload.operatorPassword) || 'Vendor123!';
+        const password = this.requireString(
+          payload.operatorPassword,
+          'Operatör şifresi zorunludur',
+        );
         await tx.user.create({
           data: {
             email: operatorEmail.toLowerCase(),
@@ -637,7 +648,7 @@ export class AdminService {
         title,
         description: this.optionalString(payload.description) || null,
         unitPrice,
-        imageUrl: this.optionalString(payload.imageUrl) || null,
+        imageUrl: this.optionalImageUrl(payload.imageUrl) || null,
         kind: this.optionalString(payload.category) || vendor.category,
         sku,
         barcode: this.optionalString(payload.barcode) || null,
@@ -711,7 +722,7 @@ export class AdminService {
             ? { unitPrice: this.parseDecimal(payload.unitPrice, 'Ürün fiyatı zorunludur') }
             : {}),
           ...(payload.imageUrl !== undefined
-            ? { imageUrl: this.optionalString(payload.imageUrl) || null }
+            ? { imageUrl: this.optionalImageUrl(payload.imageUrl) || null }
             : {}),
           ...(payload.category !== undefined
             ? { kind: this.requireString(payload.category, 'Kategori zorunludur') }
@@ -1036,6 +1047,194 @@ export class AdminService {
     return this.getBusinessProfile(vendorId);
   }
 
+  async createBusinessPickupPoint(adminUser: PrismaUser, vendorId: string, payload: JsonRecord) {
+    await this.ensureVendor(vendorId);
+    const point = await this.prisma.pickupPoint.create({
+      data: {
+        vendorId,
+        label: this.requireString(payload.label, 'Teslim noktası etiketi zorunludur'),
+        address: this.requireString(payload.address, 'Teslim noktası adresi zorunludur'),
+        isActive: this.parseBoolean(payload.isActive, true),
+      },
+    });
+    await this.logAction(adminUser.id, 'pickup-point.create', 'pickup-point', point.id, {
+      vendorId,
+    });
+    return this.getBusinessProfile(vendorId);
+  }
+
+  async updateBusinessPickupPoint(
+    adminUser: PrismaUser,
+    vendorId: string,
+    pickupPointId: string,
+    payload: JsonRecord,
+  ) {
+    const existing = await this.prisma.pickupPoint.findUnique({
+      where: { id: pickupPointId },
+    });
+    if (!existing || existing.vendorId !== vendorId) {
+      throw new NotFoundException(`Pickup point ${pickupPointId} not found`);
+    }
+    await this.prisma.pickupPoint.update({
+      where: { id: pickupPointId },
+      data: {
+        ...(payload.label !== undefined
+          ? { label: this.requireString(payload.label, 'Teslim noktası etiketi zorunludur') }
+          : {}),
+        ...(payload.address !== undefined
+          ? { address: this.requireString(payload.address, 'Teslim noktası adresi zorunludur') }
+          : {}),
+        ...(payload.isActive !== undefined
+          ? { isActive: this.parseBoolean(payload.isActive, existing.isActive) }
+          : {}),
+      },
+    });
+    await this.logAction(adminUser.id, 'pickup-point.update', 'pickup-point', pickupPointId, {
+      vendorId,
+      payload,
+    });
+    return this.getBusinessProfile(vendorId);
+  }
+
+  async createBusinessOperator(adminUser: PrismaUser, vendorId: string, payload: JsonRecord) {
+    await this.ensureVendor(vendorId);
+    const password = this.optionalString(payload.password);
+    if (!password) {
+      throw new BadRequestException('Operatör şifresi zorunludur');
+    }
+    const operator = await this.prisma.user.create({
+      data: {
+        email: this.requireString(payload.email, 'Operatör e-postası zorunludur').toLowerCase(),
+        passwordHash: await bcrypt.hash(password, 10),
+        displayName: this.requireString(payload.displayName, 'Operatör adı zorunludur'),
+        phone: this.optionalString(payload.phone) || null,
+        role: PrismaRole.VENDOR,
+        vendorId,
+        notificationsEnabled: this.parseBoolean(payload.notificationsEnabled, true),
+      },
+    });
+    await this.logAction(adminUser.id, 'operator.create', 'user', operator.id, {
+      vendorId,
+      email: operator.email,
+    });
+    return this.getBusinessProfile(vendorId);
+  }
+
+  async updateBusinessOperator(
+    adminUser: PrismaUser,
+    vendorId: string,
+    operatorId: string,
+    payload: JsonRecord,
+  ) {
+    const existing = await this.prisma.user.findUnique({
+      where: { id: operatorId },
+    });
+    if (!existing || existing.vendorId !== vendorId || existing.role !== PrismaRole.VENDOR) {
+      throw new NotFoundException(`Operator ${operatorId} not found`);
+    }
+    await this.prisma.user.update({
+      where: { id: operatorId },
+      data: {
+        ...(payload.email !== undefined
+          ? { email: this.requireString(payload.email, 'Operatör e-postası zorunludur').toLowerCase() }
+          : {}),
+        ...(payload.displayName !== undefined
+          ? { displayName: this.requireString(payload.displayName, 'Operatör adı zorunludur') }
+          : {}),
+        ...(payload.phone !== undefined ? { phone: this.optionalString(payload.phone) || null } : {}),
+        ...(payload.notificationsEnabled !== undefined
+          ? {
+              notificationsEnabled: this.parseBoolean(
+                payload.notificationsEnabled,
+                existing.notificationsEnabled,
+              ),
+            }
+          : {}),
+        ...(payload.password !== undefined && this.optionalString(payload.password)
+          ? { passwordHash: await bcrypt.hash(this.requireString(payload.password, 'Şifre zorunludur'), 10) }
+          : {}),
+        ...(payload.isSuspended !== undefined
+          ? { isSuspended: this.parseBoolean(payload.isSuspended, existing.isSuspended) }
+          : {}),
+      },
+    });
+    await this.logAction(adminUser.id, 'operator.update', 'user', operatorId, {
+      vendorId,
+      payload,
+    });
+    return this.getBusinessProfile(vendorId);
+  }
+
+  async createBusinessBankAccount(adminUser: PrismaUser, vendorId: string, payload: JsonRecord) {
+    await this.ensureVendor(vendorId);
+    const isDefault = this.parseBoolean(payload.isDefault, false);
+    const created = await this.prisma.$transaction(async (tx) => {
+      if (isDefault) {
+        await tx.vendorBankAccount.updateMany({
+          where: { vendorId },
+          data: { isDefault: false },
+        });
+      }
+      return tx.vendorBankAccount.create({
+        data: {
+          vendorId,
+          holderName: this.requireString(payload.holderName, 'Hesap sahibi zorunludur'),
+          bankName: this.requireString(payload.bankName, 'Banka adı zorunludur'),
+          iban: this.requireString(payload.iban, 'IBAN zorunludur'),
+          isDefault,
+        },
+      });
+    });
+    await this.logAction(adminUser.id, 'bank-account.create', 'vendor-bank-account', created.id, {
+      vendorId,
+    });
+    return this.getBusinessProfile(vendorId);
+  }
+
+  async updateBusinessBankAccount(
+    adminUser: PrismaUser,
+    vendorId: string,
+    bankAccountId: string,
+    payload: JsonRecord,
+  ) {
+    const existing = await this.prisma.vendorBankAccount.findUnique({
+      where: { id: bankAccountId },
+    });
+    if (!existing || existing.vendorId !== vendorId) {
+      throw new NotFoundException(`Bank account ${bankAccountId} not found`);
+    }
+    await this.prisma.$transaction(async (tx) => {
+      if (payload.isDefault !== undefined && this.parseBoolean(payload.isDefault, existing.isDefault)) {
+        await tx.vendorBankAccount.updateMany({
+          where: { vendorId },
+          data: { isDefault: false },
+        });
+      }
+      await tx.vendorBankAccount.update({
+        where: { id: bankAccountId },
+        data: {
+          ...(payload.holderName !== undefined
+            ? { holderName: this.requireString(payload.holderName, 'Hesap sahibi zorunludur') }
+            : {}),
+          ...(payload.bankName !== undefined
+            ? { bankName: this.requireString(payload.bankName, 'Banka adı zorunludur') }
+            : {}),
+          ...(payload.iban !== undefined
+            ? { iban: this.requireString(payload.iban, 'IBAN zorunludur') }
+            : {}),
+          ...(payload.isDefault !== undefined
+            ? { isDefault: this.parseBoolean(payload.isDefault, existing.isDefault) }
+            : {}),
+        },
+      });
+    });
+    await this.logAction(adminUser.id, 'bank-account.update', 'vendor-bank-account', bankAccountId, {
+      vendorId,
+      payload,
+    });
+    return this.getBusinessProfile(vendorId);
+  }
+
   async listOrders(query: JsonRecord = {}) {
     const search = this.optionalString(query.q || query.search);
     const status = this.optionalOrderStatus(query.status);
@@ -1072,7 +1271,8 @@ export class AdminService {
         : {}),
     };
 
-    const orders = await this.prisma.order.findMany({
+    const paging = this.parsePaging(query);
+    const findArgs = {
       where,
       include: {
         vendor: {
@@ -1086,10 +1286,16 @@ export class AdminService {
         },
         items: true,
       },
-      orderBy: { createdAt: 'desc' },
-      take: this.parseTake(query.take ?? query.limit, 250),
-    });
-    return orders.map((order) => this.toOrderPayload(order));
+      orderBy: { createdAt: 'desc' as const },
+      take: paging?.pageSize ?? this.parseTake(query.take ?? query.limit, 250),
+      ...(paging ? { skip: (paging.page - 1) * paging.pageSize } : {}),
+    };
+    const [orders, total] = await Promise.all([
+      this.prisma.order.findMany(findArgs),
+      paging ? this.prisma.order.count({ where }) : Promise.resolve(0),
+    ]);
+    const items = orders.map((order) => this.toOrderPayload(order));
+    return paging ? this.toPagedResponse(items, total, paging) : items;
   }
 
   async listUsers(query: JsonRecord = {}) {
@@ -1113,22 +1319,25 @@ export class AdminService {
           }
         : {}),
     };
-    const [users, orderCounts] = await Promise.all([
+    const paging = this.parsePaging(query);
+    const [users, orderCounts, total] = await Promise.all([
       this.prisma.user.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        take: this.parseTake(query.take ?? query.limit, 250),
+        take: paging?.pageSize ?? this.parseTake(query.take ?? query.limit, 250),
+        ...(paging ? { skip: (paging.page - 1) * paging.pageSize } : {}),
       }),
       this.prisma.order.findMany({
         select: { userId: true },
       }),
+      paging ? this.prisma.user.count({ where }) : Promise.resolve(0),
     ]);
     const ordersByUserId = orderCounts.reduce((acc, order) => {
       acc.set(order.userId, (acc.get(order.userId) ?? 0) + 1);
       return acc;
     }, new Map<string, number>());
 
-    return users.map((user) => ({
+    const items = users.map((user) => ({
       id: user.id,
       email: user.email,
       displayName: user.displayName,
@@ -1145,10 +1354,11 @@ export class AdminService {
       lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
       ordersCount: ordersByUserId.get(user.id) ?? 0,
     }));
+    return paging ? this.toPagedResponse(items, total, paging) : items;
   }
 
   async createUser(adminUser: PrismaUser, payload: JsonRecord) {
-    const password = this.optionalString(payload.password) || 'Customer123!';
+    const password = this.requireString(payload.password, 'Şifre zorunludur');
     const user = await this.prisma.user.create({
       data: {
         email: this.requireString(payload.email, 'E-posta zorunludur').toLowerCase(),
@@ -1239,7 +1449,7 @@ export class AdminService {
     });
     await this.logAction(adminUser.id, 'user.update', 'user', userId, payload);
     const users = await this.listUsers();
-    return users.find((user) => user.id === userId);
+    return Array.isArray(users) ? users.find((user) => user.id === userId) : undefined;
   }
 
   async bulkUpdateUsers(adminUser: PrismaUser, payload: JsonRecord) {
@@ -1280,16 +1490,39 @@ export class AdminService {
     return { updatedCount: result.count };
   }
 
-  async listEvents() {
-    const events = await this.prisma.event.findMany({
+  async listEvents(query: JsonRecord = {}) {
+    const search = this.optionalString(query.q || query.search);
+    const isActive = this.optionalBoolean(query.isActive);
+    const where: Prisma.EventWhereInput = {
+      ...(isActive !== undefined ? { isActive } : {}),
+      ...(search
+        ? {
+            OR: [
+              { title: { contains: search, mode: 'insensitive' } },
+              { venue: { contains: search, mode: 'insensitive' } },
+              { district: { contains: search, mode: 'insensitive' } },
+              { vendor: { is: { name: { contains: search, mode: 'insensitive' } } } },
+            ],
+          }
+        : {}),
+    };
+    const paging = this.parsePaging(query);
+    const findArgs = {
+      where,
       include: {
         vendor: {
           select: { id: true, name: true },
         },
       },
-      orderBy: { startsAt: 'asc' },
-    });
-    return events.map((event) => ({
+      orderBy: { startsAt: 'asc' as const },
+      take: paging?.pageSize ?? this.parseTake(query.take ?? query.limit, 250),
+      ...(paging ? { skip: (paging.page - 1) * paging.pageSize } : {}),
+    } satisfies Prisma.EventFindManyArgs;
+    const [events, total] = await Promise.all([
+      this.prisma.event.findMany(findArgs),
+      paging ? this.prisma.event.count({ where }) : Promise.resolve(0),
+    ]);
+    const items = events.map((event) => ({
       id: event.id,
       vendorId: event.vendorId,
       vendorName: event.vendor.name,
@@ -1308,6 +1541,7 @@ export class AdminService {
       isActive: event.isActive,
       createdAt: event.createdAt.toISOString(),
     }));
+    return paging ? this.toPagedResponse(items, total, paging) : items;
   }
 
   async createEvent(adminUser: PrismaUser, payload: JsonRecord) {
@@ -1443,7 +1677,7 @@ export class AdminService {
     });
     await this.logAction(adminUser.id, 'event.update', 'event', eventId, payload);
     const events = await this.listEvents();
-    return events.find((event) => event.id === eventId);
+    return Array.isArray(events) ? events.find((event) => event.id === eventId) : undefined;
   }
 
   async deleteEvent(adminUser: PrismaUser, eventId: string) {
@@ -1541,8 +1775,74 @@ export class AdminService {
         completedAt: payout.completedAt?.toISOString() ?? null,
         bankName: payout.bankAccount.bankName,
         iban: payout.bankAccount.iban,
+        note: payout.note ?? null,
       })),
     };
+  }
+
+  async createPayout(adminUser: PrismaUser, payload: JsonRecord) {
+    const vendorId = this.requireString(payload.vendorId, 'İşletme seçimi zorunludur');
+    await this.ensureVendor(vendorId);
+    const bankAccountId = this.requireString(payload.bankAccountId, 'Banka hesabı zorunludur');
+    const bankAccount = await this.prisma.vendorBankAccount.findUnique({
+      where: { id: bankAccountId },
+    });
+    if (!bankAccount || bankAccount.vendorId !== vendorId) {
+      throw new BadRequestException('Banka hesabı işletmeye ait değil');
+    }
+    const payout = await this.prisma.vendorPayout.create({
+      data: {
+        vendorId,
+        bankAccountId,
+        amount: this.parseDecimal(payload.amount, 'Payout tutarı geçersiz'),
+        status: this.parsePayoutStatus(payload.status, PayoutStatus.PENDING),
+        note: this.optionalString(payload.note) || null,
+        completedAt:
+          this.parsePayoutStatus(payload.status, PayoutStatus.PENDING) === PayoutStatus.PAID
+            ? new Date()
+            : null,
+      },
+    });
+    await this.logAction(adminUser.id, 'payout.create', 'vendor-payout', payout.id, {
+      vendorId,
+      bankAccountId,
+      amount: String(payout.amount),
+      status: payout.status,
+      providerMode: 'manual',
+    });
+    return this.getFinanceSummary();
+  }
+
+  async updatePayout(adminUser: PrismaUser, payoutId: string, payload: JsonRecord) {
+    const existing = await this.prisma.vendorPayout.findUnique({
+      where: { id: payoutId },
+    });
+    if (!existing) {
+      throw new NotFoundException(`Payout ${payoutId} not found`);
+    }
+    const status =
+      payload.status !== undefined
+        ? this.parsePayoutStatus(payload.status, existing.status)
+        : existing.status;
+    await this.prisma.vendorPayout.update({
+      where: { id: payoutId },
+      data: {
+        ...(payload.amount !== undefined
+          ? { amount: this.parseDecimal(payload.amount, 'Payout tutarı geçersiz') }
+          : {}),
+        ...(payload.note !== undefined ? { note: this.optionalString(payload.note) || null } : {}),
+        ...(payload.status !== undefined ? { status } : {}),
+        ...(status === PayoutStatus.PAID && existing.completedAt == null
+          ? { completedAt: new Date() }
+          : {}),
+        ...(status !== PayoutStatus.PAID ? { completedAt: null } : {}),
+      },
+    });
+    await this.logAction(adminUser.id, 'payout.update', 'vendor-payout', payoutId, {
+      status,
+      providerMode: 'manual',
+    });
+    return this.getFinanceSummary();
   }
 
   async getReportsOverview() {
@@ -1640,17 +1940,27 @@ export class AdminService {
           }
         : {}),
     };
-    const notifications = await this.prisma.adminNotification.findMany({
+    const paging = this.parsePaging(query);
+    const findArgs = {
       where,
       include: {
         createdByAdmin: {
           select: { displayName: true, email: true },
         },
+        deliveryLogs: {
+          orderBy: { createdAt: 'desc' as const },
+          take: 5,
+        },
       },
-      orderBy: { createdAt: 'desc' },
-      take: this.parseTake(query.take ?? query.limit, 250),
-    });
-    return notifications.map((notification) => ({
+      orderBy: { createdAt: 'desc' as const },
+      take: paging?.pageSize ?? this.parseTake(query.take ?? query.limit, 250),
+      ...(paging ? { skip: (paging.page - 1) * paging.pageSize } : {}),
+    } satisfies Prisma.AdminNotificationFindManyArgs;
+    const [notifications, total] = await Promise.all([
+      this.prisma.adminNotification.findMany(findArgs),
+      paging ? this.prisma.adminNotification.count({ where }) : Promise.resolve(0),
+    ]);
+    const items = notifications.map((notification) => ({
       id: notification.id,
       title: notification.title,
       body: notification.body,
@@ -1662,7 +1972,17 @@ export class AdminService {
       updatedAt: notification.updatedAt.toISOString(),
       createdByName: notification.createdByAdmin.displayName,
       createdByEmail: notification.createdByAdmin.email,
+      deliveryLogs: notification.deliveryLogs.map((log) => ({
+        id: log.id,
+        notificationId: log.notificationId,
+        provider: log.provider,
+        status: log.status,
+        target: log.target ?? null,
+        errorMessage: log.errorMessage ?? null,
+        createdAt: log.createdAt.toISOString(),
+      })),
     }));
+    return paging ? this.toPagedResponse(items, total, paging) : items;
   }
 
   async createNotification(adminUser: PrismaUser, payload: JsonRecord) {
@@ -1689,6 +2009,9 @@ export class AdminService {
     await this.logAction(adminUser.id, 'notification.create', 'notification', notification.id, {
       title: notification.title,
     });
+    if (notification.status === AdminNotificationStatus.SENT) {
+      await this.logNotificationDeliveryPlaceholder(notification.id);
+    }
     return {
       id: notification.id,
       title: notification.title,
@@ -1701,6 +2024,7 @@ export class AdminService {
       updatedAt: notification.updatedAt.toISOString(),
       createdByName: notification.createdByAdmin.displayName,
       createdByEmail: notification.createdByAdmin.email,
+      deliveryLogs: [],
     };
   }
 
@@ -1750,6 +2074,9 @@ export class AdminService {
       },
     });
     await this.logAction(adminUser.id, 'notification.update', 'notification', notificationId, payload);
+    if (updated.status === AdminNotificationStatus.SENT && existing.sentAt == null) {
+      await this.logNotificationDeliveryPlaceholder(updated.id);
+    }
     return {
       id: updated.id,
       title: updated.title,
@@ -1762,6 +2089,7 @@ export class AdminService {
       updatedAt: updated.updatedAt.toISOString(),
       createdByName: updated.createdByAdmin.displayName,
       createdByEmail: updated.createdByAdmin.email,
+      deliveryLogs: [],
     };
   }
 
@@ -1783,10 +2111,12 @@ export class AdminService {
   async listSupportTickets(query: JsonRecord = {}) {
     const search = this.optionalString(query.q || query.search);
     const status = this.optionalSupportStatus(query.status);
+    const priority = this.optionalSupportPriority(query.priority);
     const channel = this.optionalString(query.channel);
     const createdAt = this.dateRangeFilter(query.createdFrom || query.from, query.createdTo || query.to);
     const where: Prisma.SupportTicketWhereInput = {
       ...(status ? { status } : {}),
+      ...(priority ? { priority } : {}),
       ...(channel ? { channel: { contains: channel, mode: 'insensitive' } } : {}),
       ...(createdAt ? { createdAt } : {}),
       ...(search
@@ -1808,17 +2138,26 @@ export class AdminService {
           }
         : {}),
     };
-    const tickets = await this.prisma.supportTicket.findMany({
+    const paging = this.parsePaging(query);
+    const findArgs = {
       where,
       include: {
         user: {
           select: { id: true, displayName: true, email: true },
         },
+        assignedAdmin: {
+          select: { id: true, displayName: true, email: true },
+        },
       },
-      orderBy: { updatedAt: 'desc' },
-      take: this.parseTake(query.take ?? query.limit, 250),
-    });
-    return tickets.map((ticket) => ({
+      orderBy: { updatedAt: 'desc' as const },
+      take: paging?.pageSize ?? this.parseTake(query.take ?? query.limit, 250),
+      ...(paging ? { skip: (paging.page - 1) * paging.pageSize } : {}),
+    } satisfies Prisma.SupportTicketFindManyArgs;
+    const [tickets, total] = await Promise.all([
+      this.prisma.supportTicket.findMany(findArgs),
+      paging ? this.prisma.supportTicket.count({ where }) : Promise.resolve(0),
+    ]);
+    const items = tickets.map((ticket) => ({
       id: ticket.id,
       userId: ticket.userId,
       userName: ticket.user.displayName,
@@ -1827,9 +2166,14 @@ export class AdminService {
       message: ticket.message,
       channel: ticket.channel,
       status: ticket.status,
+      priority: ticket.priority,
+      assignedAdminId: ticket.assignedAdminId ?? null,
+      assignedAdminName: ticket.assignedAdmin?.displayName ?? '',
+      assignedAdminEmail: ticket.assignedAdmin?.email ?? '',
       createdAt: ticket.createdAt.toISOString(),
       updatedAt: ticket.updatedAt.toISOString(),
     }));
+    return paging ? this.toPagedResponse(items, total, paging) : items;
   }
 
   async updateSupportTicket(adminUser: PrismaUser, ticketId: string, payload: JsonRecord) {
@@ -1837,6 +2181,9 @@ export class AdminService {
       where: { id: ticketId },
       include: {
         user: {
+          select: { id: true, displayName: true, email: true },
+        },
+        assignedAdmin: {
           select: { id: true, displayName: true, email: true },
         },
       },
@@ -1859,9 +2206,15 @@ export class AdminService {
         ...(payload.status !== undefined
           ? { status: this.parseSupportStatus(payload.status) }
           : {}),
+        ...(payload.priority !== undefined
+          ? { priority: this.parseSupportPriority(payload.priority) }
+          : {}),
       },
       include: {
         user: {
+          select: { id: true, displayName: true, email: true },
+        },
+        assignedAdmin: {
           select: { id: true, displayName: true, email: true },
         },
       },
@@ -1876,8 +2229,176 @@ export class AdminService {
       message: updated.message,
       channel: updated.channel,
       status: updated.status,
+      priority: updated.priority,
+      assignedAdminId: updated.assignedAdminId ?? null,
+      assignedAdminName: updated.assignedAdmin?.displayName ?? '',
+      assignedAdminEmail: updated.assignedAdmin?.email ?? '',
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
+    };
+  }
+
+  async getSupportTicket(ticketId: string) {
+    const ticket = await this.prisma.supportTicket.findUnique({
+      where: { id: ticketId },
+      include: {
+        user: {
+          select: { id: true, displayName: true, email: true },
+        },
+        assignedAdmin: {
+          select: { id: true, displayName: true, email: true },
+        },
+        messages: {
+          include: {
+            author: {
+              select: { id: true, displayName: true, email: true, role: true },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+    if (!ticket) {
+      throw new NotFoundException(`Support ticket ${ticketId} not found`);
+    }
+    return {
+      id: ticket.id,
+      userId: ticket.userId,
+      userName: ticket.user.displayName,
+      userEmail: ticket.user.email,
+      subject: ticket.subject,
+      message: ticket.message,
+      channel: ticket.channel,
+      status: ticket.status,
+      priority: ticket.priority,
+      assignedAdminId: ticket.assignedAdminId ?? null,
+      assignedAdminName: ticket.assignedAdmin?.displayName ?? '',
+      assignedAdminEmail: ticket.assignedAdmin?.email ?? '',
+      createdAt: ticket.createdAt.toISOString(),
+      updatedAt: ticket.updatedAt.toISOString(),
+      messages: ticket.messages.map((message) => ({
+        id: message.id,
+        ticketId: message.ticketId,
+        authorId: message.authorId,
+        authorName: message.author.displayName,
+        authorEmail: message.author.email,
+        authorRole: message.author.role,
+        body: message.body,
+        isInternal: message.isInternal,
+        createdAt: message.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  async updateSupportTicketAssignment(
+    adminUser: PrismaUser,
+    ticketId: string,
+    payload: JsonRecord,
+  ) {
+    const assignedAdminId = this.optionalString(payload.assignedAdminId);
+    if (assignedAdminId) {
+      const assignedAdmin = await this.prisma.user.findUnique({
+        where: { id: assignedAdminId },
+      });
+      if (!assignedAdmin || assignedAdmin.role !== PrismaRole.ADMIN) {
+        throw new BadRequestException('Atanacak admin bulunamadı');
+      }
+    }
+    await this.prisma.supportTicket.update({
+      where: { id: ticketId },
+      data: {
+        assignedAdminId: assignedAdminId || null,
+        ...(payload.priority !== undefined
+          ? { priority: this.parseSupportPriority(payload.priority) }
+          : {}),
+      },
+    });
+    await this.logAction(adminUser.id, 'support.assignment.update', 'support-ticket', ticketId, {
+      assignedAdminId: assignedAdminId || null,
+      priority: payload.priority,
+    });
+    return this.getSupportTicket(ticketId);
+  }
+
+  async createSupportTicketMessage(
+    adminUser: PrismaUser,
+    ticketId: string,
+    payload: JsonRecord,
+  ) {
+    const ticket = await this.prisma.supportTicket.findUnique({
+      where: { id: ticketId },
+      select: { id: true },
+    });
+    if (!ticket) {
+      throw new NotFoundException(`Support ticket ${ticketId} not found`);
+    }
+    const message = await this.prisma.supportTicketMessage.create({
+      data: {
+        ticketId,
+        authorId: adminUser.id,
+        body: this.requireString(payload.body, 'Mesaj zorunludur'),
+        isInternal: this.parseBoolean(payload.isInternal, false),
+      },
+      include: {
+        author: {
+          select: { id: true, displayName: true, email: true, role: true },
+        },
+      },
+    });
+    await this.prisma.supportTicket.update({
+      where: { id: ticketId },
+      data: {
+        ...(payload.status !== undefined
+          ? { status: this.parseSupportStatus(payload.status) }
+          : { status: SupportStatus.IN_PROGRESS }),
+      },
+    });
+    await this.logAction(adminUser.id, 'support.message.create', 'support-ticket', ticketId, {
+      messageId: message.id,
+      isInternal: message.isInternal,
+    });
+    return {
+      id: message.id,
+      ticketId: message.ticketId,
+      authorId: message.authorId,
+      authorName: message.author.displayName,
+      authorEmail: message.author.email,
+      authorRole: message.author.role,
+      body: message.body,
+      isInternal: message.isInternal,
+      createdAt: message.createdAt.toISOString(),
+    };
+  }
+
+  createUploadIntent(payload: JsonRecord) {
+    const provider = (process.env.ADMIN_UPLOAD_PROVIDER ?? '').trim();
+    if (!provider) {
+      return {
+        configured: false,
+        provider: null,
+        uploadUrl: null,
+        publicUrl: null,
+        fields: {},
+        message: 'Upload provider configured değil. Şimdilik güvenli URL alanı kullanın.',
+        requested: {
+          fileName: this.optionalString(payload.fileName),
+          contentType: this.optionalString(payload.contentType),
+          folder: this.optionalString(payload.folder) || 'admin',
+        },
+      };
+    }
+    return {
+      configured: false,
+      provider,
+      uploadUrl: null,
+      publicUrl: null,
+      fields: {},
+      message: `${provider} upload adapter henüz bağlanmadı.`,
+      requested: {
+        fileName: this.optionalString(payload.fileName),
+        contentType: this.optionalString(payload.contentType),
+        folder: this.optionalString(payload.folder) || 'admin',
+      },
     };
   }
 
@@ -1943,8 +2464,7 @@ export class AdminService {
     const adminUserId = this.optionalString(query.adminUserId);
     const createdAt = this.dateRangeFilter(query.createdFrom || query.from, query.createdTo || query.to);
     const search = this.optionalString(query.q || query.search);
-    const logs = await this.prisma.adminAuditLog.findMany({
-      where: {
+    const where: Prisma.AdminAuditLogWhereInput = {
         ...(action ? { action: { contains: action, mode: 'insensitive' } } : {}),
         ...(entityType ? { entityType: { contains: entityType, mode: 'insensitive' } } : {}),
         ...(entityId ? { entityId } : {}),
@@ -1959,16 +2479,24 @@ export class AdminService {
               ],
             }
           : {}),
-      },
+      };
+    const paging = this.parsePaging(query);
+    const findArgs = {
+      where,
       include: {
         adminUser: {
           select: { id: true, email: true, displayName: true },
         },
       },
-      orderBy: { createdAt: 'desc' },
-      take: this.parseTake(query.take ?? query.limit, 250),
-    });
-    return logs.map((log) => ({
+      orderBy: { createdAt: 'desc' as const },
+      take: paging?.pageSize ?? this.parseTake(query.take ?? query.limit, 250),
+      ...(paging ? { skip: (paging.page - 1) * paging.pageSize } : {}),
+    } satisfies Prisma.AdminAuditLogFindManyArgs;
+    const [logs, total] = await Promise.all([
+      this.prisma.adminAuditLog.findMany(findArgs),
+      paging ? this.prisma.adminAuditLog.count({ where }) : Promise.resolve(0),
+    ]);
+    const items = logs.map((log) => ({
       id: log.id,
       adminUserId: log.adminUserId,
       adminUserName: log.adminUser.displayName,
@@ -1979,15 +2507,19 @@ export class AdminService {
       metadata: log.metadata ?? null,
       createdAt: log.createdAt.toISOString(),
     }));
+    return paging ? this.toPagedResponse(items, total, paging) : items;
   }
 
   async exportBusinesses(query: JsonRecord = {}) {
     const businesses = await this.listBusinesses({
       ...query,
+      page: undefined,
+      pageSize: undefined,
       take: query.take ?? query.limit ?? 1000,
     });
+    const rows = Array.isArray(businesses) ? businesses : businesses.items;
     return this.toCsv(
-      businesses.map((business) => ({
+      rows.map((business) => ({
         id: business.id,
         name: business.name,
         category: business.category,
@@ -2007,10 +2539,13 @@ export class AdminService {
   async exportOrders(query: JsonRecord = {}) {
     const orders = await this.listOrders({
       ...query,
+      page: undefined,
+      pageSize: undefined,
       take: query.take ?? query.limit ?? 1000,
     });
+    const rows = Array.isArray(orders) ? orders : orders.items;
     return this.toCsv(
-      orders.map((order) => ({
+      rows.map((order) => ({
         id: order.id,
         vendorId: order.vendorId,
         vendorName: order.vendorName,
@@ -2029,10 +2564,13 @@ export class AdminService {
   async exportUsers(query: JsonRecord = {}) {
     const users = await this.listUsers({
       ...query,
+      page: undefined,
+      pageSize: undefined,
       take: query.take ?? query.limit ?? 1000,
     });
+    const rows = Array.isArray(users) ? users : users.items;
     return this.toCsv(
-      users.map((user) => ({
+      rows.map((user) => ({
         id: user.id,
         email: user.email,
         displayName: user.displayName,
@@ -2417,6 +2955,19 @@ export class AdminService {
     });
   }
 
+  private async logNotificationDeliveryPlaceholder(notificationId: string) {
+    await this.prisma.adminNotificationDeliveryLog.create({
+      data: {
+        notificationId,
+        provider: process.env.ADMIN_NOTIFICATION_PROVIDER || 'unconfigured',
+        status: process.env.ADMIN_NOTIFICATION_PROVIDER ? 'QUEUED' : 'NOT_CONFIGURED',
+        errorMessage: process.env.ADMIN_NOTIFICATION_PROVIDER
+          ? null
+          : 'Notification provider configured değil',
+      },
+    });
+  }
+
   private objectPayload(value: unknown): JsonRecord {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return {};
@@ -2438,6 +2989,28 @@ export class AdminService {
       return fallback;
     }
     return Math.min(parsed, 1000);
+  }
+
+  private parsePaging(query: JsonRecord) {
+    if (query.page === undefined && query.pageSize === undefined) {
+      return null;
+    }
+    const page = Math.max(1, this.parseInteger(query.page, 1));
+    const pageSize = Math.min(100, Math.max(1, this.parseInteger(query.pageSize, 25)));
+    return { page, pageSize };
+  }
+
+  private toPagedResponse<T>(
+    items: T[],
+    total: number,
+    paging: { page: number; pageSize: number },
+  ) {
+    return {
+      items,
+      total,
+      page: paging.page,
+      pageSize: paging.pageSize,
+    };
   }
 
   private optionalBoolean(value: unknown) {
@@ -2511,6 +3084,14 @@ export class AdminService {
     return undefined;
   }
 
+  private optionalSupportPriority(value: unknown) {
+    const normalized = this.optionalString(value).toUpperCase();
+    if (Object.values(SupportPriority).includes(normalized as SupportPriority)) {
+      return normalized as SupportPriority;
+    }
+    return undefined;
+  }
+
   private dateRangeFilter(fromValue: unknown, toValue: unknown) {
     const from = this.optionalDate(fromValue);
     const to = this.optionalDate(toValue);
@@ -2556,6 +3137,14 @@ export class AdminService {
 
   private optionalString(value: unknown) {
     return typeof value === 'string' ? value.trim() : '';
+  }
+
+  private optionalImageUrl(value: unknown) {
+    const imageUrl = this.optionalString(value);
+    if (imageUrl.toLowerCase().startsWith('data:')) {
+      throw new BadRequestException('Görsel için dosya içeriği değil, güvenli URL gönderilmelidir');
+    }
+    return imageUrl;
   }
 
   private parseInteger(value: unknown, fallback: number) {
@@ -2679,9 +3268,6 @@ export class AdminService {
     if (normalized === PrismaRole.SUPPORT) {
       return PrismaRole.SUPPORT;
     }
-    if (normalized === PrismaRole.ADMIN) {
-      return PrismaRole.ADMIN;
-    }
     return PrismaRole.CUSTOMER;
   }
 
@@ -2718,6 +3304,22 @@ export class AdminService {
       return normalized as SupportStatus;
     }
     throw new BadRequestException('Destek durumu geçersiz');
+  }
+
+  private parseSupportPriority(value: unknown) {
+    const normalized = this.optionalString(value).toUpperCase();
+    if (Object.values(SupportPriority).includes(normalized as SupportPriority)) {
+      return normalized as SupportPriority;
+    }
+    return SupportPriority.NORMAL;
+  }
+
+  private parsePayoutStatus(value: unknown, fallback: PayoutStatus) {
+    const normalized = this.optionalString(value).toUpperCase();
+    if (Object.values(PayoutStatus).includes(normalized as PayoutStatus)) {
+      return normalized as PayoutStatus;
+    }
+    return fallback;
   }
 
   private stringArray(value: unknown) {

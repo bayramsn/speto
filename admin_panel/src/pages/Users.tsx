@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
-import { useAdminAuth } from '../auth/AdminAuthContext';
-import { EmptyState, LoadingState, Modal, PageHeader, Panel, StatusBadge, TextInput } from '../components/ui';
+import { useAdminAuth } from '../auth/adminAuth';
+import { BulkBar, EmptyState, LoadingState, Modal, PageHeader, Pagination, Panel, StatusBadge, TextInput, Toast } from '../components/ui';
 import { formatDate } from '../lib/formatters';
-import type { AdminAppUser, UserRole } from '../lib/types';
+import type { AdminAppUser, BusinessListItem, PagedResponse, UserRole } from '../lib/types';
 
 type UserDraft = {
   id?: string;
@@ -12,6 +13,7 @@ type UserDraft = {
   phone: string;
   password: string;
   role: UserRole;
+  vendorId: string;
   notificationsEnabled: boolean;
   isSuspended: boolean;
   suspendedReason: string;
@@ -19,7 +21,7 @@ type UserDraft = {
   bannedReason: string;
 };
 
-const USER_ROLES: UserRole[] = ['CUSTOMER', 'VENDOR', 'SUPPORT', 'ADMIN'];
+const USER_ROLES: UserRole[] = ['CUSTOMER', 'VENDOR', 'SUPPORT'];
 
 const EMPTY_DRAFT: UserDraft = {
   email: '',
@@ -27,6 +29,7 @@ const EMPTY_DRAFT: UserDraft = {
   phone: '',
   password: '',
   role: 'CUSTOMER',
+  vendorId: '',
   notificationsEnabled: true,
   isSuspended: false,
   suspendedReason: '',
@@ -35,30 +38,64 @@ const EMPTY_DRAFT: UserDraft = {
 };
 
 export function Users() {
-  const { request } = useAdminAuth();
+  const { request, downloadCsv } = useAdminAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState<AdminAppUser[]>([]);
+  const [businesses, setBusinesses] = useState<BusinessListItem[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [draft, setDraft] = useState<UserDraft>(EMPTY_DRAFT);
   const [modalOpen, setModalOpen] = useState(false);
 
-  async function load() {
+  const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
+  const pageSize = 25;
+  const query = useMemo(
+    () => ({
+      q: searchParams.get('q') ?? '',
+      role: searchParams.get('role') ?? '',
+      isSuspended: searchParams.get('isSuspended') ?? '',
+      isBanned: searchParams.get('isBanned') ?? '',
+      page,
+      pageSize,
+    }),
+    [page, searchParams],
+  );
+  const exportQuery = useMemo(
+    () => ({
+      q: searchParams.get('q') ?? '',
+      role: searchParams.get('role') ?? '',
+      isSuspended: searchParams.get('isSuspended') ?? '',
+      isBanned: searchParams.get('isBanned') ?? '',
+    }),
+    [searchParams],
+  );
+
+  const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const next = await request<AdminAppUser[]>('/admin/users');
-      setUsers(next);
+      const [nextUsers, nextBusinesses] = await Promise.all([
+        request<PagedResponse<AdminAppUser>>('/admin/users', { query }),
+        request<BusinessListItem[]>('/admin/businesses'),
+      ]);
+      setUsers(nextUsers.items);
+      setTotal(nextUsers.total);
+      setBusinesses(nextBusinesses);
+      setSelectedIds([]);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Kullanıcılar alınamadı.');
     } finally {
       setLoading(false);
     }
-  }
+  }, [query, request]);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   function openCreateModal() {
     setDraft(EMPTY_DRAFT);
@@ -73,6 +110,7 @@ export function Users() {
       phone: user.phone,
       password: '',
       role: user.role,
+      vendorId: user.vendorId ?? '',
       notificationsEnabled: user.notificationsEnabled,
       isSuspended: user.isSuspended,
       suspendedReason: user.suspendedReason,
@@ -100,11 +138,49 @@ export function Users() {
       setModalOpen(false);
       setDraft(EMPTY_DRAFT);
       await load();
+      setToast('Kullanıcı kaydedildi.');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Kullanıcı kaydedilemedi.');
     } finally {
       setSaving(false);
     }
+  }
+
+  async function bulkUpdate(payload: Partial<Pick<AdminAppUser, 'notificationsEnabled' | 'isSuspended' | 'isBanned'>> & { suspendedReason?: string; bannedReason?: string }) {
+    if (selectedIds.length === 0) {
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await request('/admin/users/bulk', {
+        method: 'POST',
+        body: { userIds: selectedIds, patch: payload },
+      });
+      await load();
+      setToast('Toplu kullanıcı işlemi tamamlandı.');
+    } catch (bulkError) {
+      setError(bulkError instanceof Error ? bulkError.message : 'Toplu kullanıcı işlemi başarısız.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function updateParam(key: string, value: string) {
+    const next = new URLSearchParams(searchParams);
+    if (value) {
+      next.set(key, value);
+    } else {
+      next.delete(key);
+    }
+    next.set('page', '1');
+    setSearchParams(next);
+  }
+
+  function toggleSelected(id: string, checked: boolean) {
+    setSelectedIds((current) =>
+      checked ? Array.from(new Set([...current, id])) : current.filter((item) => item !== id),
+    );
   }
 
   if (loading) {
@@ -113,25 +189,111 @@ export function Users() {
 
   return (
     <div className="space-y-8">
+      <Toast message={toast} onClose={() => setToast('')} />
       <PageHeader
         title="Kullanıcılar"
         description="Müşteri, işletme operatörü ve destek hesaplarını buradan yönetin."
         action={
-          <button
-            className="rounded-2xl bg-primary text-white px-5 py-3 text-sm font-bold hover:bg-emerald-700 transition-colors"
-            onClick={openCreateModal}
-            type="button"
-          >
-            Yeni Kullanıcı
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold hover:bg-slate-50"
+              onClick={() => void downloadCsv('/admin/export/users', 'users.csv', exportQuery)}
+              type="button"
+            >
+              CSV Export
+            </button>
+            <button
+              className="rounded-2xl bg-primary text-white px-5 py-3 text-sm font-bold hover:bg-emerald-700 transition-colors"
+              onClick={openCreateModal}
+              type="button"
+            >
+              Yeni Kullanıcı
+            </button>
+          </div>
         }
       />
+
+      <Panel title="Filtreler">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <TextInput
+            label="Arama"
+            onChange={(value) => updateParam('q', value)}
+            value={searchParams.get('q') ?? ''}
+          />
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-600">Rol</span>
+            <select
+              className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none"
+              onChange={(event) => updateParam('role', event.target.value)}
+              value={searchParams.get('role') ?? ''}
+            >
+              <option value="">Tümü</option>
+              {USER_ROLES.map((role) => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-600">Askı</span>
+            <select
+              className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none"
+              onChange={(event) => updateParam('isSuspended', event.target.value)}
+              value={searchParams.get('isSuspended') ?? ''}
+            >
+              <option value="">Tümü</option>
+              <option value="true">Askıda</option>
+              <option value="false">Askıda değil</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-600">Ban</span>
+            <select
+              className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none"
+              onChange={(event) => updateParam('isBanned', event.target.value)}
+              value={searchParams.get('isBanned') ?? ''}
+            >
+              <option value="">Tümü</option>
+              <option value="true">Yasaklı</option>
+              <option value="false">Yasaklı değil</option>
+            </select>
+          </label>
+        </div>
+      </Panel>
 
       {error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       ) : null}
+
+      <BulkBar count={selectedIds.length}>
+        <button
+          className="rounded-2xl bg-white px-4 py-2 font-bold text-emerald-800 disabled:opacity-60"
+          disabled={saving}
+          onClick={() => void bulkUpdate({ notificationsEnabled: true })}
+          type="button"
+        >
+          Bildirim Aç
+        </button>
+        <button
+          className="rounded-2xl bg-amber-600 px-4 py-2 font-bold text-white disabled:opacity-60"
+          disabled={saving}
+          onClick={() => void bulkUpdate({ isSuspended: true, suspendedReason: 'Admin toplu askıya alma' })}
+          type="button"
+        >
+          Askıya Al
+        </button>
+        <button
+          className="rounded-2xl bg-red-600 px-4 py-2 font-bold text-white disabled:opacity-60"
+          disabled={saving}
+          onClick={() => void bulkUpdate({ isBanned: true, bannedReason: 'Admin toplu yasaklama' })}
+          type="button"
+        >
+          Banla
+        </button>
+      </BulkBar>
 
       <Panel title="Kullanıcı Listesi">
         {users.length === 0 ? (
@@ -141,6 +303,15 @@ export function Users() {
             <table className="w-full text-left">
               <thead className="text-xs uppercase tracking-wide text-slate-500">
                 <tr>
+                  <th className="py-3">
+                    <input
+                      checked={users.length > 0 && selectedIds.length === users.length}
+                      onChange={(event) =>
+                        setSelectedIds(event.target.checked ? users.map((user) => user.id) : [])
+                      }
+                      type="checkbox"
+                    />
+                  </th>
                   <th className="py-3">Ad</th>
                   <th className="py-3">Rol</th>
                   <th className="py-3">Sipariş</th>
@@ -152,6 +323,13 @@ export function Users() {
               <tbody>
                 {users.map((user) => (
                   <tr className="border-t border-slate-100" key={user.id}>
+                    <td className="py-4">
+                      <input
+                        checked={selectedIds.includes(user.id)}
+                        onChange={(event) => toggleSelected(user.id, event.target.checked)}
+                        type="checkbox"
+                      />
+                    </td>
                     <td className="py-4">
                       <div>
                         <p className="font-semibold">{user.displayName}</p>
@@ -185,6 +363,16 @@ export function Users() {
             </table>
           </div>
         )}
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={(nextPage) => {
+            const next = new URLSearchParams(searchParams);
+            next.set('page', String(nextPage));
+            setSearchParams(next);
+          }}
+        />
       </Panel>
 
       <Modal
@@ -226,6 +414,22 @@ export function Users() {
               {USER_ROLES.map((role) => (
                 <option key={role} value={role}>
                   {role}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-600">Bağlı İşletme</span>
+            <select
+              className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-primary focus:bg-white"
+              disabled={draft.role !== 'VENDOR'}
+              onChange={(event) => setDraft((current) => ({ ...current, vendorId: event.target.value }))}
+              value={draft.vendorId}
+            >
+              <option value="">İşletme yok</option>
+              {businesses.map((business) => (
+                <option key={business.id} value={business.id}>
+                  {business.name}
                 </option>
               ))}
             </select>

@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, Navigate, useParams } from 'react-router-dom';
 
-import { useAdminAuth } from '../auth/AdminAuthContext';
+import { useAdminAuth } from '../auth/adminAuth';
 import {
   EmptyState,
   LoadingState,
@@ -61,6 +61,8 @@ type CampaignDraft = {
   badgeLabel: string;
   discountPercent: string;
   discountedPrice: string;
+  startsAt: string;
+  endsAt: string;
   productIds: string[];
 };
 
@@ -90,6 +92,8 @@ const EMPTY_CAMPAIGN_DRAFT: CampaignDraft = {
   badgeLabel: '',
   discountPercent: '0',
   discountedPrice: '0',
+  startsAt: '',
+  endsAt: '',
   productIds: [],
 };
 
@@ -103,6 +107,7 @@ const TABS = [
 
 export function BusinessWorkspace() {
   const { businessId = '', tab = 'overview' } = useParams();
+  const isValidTab = TABS.some((item) => item.id === tab);
   const { request } = useAdminAuth();
   const [overview, setOverview] = useState<BusinessOverview | null>(null);
   const [orders, setOrders] = useState<AdminOrder[]>([]);
@@ -129,30 +134,43 @@ export function BusinessWorkspace() {
     pickupPointLabel: '',
     pickupPointAddress: '',
   });
+  const [pickupDraft, setPickupDraft] = useState({ label: '', address: '' });
+  const [operatorDraft, setOperatorDraft] = useState({
+    email: '',
+    displayName: '',
+    phone: '',
+    password: '',
+  });
+  const [bankDraft, setBankDraft] = useState({
+    holderName: '',
+    bankName: '',
+    iban: '',
+    isDefault: false,
+  });
 
-  async function loadOverview() {
+  const loadOverview = useCallback(async () => {
     const next = await request<BusinessOverview>(`/admin/businesses/${businessId}/overview`);
     setOverview(next);
-  }
+  }, [businessId, request]);
 
-  async function loadOrders() {
+  const loadOrders = useCallback(async () => {
     const next = await request<AdminOrder[]>(`/admin/businesses/${businessId}/orders`);
     setOrders(next);
-  }
+  }, [businessId, request]);
 
-  async function loadProducts() {
+  const loadProducts = useCallback(async () => {
     const next = await request<BusinessProductsResponse>(
       `/admin/businesses/${businessId}/products`,
     );
     setProductsData(next);
-  }
+  }, [businessId, request]);
 
-  async function loadCampaigns() {
+  const loadCampaigns = useCallback(async () => {
     const next = await request<AdminCampaign[]>(`/admin/businesses/${businessId}/campaigns`);
     setCampaigns(next);
-  }
+  }, [businessId, request]);
 
-  async function loadProfile() {
+  const loadProfile = useCallback(async () => {
     const next = await request<BusinessProfileResponse>(
       `/admin/businesses/${businessId}/profile`,
     );
@@ -169,9 +187,9 @@ export function BusinessWorkspace() {
       pickupPointLabel: next.pickupPoints[0]?.label ?? '',
       pickupPointAddress: next.pickupPoints[0]?.address ?? '',
     });
-  }
+  }, [businessId, request]);
 
-  async function loadCurrentTab() {
+  const loadCurrentTab = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -190,14 +208,14 @@ export function BusinessWorkspace() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [loadCampaigns, loadOrders, loadOverview, loadProducts, loadProfile, tab]);
 
   useEffect(() => {
-    if (!businessId) {
+    if (!businessId || !isValidTab) {
       return;
     }
     void loadCurrentTab();
-  }, [businessId, tab]);
+  }, [businessId, isValidTab, loadCurrentTab]);
 
   async function updateOrderStatus(orderId: string, status: OrderStatus) {
     await request(`/admin/businesses/${businessId}/orders/${orderId}/status`, {
@@ -236,20 +254,23 @@ export function BusinessWorkspace() {
     setProductModalOpen(true);
   }
 
-  async function onProductImageSelected(file: File | null) {
-    if (!file) {
+  async function saveProduct() {
+    if (!productDraft.title.trim()) {
+      setError('Ürün adı zorunludur.');
       return;
     }
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(new Error('Görsel okunamadı.'));
-      reader.readAsDataURL(file);
-    });
-    setProductDraft((current) => ({ ...current, imageUrl: dataUrl }));
-  }
-
-  async function saveProduct() {
+    if (Number(productDraft.unitPrice) <= 0) {
+      setError('Ürün fiyatı sıfırdan büyük olmalıdır.');
+      return;
+    }
+    if (productDraft.trackStock && Number(productDraft.initialStock) < 0) {
+      setError('İlk stok negatif olamaz.');
+      return;
+    }
+    if (Number(productDraft.reorderLevel) < 0) {
+      setError('Reorder level negatif olamaz.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -292,6 +313,27 @@ export function BusinessWorkspace() {
     await loadProducts();
   }
 
+  async function updateSection(
+    sectionId: string,
+    payload: { label?: string; isActive?: boolean; displayOrder?: number },
+  ) {
+    await request(`/admin/businesses/${businessId}/sections/${sectionId}`, {
+      method: 'PATCH',
+      body: payload,
+    });
+    await loadProducts();
+  }
+
+  async function archiveProduct(product: AdminProduct) {
+    if (!window.confirm(`${product.title} ürünü arşivlenecek. Onaylıyor musunuz?`)) {
+      return;
+    }
+    await request(`/admin/businesses/${businessId}/products/${product.id}`, {
+      method: 'DELETE',
+    });
+    await loadProducts();
+  }
+
   function openCampaignModal(campaign?: AdminCampaign) {
     if (campaign) {
       setCampaignDraft({
@@ -304,6 +346,8 @@ export function BusinessWorkspace() {
         badgeLabel: campaign.badgeLabel,
         discountPercent: String(campaign.discountPercent),
         discountedPrice: String(campaign.discountedPrice),
+        startsAt: campaign.startsAt?.slice(0, 16) ?? '',
+        endsAt: campaign.endsAt?.slice(0, 16) ?? '',
         productIds: campaign.productIds,
       });
     } else {
@@ -313,6 +357,18 @@ export function BusinessWorkspace() {
   }
 
   async function saveCampaign() {
+    if (!campaignDraft.title.trim()) {
+      setError('Kampanya başlığı zorunludur.');
+      return;
+    }
+    if (
+      campaignDraft.startsAt &&
+      campaignDraft.endsAt &&
+      new Date(campaignDraft.startsAt).getTime() > new Date(campaignDraft.endsAt).getTime()
+    ) {
+      setError('Kampanya bitiş tarihi başlangıç tarihinden önce olamaz.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -320,6 +376,8 @@ export function BusinessWorkspace() {
         ...campaignDraft,
         discountPercent: Number(campaignDraft.discountPercent),
         discountedPrice: Number(campaignDraft.discountedPrice),
+        startsAt: campaignDraft.startsAt || null,
+        endsAt: campaignDraft.endsAt || null,
       };
       if (campaignDraft.id) {
         await request(`/admin/businesses/${businessId}/campaigns/${campaignDraft.id}`, {
@@ -350,6 +408,16 @@ export function BusinessWorkspace() {
     await loadCampaigns();
   }
 
+  async function deleteCampaign(campaign: AdminCampaign) {
+    if (!window.confirm(`${campaign.title} kampanyası silinecek. Onaylıyor musunuz?`)) {
+      return;
+    }
+    await request(`/admin/businesses/${businessId}/campaigns/${campaign.id}`, {
+      method: 'DELETE',
+    });
+    await loadCampaigns();
+  }
+
   async function saveProfile() {
     setSaving(true);
     setError('');
@@ -364,6 +432,69 @@ export function BusinessWorkspace() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function createPickupPoint() {
+    setSaving(true);
+    setError('');
+    try {
+      await request(`/admin/businesses/${businessId}/pickup-points`, {
+        method: 'POST',
+        body: pickupDraft,
+      });
+      setPickupDraft({ label: '', address: '' });
+      await loadProfile();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Teslim noktası kaydedilemedi.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updatePickupPoint(pointId: string, isActive: boolean) {
+    await request(`/admin/businesses/${businessId}/pickup-points/${pointId}`, {
+      method: 'PATCH',
+      body: { isActive },
+    });
+    await loadProfile();
+  }
+
+  async function createOperator() {
+    setSaving(true);
+    setError('');
+    try {
+      await request(`/admin/businesses/${businessId}/operators`, {
+        method: 'POST',
+        body: operatorDraft,
+      });
+      setOperatorDraft({ email: '', displayName: '', phone: '', password: '' });
+      await loadProfile();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Operatör kaydedilemedi.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createBankAccount() {
+    setSaving(true);
+    setError('');
+    try {
+      await request(`/admin/businesses/${businessId}/bank-accounts`, {
+        method: 'POST',
+        body: bankDraft,
+      });
+      setBankDraft({ holderName: '', bankName: '', iban: '', isDefault: false });
+      await loadProfile();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Banka hesabı kaydedilemedi.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!isValidTab) {
+    return <Navigate replace to={`/businesses/${businessId}/overview`} />;
   }
 
   if (loading) {
@@ -581,7 +712,54 @@ export function BusinessWorkspace() {
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               {productsData?.sections.map((section) => (
-                <StatusBadge key={section.id} label={section.label} tone={section.isActive ? 'info' : 'default'} />
+                <div className="flex items-center gap-2 rounded-2xl border border-slate-100 px-3 py-2" key={section.id}>
+                  <StatusBadge label={section.label} tone={section.isActive ? 'info' : 'default'} />
+                  <button
+                    className="text-xs font-bold text-slate-500 hover:text-primary"
+                    onClick={() =>
+                      void updateSection(section.id, {
+                        isActive: !section.isActive,
+                      })
+                    }
+                    type="button"
+                  >
+                    {section.isActive ? 'Pasifleştir' : 'Aktifleştir'}
+                  </button>
+                  <button
+                    className="text-xs font-bold text-slate-500 hover:text-primary"
+                    onClick={() => {
+                      const label = window.prompt('Yeni bölüm adı', section.label);
+                      if (label) {
+                        void updateSection(section.id, { label });
+                      }
+                    }}
+                    type="button"
+                    >
+                      Düzenle
+                    </button>
+                  <button
+                    className="text-xs font-bold text-slate-500 hover:text-primary"
+                    onClick={() =>
+                      void updateSection(section.id, {
+                        displayOrder: Math.max(0, section.displayOrder - 1),
+                      })
+                    }
+                    type="button"
+                  >
+                    Yukarı
+                  </button>
+                  <button
+                    className="text-xs font-bold text-slate-500 hover:text-primary"
+                    onClick={() =>
+                      void updateSection(section.id, {
+                        displayOrder: section.displayOrder + 1,
+                      })
+                    }
+                    type="button"
+                  >
+                    Aşağı
+                  </button>
+                </div>
               ))}
             </div>
           </Panel>
@@ -615,6 +793,13 @@ export function BusinessWorkspace() {
                             type="button"
                           >
                             Düzenle
+                          </button>
+                          <button
+                            className="rounded-2xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                            onClick={() => void archiveProduct(product)}
+                            type="button"
+                          >
+                            Arşivle
                           </button>
                         </div>
                         <p className="mt-3 text-sm text-slate-700">{product.description}</p>
@@ -689,6 +874,13 @@ export function BusinessWorkspace() {
                         type="button"
                       >
                         Toggle
+                      </button>
+                      <button
+                        className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+                        onClick={() => void deleteCampaign(campaign)}
+                        type="button"
+                      >
+                        Sil
                       </button>
                     </div>
                   </div>
@@ -776,7 +968,39 @@ export function BusinessWorkspace() {
             />
           </div>
           {profile ? (
-            <div className="mt-8 grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="mt-8 space-y-6">
+              <Panel title="Teslim Noktaları">
+                <div className="space-y-3">
+                  {profile.pickupPoints.map((point) => (
+                    <div className="flex flex-col gap-3 rounded-2xl border border-slate-100 p-4 md:flex-row md:items-center md:justify-between" key={point.id}>
+                      <div>
+                        <p className="font-bold">{point.label}</p>
+                        <p className="text-sm text-slate-500">{point.address}</p>
+                      </div>
+                      <button
+                        className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold"
+                        onClick={() => void updatePickupPoint(point.id, !point.isActive)}
+                        type="button"
+                      >
+                        {point.isActive ? 'Pasifleştir' : 'Aktifleştir'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-[1fr_1fr_auto]">
+                  <TextInput label="Yeni Etiket" onChange={(value) => setPickupDraft((current) => ({ ...current, label: value }))} value={pickupDraft.label} />
+                  <TextInput label="Yeni Adres" onChange={(value) => setPickupDraft((current) => ({ ...current, address: value }))} value={pickupDraft.address} />
+                  <button
+                    className="mt-8 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+                    disabled={saving || !pickupDraft.label || !pickupDraft.address}
+                    onClick={() => void createPickupPoint()}
+                    type="button"
+                  >
+                    Ekle
+                  </button>
+                </div>
+              </Panel>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <Panel title="Operatörler">
                 {profile.operators.length === 0 ? (
                   <EmptyState message="Operatör bulunmuyor." />
@@ -790,6 +1014,22 @@ export function BusinessWorkspace() {
                     ))}
                   </div>
                 )}
+                <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <TextInput label="E-posta" onChange={(value) => setOperatorDraft((current) => ({ ...current, email: value }))} value={operatorDraft.email} />
+                  <TextInput label="Ad Soyad" onChange={(value) => setOperatorDraft((current) => ({ ...current, displayName: value }))} value={operatorDraft.displayName} />
+                  <TextInput label="Telefon" onChange={(value) => setOperatorDraft((current) => ({ ...current, phone: value }))} value={operatorDraft.phone} />
+                  <TextInput label="Geçici Şifre" onChange={(value) => setOperatorDraft((current) => ({ ...current, password: value }))} type="password" value={operatorDraft.password} />
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <button
+                    className="rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+                    disabled={saving || !operatorDraft.email || !operatorDraft.displayName || !operatorDraft.password}
+                    onClick={() => void createOperator()}
+                    type="button"
+                  >
+                    Operatör Ekle
+                  </button>
+                </div>
               </Panel>
               <Panel title="Banka Hesapları">
                 {profile.bankAccounts.length === 0 ? (
@@ -809,7 +1049,31 @@ export function BusinessWorkspace() {
                     ))}
                   </div>
                 )}
+                <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <TextInput label="Hesap Sahibi" onChange={(value) => setBankDraft((current) => ({ ...current, holderName: value }))} value={bankDraft.holderName} />
+                  <TextInput label="Banka" onChange={(value) => setBankDraft((current) => ({ ...current, bankName: value }))} value={bankDraft.bankName} />
+                  <TextInput label="IBAN" onChange={(value) => setBankDraft((current) => ({ ...current, iban: value }))} value={bankDraft.iban} />
+                  <label className="mt-8 flex items-center gap-3">
+                    <input
+                      checked={bankDraft.isDefault}
+                      onChange={(event) => setBankDraft((current) => ({ ...current, isDefault: event.target.checked }))}
+                      type="checkbox"
+                    />
+                    <span className="text-sm font-semibold text-slate-600">Varsayılan</span>
+                  </label>
+                </div>
+                <div className="mt-4 flex justify-end">
+                  <button
+                    className="rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+                    disabled={saving || !bankDraft.holderName || !bankDraft.bankName || !bankDraft.iban}
+                    onClick={() => void createBankAccount()}
+                    type="button"
+                  >
+                    Banka Hesabı Ekle
+                  </button>
+                </div>
               </Panel>
+              </div>
             </div>
           ) : null}
         </Panel>
@@ -882,14 +1146,9 @@ export function BusinessWorkspace() {
             onChange={(value) => setProductDraft((current) => ({ ...current, imageUrl: value }))}
             value={productDraft.imageUrl}
           />
-          <label className="block">
-            <span className="text-sm font-semibold text-slate-600">Görsel Dosyası</span>
-            <input
-              className="mt-2 block w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-              onChange={(event) => void onProductImageSelected(event.target.files?.[0] ?? null)}
-              type="file"
-            />
-          </label>
+          <p className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Dosya yükleme provider-ready durumda. Şimdilik CDN veya güvenli public görsel URL'i girin.
+          </p>
           <TextInput
             label="İlk Stok"
             onChange={(value) => setProductDraft((current) => ({ ...current, initialStock: value }))}
@@ -1035,6 +1294,18 @@ export function BusinessWorkspace() {
             label="Rozet"
             onChange={(value) => setCampaignDraft((current) => ({ ...current, badgeLabel: value }))}
             value={campaignDraft.badgeLabel}
+          />
+          <TextInput
+            label="Başlangıç"
+            onChange={(value) => setCampaignDraft((current) => ({ ...current, startsAt: value }))}
+            type="datetime-local"
+            value={campaignDraft.startsAt}
+          />
+          <TextInput
+            label="Bitiş"
+            onChange={(value) => setCampaignDraft((current) => ({ ...current, endsAt: value }))}
+            type="datetime-local"
+            value={campaignDraft.endsAt}
           />
         </div>
         <div className="mt-5">

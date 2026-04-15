@@ -85,7 +85,7 @@ async function bootstrap() {
       }
       callback(null, resolveAllowedCorsOrigins().has(origin));
     },
-    credentials: false,
+    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Accept', 'Authorization', 'Content-Type'],
   });

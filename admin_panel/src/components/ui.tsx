@@ -132,8 +132,16 @@ export function Modal({
     return null;
   }
   return (
-    <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
-      <div className="w-full max-w-3xl bg-white rounded-[1.75rem] shadow-2xl overflow-hidden">
+    <div
+      aria-modal="true"
+      className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4 z-[100]"
+      onMouseDown={onClose}
+      role="dialog"
+    >
+      <div
+        className="w-full max-w-3xl max-h-[90vh] bg-white rounded-[1.75rem] shadow-2xl overflow-hidden flex flex-col"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
           <h3 className="text-lg font-bold font-headline">{title}</h3>
           <button
@@ -144,7 +152,7 @@ export function Modal({
             Kapat
           </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="p-6 overflow-y-auto">{children}</div>
       </div>
     </div>
   );
@@ -198,5 +206,133 @@ export function TextArea({
         value={value}
       />
     </label>
+  );
+}
+
+export function Toast({
+  message,
+  tone = 'success',
+  onClose,
+}: {
+  message: string;
+  tone?: 'success' | 'danger' | 'warning';
+  onClose: () => void;
+}) {
+  if (!message) {
+    return null;
+  }
+  const toneClass =
+    tone === 'danger'
+      ? 'border-red-200 bg-red-50 text-red-700'
+      : tone === 'warning'
+        ? 'border-amber-200 bg-amber-50 text-amber-800'
+        : 'border-emerald-200 bg-emerald-50 text-emerald-800';
+  return (
+    <div className={`fixed right-6 top-20 z-[120] max-w-sm rounded-2xl border px-4 py-3 text-sm shadow-lg ${toneClass}`}>
+      <div className="flex items-start gap-4">
+        <p className="flex-1">{message}</p>
+        <button className="font-bold" onClick={onClose} type="button">
+          Kapat
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel = 'Onayla',
+  danger = false,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean;
+  title: string;
+  description: string;
+  confirmLabel?: string;
+  danger?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!open) {
+    return null;
+  }
+  return (
+    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <h3 className="text-lg font-bold font-headline">{title}</h3>
+        <p className="mt-2 text-sm text-slate-600">{description}</p>
+        <div className="mt-6 flex justify-end gap-3">
+          <button className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold" onClick={onCancel} type="button">
+            Vazgeç
+          </button>
+          <button
+            className={`rounded-2xl px-4 py-2 text-sm font-bold text-white ${danger ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:bg-emerald-700'}`}
+            onClick={onConfirm}
+            type="button"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function Pagination({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}) {
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  return (
+    <div className="flex flex-col gap-3 border-t border-slate-100 px-6 py-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+      <span>
+        {total} kayıt · Sayfa {page}/{pageCount}
+      </span>
+      <div className="flex gap-2">
+        <button
+          className="rounded-2xl border border-slate-200 px-4 py-2 font-semibold disabled:opacity-40"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+          type="button"
+        >
+          Önceki
+        </button>
+        <button
+          className="rounded-2xl border border-slate-200 px-4 py-2 font-semibold disabled:opacity-40"
+          disabled={page >= pageCount}
+          onClick={() => onPageChange(page + 1)}
+          type="button"
+        >
+          Sonraki
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function BulkBar({
+  count,
+  children,
+}: PropsWithChildren<{
+  count: number;
+}>) {
+  if (count === 0) {
+    return null;
+  }
+  return (
+    <div className="sticky top-20 z-30 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 shadow-sm md:flex-row md:items-center md:justify-between">
+      <span className="font-bold">{count} kayıt seçildi</span>
+      <div className="flex flex-wrap gap-2">{children}</div>
+    </div>
   );
 }

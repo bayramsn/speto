@@ -11,6 +11,7 @@ export type CampaignKind = 'HAPPY_HOUR' | 'DISCOUNT' | 'CLEARANCE' | 'BUNDLE';
 export type CampaignStatus = 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'COMPLETED';
 export type UserRole = 'CUSTOMER' | 'ADMIN' | 'SUPPORT' | 'VENDOR';
 export type SupportStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+export type SupportPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
 export type NotificationStatus = 'DRAFT' | 'SCHEDULED' | 'SENT';
 export type NotificationAudience =
   | 'ALL_USERS'
@@ -30,9 +31,7 @@ export interface AdminUser {
 
 export interface AdminTokens {
   accessToken: string;
-  refreshToken: string;
   accessTokenExpiresAt: string;
-  refreshTokenExpiresAt: string;
 }
 
 export interface AdminSession {
@@ -270,6 +269,7 @@ export interface FinanceSummary {
     completedAt: string | null;
     bankName: string;
     iban: string;
+    note: string | null;
   }>;
 }
 
@@ -304,6 +304,7 @@ export interface AdminNotification {
   updatedAt: string;
   createdByName: string;
   createdByEmail: string;
+  deliveryLogs: AdminNotificationDeliveryLog[];
 }
 
 export interface AdminSupportTicket {
@@ -315,8 +316,57 @@ export interface AdminSupportTicket {
   message: string;
   channel: string;
   status: SupportStatus;
+  priority: SupportPriority;
+  assignedAdminId: string | null;
+  assignedAdminName: string;
+  assignedAdminEmail: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SupportTicketMessage {
+  id: string;
+  ticketId: string;
+  authorId: string;
+  authorName: string;
+  authorEmail: string;
+  authorRole: UserRole;
+  body: string;
+  isInternal: boolean;
+  createdAt: string;
+}
+
+export interface AdminSupportTicketDetail extends AdminSupportTicket {
+  messages: SupportTicketMessage[];
+}
+
+export interface AdminAuditLog {
+  id: string;
+  adminUserId: string;
+  adminUserName: string;
+  adminUserEmail: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  metadata: unknown;
+  createdAt: string;
+}
+
+export interface AdminNotificationDeliveryLog {
+  id: string;
+  notificationId: string;
+  provider: string;
+  status: string;
+  target: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+}
+
+export interface PagedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface AdminSettings {

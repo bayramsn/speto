@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 
-import { useAdminAuth } from './AdminAuthContext';
+import { useAdminAuth } from './adminAuth';
 
 export function ProtectedRoute() {
   const { session, loading } = useAdminAuth();

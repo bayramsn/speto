@@ -10,10 +10,11 @@ import {
   Users, 
   Headset, 
   Wallet, 
-  Star 
+  Star,
+  ShieldCheck,
 } from 'lucide-react';
 
-import { useAdminAuth } from '../auth/AdminAuthContext';
+import { useAdminAuth } from '../auth/adminAuth';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -26,14 +27,29 @@ const navItems = [
   { path: '/reports', label: 'Raporlar', icon: BarChart },
   { path: '/notifications', label: 'Bildirimler', icon: Bell },
   { path: '/support', label: 'Destek', icon: Headset },
+  { path: '/audit-logs', label: 'Audit Logs', icon: ShieldCheck },
   { path: '/settings', label: 'Ayarlar', icon: Settings },
 ];
 
-export const Sidebar: FC = () => {
+type SidebarProps = {
+  mobileOpen?: boolean;
+  onClose?: () => void;
+};
+
+export const Sidebar: FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
   const { session, logout } = useAdminAuth();
 
   return (
-    <aside className="h-screen w-64 fixed left-0 top-0 overflow-y-auto bg-slate-50 flex flex-col py-6 px-4 gap-2 z-50">
+    <>
+      <div
+        className={`fixed inset-0 z-40 bg-slate-950/40 lg:hidden ${mobileOpen ? 'block' : 'hidden'}`}
+        onClick={onClose}
+      />
+      <aside
+        className={`h-screen w-64 fixed left-0 top-0 overflow-y-auto bg-slate-50 flex flex-col py-6 px-4 gap-2 z-50 transition-transform lg:translate-x-0 ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        }`}
+      >
       <div className="mb-8 px-4">
         <h1 className="text-2xl font-bold text-primary tracking-tight font-headline">SepetPro</h1>
         <p className="text-xs text-slate-500 font-medium">God Mode Admin</p>
@@ -46,6 +62,7 @@ export const Sidebar: FC = () => {
             <NavLink
               key={item.path}
               to={item.path}
+              onClick={onClose}
               className={({ isActive }) =>
                 `flex items-center gap-3 py-3 px-4 rounded-xl font-headline font-medium text-sm transition-colors duration-200 ${
                   isActive
@@ -89,6 +106,7 @@ export const Sidebar: FC = () => {
           Güvenli Çıkış
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 };

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
-import { useAdminAuth } from '../auth/AdminAuthContext';
-import { EmptyState, LoadingState, Modal, PageHeader, Panel, StatusBadge, TextArea, TextInput } from '../components/ui';
+import { useAdminAuth } from '../auth/adminAuth';
+import { EmptyState, LoadingState, Modal, PageHeader, Pagination, Panel, StatusBadge, TextArea, TextInput, Toast } from '../components/ui';
 import { formatDate } from '../lib/formatters';
-import type { AdminEvent, BusinessListItem } from '../lib/types';
+import type { AdminEvent, BusinessListItem, PagedResponse } from '../lib/types';
 
 type EventDraft = {
   id?: string;
@@ -42,34 +43,50 @@ const EMPTY_EVENT_DRAFT: EventDraft = {
 
 export function Events() {
   const { request } = useAdminAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [businesses, setBusinesses] = useState<BusinessListItem[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [draft, setDraft] = useState<EventDraft>(EMPTY_EVENT_DRAFT);
 
-  async function load() {
+  const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
+  const pageSize = 25;
+  const query = useMemo(
+    () => ({
+      q: searchParams.get('q') ?? '',
+      isActive: searchParams.get('isActive') ?? '',
+      page,
+      pageSize,
+    }),
+    [page, searchParams],
+  );
+
+  const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const [nextEvents, nextBusinesses] = await Promise.all([
-        request<AdminEvent[]>('/admin/events'),
+        request<PagedResponse<AdminEvent>>('/admin/events', { query }),
         request<BusinessListItem[]>('/admin/businesses'),
       ]);
-      setEvents(nextEvents);
+      setEvents(nextEvents.items);
+      setTotal(nextEvents.total);
       setBusinesses(nextBusinesses);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Etkinlikler alınamadı.');
     } finally {
       setLoading(false);
     }
-  }
+  }, [query, request]);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   function openCreateModal() {
     setDraft({
@@ -124,11 +141,40 @@ export function Events() {
       setModalOpen(false);
       setDraft(EMPTY_EVENT_DRAFT);
       await load();
+      setToast('Etkinlik kaydedildi.');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Etkinlik kaydedilemedi.');
     } finally {
       setSaving(false);
     }
+  }
+
+  async function deleteEvent(event: AdminEvent) {
+    if (!window.confirm(`${event.title} etkinliği silinecek. Onaylıyor musunuz?`)) {
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await request(`/admin/events/${event.id}`, { method: 'DELETE' });
+      await load();
+      setToast('Etkinlik silindi.');
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Etkinlik silinemedi.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function updateParam(key: string, value: string) {
+    const next = new URLSearchParams(searchParams);
+    if (value) {
+      next.set(key, value);
+    } else {
+      next.delete(key);
+    }
+    next.set('page', '1');
+    setSearchParams(next);
   }
 
   if (loading) {
@@ -137,6 +183,7 @@ export function Events() {
 
   return (
     <div className="space-y-8">
+      <Toast message={toast} onClose={() => setToast('')} />
       <PageHeader
         title="Etkinlik & Puan"
         description="İşletmelerin etkinliklerini ve puan tüketim akışını yönetin."
@@ -150,6 +197,28 @@ export function Events() {
           </button>
         }
       />
+
+      <Panel title="Filtreler">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <TextInput
+            label="Arama"
+            onChange={(value) => updateParam('q', value)}
+            value={searchParams.get('q') ?? ''}
+          />
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-600">Yayın</span>
+            <select
+              className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none"
+              onChange={(event) => updateParam('isActive', event.target.value)}
+              value={searchParams.get('isActive') ?? ''}
+            >
+              <option value="">Tümü</option>
+              <option value="true">Aktif</option>
+              <option value="false">Pasif</option>
+            </select>
+          </label>
+        </div>
+      </Panel>
 
       {error ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -185,11 +254,29 @@ export function Events() {
                   >
                     Düzenle
                   </button>
+                  <button
+                    className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                    disabled={saving}
+                    onClick={() => void deleteEvent(event)}
+                    type="button"
+                  >
+                    Sil
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         )}
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={(nextPage) => {
+            const next = new URLSearchParams(searchParams);
+            next.set('page', String(nextPage));
+            setSearchParams(next);
+          }}
+        />
       </Panel>
 
       <Modal

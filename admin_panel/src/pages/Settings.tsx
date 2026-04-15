@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { useAdminAuth } from '../auth/AdminAuthContext';
+import { useAdminAuth } from '../auth/adminAuth';
 import { LoadingState, PageHeader, Panel, TextArea, TextInput } from '../components/ui';
 import type { AdminSettings } from '../lib/types';
 

@@ -39,6 +39,13 @@ enum SupportStatus {
   CLOSED
 }
 
+enum SupportPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
 enum InventoryMovementType {
   SALE
   MANUAL_ADJUSTMENT
@@ -142,6 +149,8 @@ model User {
   tickets                    Ticket[]
   walletEntries              WalletLedgerEntry[]
   supportTickets             SupportTicket[]
+  assignedSupportTickets     SupportTicket[]      @relation("AssignedSupportTickets")
+  supportTicketMessages      SupportTicketMessage[]
   refreshSessions            RefreshSession[]
   adminRefreshSessions       AdminRefreshSession[]
   adminAuditLogs             AdminAuditLog[]
@@ -409,15 +418,32 @@ model Ticket {
 }
 
 model SupportTicket {
-  id        String        @id @default(cuid())
-  userId    String
-  subject   String
-  message   String
-  channel   String
-  status    SupportStatus @default(OPEN)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String                 @id @default(cuid())
+  userId          String
+  subject         String
+  message         String
+  channel         String
+  status          SupportStatus          @default(OPEN)
+  priority        SupportPriority        @default(NORMAL)
+  assignedAdminId String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedAdmin   User?                  @relation("AssignedSupportTickets", fields: [assignedAdminId], references: [id], onDelete: SetNull)
+  messages        SupportTicketMessage[]
+}
+
+model SupportTicketMessage {
+  id          String        @id @default(cuid())
+  ticketId    String
+  authorId    String
+  body        String
+  isInternal  Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  ticket      SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author      User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
 }
 
 model Favorite {
@@ -518,8 +544,22 @@ model AdminNotification {
   createdAt        DateTime                  @default(now())
   updatedAt        DateTime                  @updatedAt
   createdByAdmin   User                      @relation(fields: [createdByAdminId], references: [id], onDelete: Cascade)
+  deliveryLogs     AdminNotificationDeliveryLog[]
 
   @@index([status, createdAt])
+}
+
+model AdminNotificationDeliveryLog {
+  id             String            @id @default(cuid())
+  notificationId String
+  provider       String
+  status         String
+  target         String?
+  errorMessage   String?
+  createdAt      DateTime          @default(now())
+  notification   AdminNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([notificationId, createdAt])
 }
 
 model InventoryStock {

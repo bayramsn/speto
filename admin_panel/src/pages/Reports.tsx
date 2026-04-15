@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { useAdminAuth } from '../auth/AdminAuthContext';
+import { useAdminAuth } from '../auth/adminAuth';
 import { EmptyState, LoadingState, MetricCard, PageHeader, Panel } from '../components/ui';
 import { formatCurrency } from '../lib/formatters';
 import type { ReportsOverview } from '../lib/types';

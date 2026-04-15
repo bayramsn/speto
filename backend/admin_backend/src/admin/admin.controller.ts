@@ -110,6 +110,78 @@ export class AdminController {
     );
   }
 
+  @Post('businesses/:vendorId/pickup-points')
+  createBusinessPickupPoint(
+    @Req() req: AdminRequest,
+    @Param('vendorId') vendorId: string,
+    @Body() payload: Record<string, unknown>,
+  ) {
+    return this.adminService.createBusinessPickupPoint(req.adminUser!, vendorId, payload);
+  }
+
+  @Patch('businesses/:vendorId/pickup-points/:pickupPointId')
+  updateBusinessPickupPoint(
+    @Req() req: AdminRequest,
+    @Param('vendorId') vendorId: string,
+    @Param('pickupPointId') pickupPointId: string,
+    @Body() payload: Record<string, unknown>,
+  ) {
+    return this.adminService.updateBusinessPickupPoint(
+      req.adminUser!,
+      vendorId,
+      pickupPointId,
+      payload,
+    );
+  }
+
+  @Post('businesses/:vendorId/operators')
+  createBusinessOperator(
+    @Req() req: AdminRequest,
+    @Param('vendorId') vendorId: string,
+    @Body() payload: Record<string, unknown>,
+  ) {
+    return this.adminService.createBusinessOperator(req.adminUser!, vendorId, payload);
+  }
+
+  @Patch('businesses/:vendorId/operators/:operatorId')
+  updateBusinessOperator(
+    @Req() req: AdminRequest,
+    @Param('vendorId') vendorId: string,
+    @Param('operatorId') operatorId: string,
+    @Body() payload: Record<string, unknown>,
+  ) {
+    return this.adminService.updateBusinessOperator(
+      req.adminUser!,
+      vendorId,
+      operatorId,
+      payload,
+    );
+  }
+
+  @Post('businesses/:vendorId/bank-accounts')
+  createBusinessBankAccount(
+    @Req() req: AdminRequest,
+    @Param('vendorId') vendorId: string,
+    @Body() payload: Record<string, unknown>,
+  ) {
+    return this.adminService.createBusinessBankAccount(req.adminUser!, vendorId, payload);
+  }
+
+  @Patch('businesses/:vendorId/bank-accounts/:bankAccountId')
+  updateBusinessBankAccount(
+    @Req() req: AdminRequest,
+    @Param('vendorId') vendorId: string,
+    @Param('bankAccountId') bankAccountId: string,
+    @Body() payload: Record<string, unknown>,
+  ) {
+    return this.adminService.updateBusinessBankAccount(
+      req.adminUser!,
+      vendorId,
+      bankAccountId,
+      payload,
+    );
+  }
+
   @Get('businesses/:vendorId/products')
   businessProducts(@Param('vendorId') vendorId: string) {
     return this.adminService.listBusinessProducts(vendorId);
@@ -239,8 +311,8 @@ export class AdminController {
   }
 
   @Get('events')
-  events() {
-    return this.adminService.listEvents();
+  events(@Query() query: Record<string, unknown>) {
+    return this.adminService.listEvents(query);
   }
 
   @Post('events')
@@ -265,6 +337,20 @@ export class AdminController {
   @Get('finance/summary')
   financeSummary() {
     return this.adminService.getFinanceSummary();
+  }
+
+  @Post('finance/payouts')
+  createPayout(@Req() req: AdminRequest, @Body() payload: Record<string, unknown>) {
+    return this.adminService.createPayout(req.adminUser!, payload);
+  }
+
+  @Patch('finance/payouts/:payoutId')
+  updatePayout(
+    @Req() req: AdminRequest,
+    @Param('payoutId') payoutId: string,
+    @Body() payload: Record<string, unknown>,
+  ) {
+    return this.adminService.updatePayout(req.adminUser!, payoutId, payload);
   }
 
   @Get('reports/overview')
@@ -307,6 +393,11 @@ export class AdminController {
     return this.adminService.listSupportTickets(query);
   }
 
+  @Get('support/tickets/:ticketId')
+  supportTicket(@Param('ticketId') ticketId: string) {
+    return this.adminService.getSupportTicket(ticketId);
+  }
+
   @Patch('support/tickets/:ticketId')
   updateSupportTicket(
     @Req() req: AdminRequest,
@@ -314,6 +405,37 @@ export class AdminController {
     @Body() payload: Record<string, unknown>,
   ) {
     return this.adminService.updateSupportTicket(req.adminUser!, ticketId, payload);
+  }
+
+  @Patch('support/tickets/:ticketId/assignment')
+  updateSupportTicketAssignment(
+    @Req() req: AdminRequest,
+    @Param('ticketId') ticketId: string,
+    @Body() payload: Record<string, unknown>,
+  ) {
+    return this.adminService.updateSupportTicketAssignment(
+      req.adminUser!,
+      ticketId,
+      payload,
+    );
+  }
+
+  @Post('support/tickets/:ticketId/messages')
+  createSupportTicketMessage(
+    @Req() req: AdminRequest,
+    @Param('ticketId') ticketId: string,
+    @Body() payload: Record<string, unknown>,
+  ) {
+    return this.adminService.createSupportTicketMessage(
+      req.adminUser!,
+      ticketId,
+      payload,
+    );
+  }
+
+  @Post('uploads/presign')
+  createUploadIntent(@Body() payload: Record<string, unknown>) {
+    return this.adminService.createUploadIntent(payload);
   }
 
   @Get('audit-logs')

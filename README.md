@@ -104,7 +104,8 @@ flutter run -d chrome
 
 ## Demo Hesaplari
 
-- `admin@speto.app / admin123`
+- `admin@speto.app / admin123` sadece local/demo seed icindir; production admin
+  hesabi ayri ve guclu parola ile olusturulmalidir.
 - `burger@speto.app / vendor123`
 - `market@speto.app / vendor123`
 

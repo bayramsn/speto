@@ -16,6 +16,7 @@ import { Notifications } from './pages/Notifications';
 import { Support } from './pages/Support';
 import { Settings } from './pages/Settings';
 import { BusinessWorkspace } from './pages/BusinessWorkspace';
+import { AuditLogs } from './pages/AuditLogs';
 
 function App() {
   return (
@@ -40,6 +41,7 @@ function App() {
               <Route path="reports" element={<Reports />} />
               <Route path="notifications" element={<Notifications />} />
               <Route path="support" element={<Support />} />
+              <Route path="audit-logs" element={<AuditLogs />} />
               <Route path="settings" element={<Settings />} />
             </Route>
           </Route>
