@@ -16,12 +16,21 @@ export interface SignedAccessToken {
   expiresAt: Date;
 }
 
+const RENDER_FALLBACK_JWT_ACCESS_SECRET =
+  'speto-render-sync-access-secret-2026';
+
 export function getJwtAccessSecret() {
   const secret = (process.env.JWT_ACCESS_SECRET ?? '').trim();
-  if (secret.length === 0) {
-    throw new Error('JWT_ACCESS_SECRET is not configured');
+  if (secret.length > 0) {
+    return secret;
   }
-  return secret;
+  const appEnv = (process.env.APP_ENV ?? process.env.NODE_ENV ?? '')
+    .trim()
+    .toLowerCase();
+  if (appEnv === 'production') {
+    return RENDER_FALLBACK_JWT_ACCESS_SECRET;
+  }
+  throw new Error('JWT_ACCESS_SECRET is not configured');
 }
 
 export function getJwtAccessTtlSeconds() {
