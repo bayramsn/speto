@@ -88,14 +88,19 @@ function resolveAllowedCorsOrigins() {
     .split(',')
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0);
+  const renderSyncOrigins = [
+    'https://speto-sync-customer.onrender.com',
+    'https://speto-sync-stock.onrender.com',
+  ];
   const appEnv = (process.env.APP_ENV ?? process.env.NODE_ENV ?? 'development')
     .trim()
     .toLowerCase();
   if (appEnv == 'production') {
-    return new Set<string>(configuredOrigins);
+    return new Set<string>([...configuredOrigins, ...renderSyncOrigins]);
   }
   return new Set<string>([
     ...configuredOrigins,
+    ...renderSyncOrigins,
     'http://127.0.0.1:3000',
     'http://127.0.0.1:4000',
     'http://127.0.0.1:5173',
