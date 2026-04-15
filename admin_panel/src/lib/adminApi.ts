@@ -2,11 +2,18 @@ import type { AdminSession } from './types';
 
 const env = import.meta.env as Record<string, string | undefined>;
 
-export const ADMIN_API_BASE_URL = (
-  env.VITE_ADMIN_API_BASE_URL ||
-  env.ADMIN_API_BASE_URL ||
-  'http://127.0.0.1:4100/api'
-).replace(/\/$/, '');
+function resolveAdminApiBaseUrl() {
+  const configured = env.VITE_ADMIN_API_BASE_URL || env.ADMIN_API_BASE_URL;
+  if (configured) {
+    return configured.replace(/\/$/, '');
+  }
+  if (import.meta.env.DEV) {
+    return 'http://127.0.0.1:4100/api';
+  }
+  return '';
+}
+
+export const ADMIN_API_BASE_URL = resolveAdminApiBaseUrl();
 
 export class AdminApiError extends Error {
   readonly status: number;
@@ -28,6 +35,13 @@ export async function adminApiRequest<T>(
     accessToken?: string;
   } = {},
 ): Promise<T> {
+  if (!ADMIN_API_BASE_URL) {
+    throw new AdminApiError(
+      'Admin API adresi production build icin tanimli degil. VITE_ADMIN_API_BASE_URL ayarlanmali.',
+      0,
+    );
+  }
+
   const response = await fetch(`${ADMIN_API_BASE_URL}${path}`, {
     method: options.method ?? 'GET',
     headers: {

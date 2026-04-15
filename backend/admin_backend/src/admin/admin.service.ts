@@ -24,6 +24,8 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 
 type JsonRecord = Record<string, unknown>;
+type CsvValue = string | number | boolean | null | undefined;
+type CsvRow = Record<string, CsvValue>;
 
 const SETTINGS_DEFAULTS = {
   maintenanceMode: false,
@@ -127,8 +129,41 @@ export class AdminService {
     };
   }
 
-  async listBusinesses() {
+  async listBusinesses(query: JsonRecord = {}) {
+    const where: Prisma.VendorWhereInput = {};
+    const search = this.optionalString(query.q || query.search);
+    const approvalStatus = this.optionalVendorApprovalStatus(query.approvalStatus);
+    const storefrontType = this.optionalStorefrontType(query.storefrontType);
+    const isActive = this.optionalBoolean(query.isActive);
+    const city = this.optionalString(query.city);
+    const district = this.optionalString(query.district);
+
+    if (approvalStatus) {
+      where.approvalStatus = approvalStatus;
+    }
+    if (storefrontType) {
+      where.storefrontType = storefrontType;
+    }
+    if (isActive !== undefined) {
+      where.isActive = isActive;
+    }
+    if (city) {
+      where.city = { contains: city, mode: 'insensitive' };
+    }
+    if (district) {
+      where.district = { contains: district, mode: 'insensitive' };
+    }
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { category: { contains: search, mode: 'insensitive' } },
+        { city: { contains: search, mode: 'insensitive' } },
+        { district: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
     const businesses = await this.prisma.vendor.findMany({
+      where,
       include: {
         operators: {
           select: { id: true },
@@ -143,6 +178,7 @@ export class AdminService {
         },
       },
       orderBy: [{ displayOrder: 'asc' }, { createdAt: 'desc' }],
+      take: this.parseTake(query.take ?? query.limit, 250),
     });
     const activeOrderCounts = await this.getOpenOrderCountByVendor();
     return businesses.map((business) =>
@@ -312,6 +348,35 @@ export class AdminService {
     return this.getBusinessProfile(vendorId);
   }
 
+  async bulkUpdateBusinesses(adminUser: PrismaUser, payload: JsonRecord) {
+    const vendorIds = this.requiredIdArray(payload.vendorIds || payload.ids, 'İşletme seçimi zorunludur');
+    const patch = this.objectPayload(payload.patch || payload);
+    const data: Prisma.VendorUpdateManyMutationInput = {
+      ...(patch.isActive !== undefined
+        ? { isActive: this.parseBoolean(patch.isActive, true) }
+        : {}),
+      ...(patch.approvalStatus !== undefined
+        ? { approvalStatus: this.parseVendorApprovalStatus(patch.approvalStatus) }
+        : {}),
+      ...(patch.suspendedReason !== undefined
+        ? { suspendedReason: this.optionalString(patch.suspendedReason) || null }
+        : {}),
+    };
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('Toplu işletme güncellemesi için alan gönderilmedi');
+    }
+    const result = await this.prisma.vendor.updateMany({
+      where: { id: { in: vendorIds } },
+      data,
+    });
+    await this.logAction(adminUser.id, 'business.bulk.update', 'vendor', 'bulk', {
+      vendorIds,
+      data,
+      updatedCount: result.count,
+    });
+    return { updatedCount: result.count };
+  }
+
   async getBusinessOverview(vendorId: string) {
     const [profile, orders, products, campaigns, bankAccounts] = await Promise.all([
       this.getBusinessProfile(vendorId),
@@ -408,6 +473,24 @@ export class AdminService {
       vendorId,
     });
     return this.getOrderById(orderId);
+  }
+
+  async bulkUpdateOrderStatus(adminUser: PrismaUser, payload: JsonRecord) {
+    const orderIds = this.requiredIdArray(payload.orderIds || payload.ids, 'Sipariş seçimi zorunludur');
+    const status = this.parseOrderStatus(payload.status);
+    const result = await this.prisma.order.updateMany({
+      where: { id: { in: orderIds } },
+      data: {
+        status,
+        etaLabel: this.etaLabelForStatus(status),
+      },
+    });
+    await this.logAction(adminUser.id, 'order.bulk.status.update', 'order', 'bulk', {
+      orderIds,
+      status,
+      updatedCount: result.count,
+    });
+    return { updatedCount: result.count };
   }
 
   async listBusinessSections(vendorId: string) {
@@ -691,6 +774,31 @@ export class AdminService {
     return this.getProductById(productId);
   }
 
+  async deleteBusinessProduct(adminUser: PrismaUser, vendorId: string, productId: string) {
+    const existing = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true, vendorId: true, title: true },
+    });
+    if (!existing || existing.vendorId !== vendorId) {
+      throw new NotFoundException(`Product ${productId} not found`);
+    }
+
+    await this.prisma.product.update({
+      where: { id: productId },
+      data: {
+        isArchived: true,
+        isActive: false,
+        isVisibleInApp: false,
+      },
+    });
+    await this.logAction(adminUser.id, 'product.delete', 'product', productId, {
+      vendorId,
+      title: existing.title,
+      mode: 'soft-archive',
+    });
+    return { deleted: true, mode: 'soft-archive' };
+  }
+
   async listBusinessCampaigns(vendorId: string) {
     await this.ensureVendor(vendorId);
     const [products, campaigns] = await Promise.all([
@@ -837,6 +945,22 @@ export class AdminService {
     return this.getCampaignById(campaignId);
   }
 
+  async deleteBusinessCampaign(adminUser: PrismaUser, vendorId: string, campaignId: string) {
+    const existing = await this.prisma.vendorCampaign.findUnique({
+      where: { id: campaignId },
+      select: { id: true, vendorId: true, title: true },
+    });
+    if (!existing || existing.vendorId !== vendorId) {
+      throw new NotFoundException(`Campaign ${campaignId} not found`);
+    }
+    await this.prisma.vendorCampaign.delete({ where: { id: campaignId } });
+    await this.logAction(adminUser.id, 'campaign.delete', 'campaign', campaignId, {
+      vendorId,
+      title: existing.title,
+    });
+    return { deleted: true };
+  }
+
   async getBusinessProfile(vendorId: string) {
     const vendor = await this.prisma.vendor.findUnique({
       where: { id: vendorId },
@@ -912,8 +1036,44 @@ export class AdminService {
     return this.getBusinessProfile(vendorId);
   }
 
-  async listOrders() {
+  async listOrders(query: JsonRecord = {}) {
+    const search = this.optionalString(query.q || query.search);
+    const status = this.optionalOrderStatus(query.status);
+    const vendorId = this.optionalString(query.vendorId);
+    const userId = this.optionalString(query.userId);
+    const createdAt = this.dateRangeFilter(query.createdFrom || query.from, query.createdTo || query.to);
+    const where: Prisma.OrderWhereInput = {
+      ...(status ? { status } : {}),
+      ...(vendorId ? { vendorId } : {}),
+      ...(userId ? { userId } : {}),
+      ...(createdAt ? { createdAt } : {}),
+      ...(search
+        ? {
+            OR: [
+              { pickupCode: { contains: search, mode: 'insensitive' } },
+              { promoCode: { contains: search, mode: 'insensitive' } },
+              {
+                vendor: {
+                  is: { name: { contains: search, mode: 'insensitive' } },
+                },
+              },
+              {
+                user: {
+                  is: {
+                    OR: [
+                      { email: { contains: search, mode: 'insensitive' } },
+                      { displayName: { contains: search, mode: 'insensitive' } },
+                    ],
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+
     const orders = await this.prisma.order.findMany({
+      where,
       include: {
         vendor: {
           select: { id: true, name: true },
@@ -927,15 +1087,37 @@ export class AdminService {
         items: true,
       },
       orderBy: { createdAt: 'desc' },
+      take: this.parseTake(query.take ?? query.limit, 250),
     });
     return orders.map((order) => this.toOrderPayload(order));
   }
 
-  async listUsers() {
+  async listUsers(query: JsonRecord = {}) {
+    const search = this.optionalString(query.q || query.search);
+    const role = this.optionalUserRole(query.role);
+    const isBanned = this.optionalBoolean(query.isBanned);
+    const isSuspended = this.optionalBoolean(query.isSuspended);
+    const vendorId = this.optionalString(query.vendorId);
+    const where: Prisma.UserWhereInput = {
+      role: role ? role : { not: PrismaRole.ADMIN },
+      ...(vendorId ? { vendorId } : {}),
+      ...(isBanned !== undefined ? { isBanned } : {}),
+      ...(isSuspended !== undefined ? { isSuspended } : {}),
+      ...(search
+        ? {
+            OR: [
+              { email: { contains: search, mode: 'insensitive' } },
+              { displayName: { contains: search, mode: 'insensitive' } },
+              { phone: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
     const [users, orderCounts] = await Promise.all([
       this.prisma.user.findMany({
-        where: { role: { not: PrismaRole.ADMIN } },
+        where,
         orderBy: { createdAt: 'desc' },
+        take: this.parseTake(query.take ?? query.limit, 250),
       }),
       this.prisma.order.findMany({
         select: { userId: true },
@@ -1058,6 +1240,44 @@ export class AdminService {
     await this.logAction(adminUser.id, 'user.update', 'user', userId, payload);
     const users = await this.listUsers();
     return users.find((user) => user.id === userId);
+  }
+
+  async bulkUpdateUsers(adminUser: PrismaUser, payload: JsonRecord) {
+    const userIds = this.requiredIdArray(payload.userIds || payload.ids, 'Kullanıcı seçimi zorunludur');
+    const patch = this.objectPayload(payload.patch || payload);
+    const data: Prisma.UserUpdateManyMutationInput = {
+      ...(patch.notificationsEnabled !== undefined
+        ? { notificationsEnabled: this.parseBoolean(patch.notificationsEnabled, true) }
+        : {}),
+      ...(patch.isSuspended !== undefined
+        ? { isSuspended: this.parseBoolean(patch.isSuspended, false) }
+        : {}),
+      ...(patch.suspendedReason !== undefined
+        ? { suspendedReason: this.optionalString(patch.suspendedReason) || null }
+        : {}),
+      ...(patch.isBanned !== undefined
+        ? { isBanned: this.parseBoolean(patch.isBanned, false) }
+        : {}),
+      ...(patch.bannedReason !== undefined
+        ? { bannedReason: this.optionalString(patch.bannedReason) || null }
+        : {}),
+      ...(patch.marketingOptIn !== undefined
+        ? { marketingOptIn: this.parseBoolean(patch.marketingOptIn, false) }
+        : {}),
+    };
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('Toplu kullanıcı güncellemesi için alan gönderilmedi');
+    }
+    const result = await this.prisma.user.updateMany({
+      where: { id: { in: userIds } },
+      data,
+    });
+    await this.logAction(adminUser.id, 'user.bulk.update', 'user', 'bulk', {
+      userIds,
+      data,
+      updatedCount: result.count,
+    });
+    return { updatedCount: result.count };
   }
 
   async listEvents() {
@@ -1226,6 +1446,22 @@ export class AdminService {
     return events.find((event) => event.id === eventId);
   }
 
+  async deleteEvent(adminUser: PrismaUser, eventId: string) {
+    const existing = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true, vendorId: true, title: true },
+    });
+    if (!existing) {
+      throw new NotFoundException(`Event ${eventId} not found`);
+    }
+    await this.prisma.event.delete({ where: { id: eventId } });
+    await this.logAction(adminUser.id, 'event.delete', 'event', eventId, {
+      vendorId: existing.vendorId,
+      title: existing.title,
+    });
+    return { deleted: true };
+  }
+
   async getFinanceSummary() {
     const [businesses, completedOrders, payouts] = await Promise.all([
       this.prisma.vendor.findMany({
@@ -1386,14 +1622,33 @@ export class AdminService {
     };
   }
 
-  async listNotifications() {
+  async listNotifications(query: JsonRecord = {}) {
+    const search = this.optionalString(query.q || query.search);
+    const status = this.optionalNotificationStatus(query.status);
+    const audience = this.optionalNotificationAudience(query.audience);
+    const createdAt = this.dateRangeFilter(query.createdFrom || query.from, query.createdTo || query.to);
+    const where: Prisma.AdminNotificationWhereInput = {
+      ...(status ? { status } : {}),
+      ...(audience ? { audience } : {}),
+      ...(createdAt ? { createdAt } : {}),
+      ...(search
+        ? {
+            OR: [
+              { title: { contains: search, mode: 'insensitive' } },
+              { body: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
     const notifications = await this.prisma.adminNotification.findMany({
+      where,
       include: {
         createdByAdmin: {
           select: { displayName: true, email: true },
         },
       },
       orderBy: { createdAt: 'desc' },
+      take: this.parseTake(query.take ?? query.limit, 250),
     });
     return notifications.map((notification) => ({
       id: notification.id,
@@ -1510,14 +1765,58 @@ export class AdminService {
     };
   }
 
-  async listSupportTickets() {
+  async deleteNotification(adminUser: PrismaUser, notificationId: string) {
+    const existing = await this.prisma.adminNotification.findUnique({
+      where: { id: notificationId },
+      select: { id: true, title: true },
+    });
+    if (!existing) {
+      throw new NotFoundException(`Notification ${notificationId} not found`);
+    }
+    await this.prisma.adminNotification.delete({ where: { id: notificationId } });
+    await this.logAction(adminUser.id, 'notification.delete', 'notification', notificationId, {
+      title: existing.title,
+    });
+    return { deleted: true };
+  }
+
+  async listSupportTickets(query: JsonRecord = {}) {
+    const search = this.optionalString(query.q || query.search);
+    const status = this.optionalSupportStatus(query.status);
+    const channel = this.optionalString(query.channel);
+    const createdAt = this.dateRangeFilter(query.createdFrom || query.from, query.createdTo || query.to);
+    const where: Prisma.SupportTicketWhereInput = {
+      ...(status ? { status } : {}),
+      ...(channel ? { channel: { contains: channel, mode: 'insensitive' } } : {}),
+      ...(createdAt ? { createdAt } : {}),
+      ...(search
+        ? {
+            OR: [
+              { subject: { contains: search, mode: 'insensitive' } },
+              { message: { contains: search, mode: 'insensitive' } },
+              {
+                user: {
+                  is: {
+                    OR: [
+                      { email: { contains: search, mode: 'insensitive' } },
+                      { displayName: { contains: search, mode: 'insensitive' } },
+                    ],
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
     const tickets = await this.prisma.supportTicket.findMany({
+      where,
       include: {
         user: {
           select: { id: true, displayName: true, email: true },
         },
       },
       orderBy: { updatedAt: 'desc' },
+      take: this.parseTake(query.take ?? query.limit, 250),
     });
     return tickets.map((ticket) => ({
       id: ticket.id,
@@ -1635,6 +1934,119 @@ export class AdminService {
 
     await this.logAction(adminUser.id, 'settings.update', 'platform-setting', 'global', nextSettings);
     return nextSettings;
+  }
+
+  async listAuditLogs(query: JsonRecord = {}) {
+    const action = this.optionalString(query.action);
+    const entityType = this.optionalString(query.entityType);
+    const entityId = this.optionalString(query.entityId);
+    const adminUserId = this.optionalString(query.adminUserId);
+    const createdAt = this.dateRangeFilter(query.createdFrom || query.from, query.createdTo || query.to);
+    const search = this.optionalString(query.q || query.search);
+    const logs = await this.prisma.adminAuditLog.findMany({
+      where: {
+        ...(action ? { action: { contains: action, mode: 'insensitive' } } : {}),
+        ...(entityType ? { entityType: { contains: entityType, mode: 'insensitive' } } : {}),
+        ...(entityId ? { entityId } : {}),
+        ...(adminUserId ? { adminUserId } : {}),
+        ...(createdAt ? { createdAt } : {}),
+        ...(search
+          ? {
+              OR: [
+                { action: { contains: search, mode: 'insensitive' } },
+                { entityType: { contains: search, mode: 'insensitive' } },
+                { entityId: { contains: search, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
+      include: {
+        adminUser: {
+          select: { id: true, email: true, displayName: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: this.parseTake(query.take ?? query.limit, 250),
+    });
+    return logs.map((log) => ({
+      id: log.id,
+      adminUserId: log.adminUserId,
+      adminUserName: log.adminUser.displayName,
+      adminUserEmail: log.adminUser.email,
+      action: log.action,
+      entityType: log.entityType,
+      entityId: log.entityId ?? '',
+      metadata: log.metadata ?? null,
+      createdAt: log.createdAt.toISOString(),
+    }));
+  }
+
+  async exportBusinesses(query: JsonRecord = {}) {
+    const businesses = await this.listBusinesses({
+      ...query,
+      take: query.take ?? query.limit ?? 1000,
+    });
+    return this.toCsv(
+      businesses.map((business) => ({
+        id: business.id,
+        name: business.name,
+        category: business.category,
+        storefrontType: business.storefrontType,
+        city: business.city,
+        district: business.district,
+        approvalStatus: business.approvalStatus,
+        isActive: business.isActive,
+        productsCount: business.productsCount,
+        ordersCount: business.ordersCount,
+        pendingOrders: business.pendingOrders,
+        createdAt: business.createdAt,
+      })),
+    );
+  }
+
+  async exportOrders(query: JsonRecord = {}) {
+    const orders = await this.listOrders({
+      ...query,
+      take: query.take ?? query.limit ?? 1000,
+    });
+    return this.toCsv(
+      orders.map((order) => ({
+        id: order.id,
+        vendorId: order.vendorId,
+        vendorName: order.vendorName,
+        userId: order.userId,
+        userName: order.userName,
+        userEmail: order.userEmail,
+        pickupCode: order.pickupCode,
+        status: order.status,
+        totalAmount: order.totalAmount,
+        itemCount: order.itemCount,
+        createdAt: order.createdAt,
+      })),
+    );
+  }
+
+  async exportUsers(query: JsonRecord = {}) {
+    const users = await this.listUsers({
+      ...query,
+      take: query.take ?? query.limit ?? 1000,
+    });
+    return this.toCsv(
+      users.map((user) => ({
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        phone: user.phone,
+        role: user.role,
+        vendorId: user.vendorId,
+        isSuspended: user.isSuspended,
+        isBanned: user.isBanned,
+        marketingOptIn: user.marketingOptIn,
+        ordersCount: user.ordersCount,
+        createdAt: user.createdAt,
+        lastLoginAt: user.lastLoginAt,
+      })),
+    );
   }
 
   private async getOrderById(orderId: string) {
@@ -2003,6 +2415,136 @@ export class AdminService {
         metadata: metadata as Prisma.InputJsonValue | undefined,
       },
     });
+  }
+
+  private objectPayload(value: unknown): JsonRecord {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return {};
+    }
+    return value as JsonRecord;
+  }
+
+  private requiredIdArray(value: unknown, message: string) {
+    const ids = this.stringArray(value);
+    if (ids.length === 0) {
+      throw new BadRequestException(message);
+    }
+    return Array.from(new Set(ids)).slice(0, 500);
+  }
+
+  private parseTake(value: unknown, fallback: number) {
+    const parsed = this.parseInteger(value, fallback);
+    if (parsed <= 0) {
+      return fallback;
+    }
+    return Math.min(parsed, 1000);
+  }
+
+  private optionalBoolean(value: unknown) {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    return this.parseBoolean(value, false);
+  }
+
+  private optionalStorefrontType(value: unknown) {
+    const normalized = this.optionalString(value).toUpperCase();
+    if (Object.values(StorefrontType).includes(normalized as StorefrontType)) {
+      return normalized as StorefrontType;
+    }
+    return undefined;
+  }
+
+  private optionalVendorApprovalStatus(value: unknown) {
+    const normalized = this.optionalString(value).toUpperCase();
+    if (Object.values(VendorApprovalStatus).includes(normalized as VendorApprovalStatus)) {
+      return normalized as VendorApprovalStatus;
+    }
+    return undefined;
+  }
+
+  private optionalOrderStatus(value: unknown) {
+    const normalized = this.optionalString(value).toUpperCase();
+    if (Object.values(OrderStatus).includes(normalized as OrderStatus)) {
+      return normalized as OrderStatus;
+    }
+    return undefined;
+  }
+
+  private optionalUserRole(value: unknown) {
+    const normalized = this.optionalString(value).toUpperCase();
+    if (Object.values(PrismaRole).includes(normalized as PrismaRole)) {
+      return normalized as PrismaRole;
+    }
+    return undefined;
+  }
+
+  private optionalNotificationStatus(value: unknown) {
+    const normalized = this.optionalString(value).toUpperCase();
+    if (
+      Object.values(AdminNotificationStatus).includes(
+        normalized as AdminNotificationStatus,
+      )
+    ) {
+      return normalized as AdminNotificationStatus;
+    }
+    return undefined;
+  }
+
+  private optionalNotificationAudience(value: unknown) {
+    const normalized = this.optionalString(value).toUpperCase();
+    if (
+      Object.values(AdminNotificationAudience).includes(
+        normalized as AdminNotificationAudience,
+      )
+    ) {
+      return normalized as AdminNotificationAudience;
+    }
+    return undefined;
+  }
+
+  private optionalSupportStatus(value: unknown) {
+    const normalized = this.optionalString(value).toUpperCase();
+    if (Object.values(SupportStatus).includes(normalized as SupportStatus)) {
+      return normalized as SupportStatus;
+    }
+    return undefined;
+  }
+
+  private dateRangeFilter(fromValue: unknown, toValue: unknown) {
+    const from = this.optionalDate(fromValue);
+    const to = this.optionalDate(toValue);
+    if (!from && !to) {
+      return undefined;
+    }
+    return {
+      ...(from ? { gte: from } : {}),
+      ...(to ? { lte: to } : {}),
+    };
+  }
+
+  private toCsv(rows: CsvRow[]) {
+    if (rows.length === 0) {
+      return '';
+    }
+    const headers = Object.keys(rows[0]);
+    return [
+      headers.join(','),
+      ...rows.map((row) =>
+        headers.map((header) => this.escapeCsvValue(row[header])).join(','),
+      ),
+    ].join('\n');
+  }
+
+  private escapeCsvValue(value: CsvValue) {
+    if (value === undefined || value === null) {
+      return '';
+    }
+    const normalized = String(value);
+    if (/["\n,]/.test(normalized)) {
+      return `"${normalized.replace(/"/g, '""')}"`;
+    }
+    return normalized;
   }
 
   private requireString(value: unknown, message: string) {

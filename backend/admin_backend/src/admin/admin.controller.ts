@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Header,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { User as PrismaUser } from '@prisma/client';
 
 import { AdminService } from './admin.service';
@@ -17,8 +28,13 @@ export class AdminController {
   }
 
   @Get('businesses')
-  businesses() {
-    return this.adminService.listBusinesses();
+  businesses(@Query() query: Record<string, unknown>) {
+    return this.adminService.listBusinesses(query);
+  }
+
+  @Post('businesses/bulk')
+  bulkUpdateBusinesses(@Req() req: AdminRequest, @Body() payload: Record<string, unknown>) {
+    return this.adminService.bulkUpdateBusinesses(req.adminUser!, payload);
   }
 
   @Post('businesses')
@@ -58,6 +74,11 @@ export class AdminController {
       orderId,
       payload,
     );
+  }
+
+  @Post('orders/bulk-status')
+  bulkUpdateOrderStatus(@Req() req: AdminRequest, @Body() payload: Record<string, unknown>) {
+    return this.adminService.bulkUpdateOrderStatus(req.adminUser!, payload);
   }
 
   @Get('businesses/:vendorId/sections')
@@ -118,6 +139,15 @@ export class AdminController {
     );
   }
 
+  @Delete('businesses/:vendorId/products/:productId')
+  deleteBusinessProduct(
+    @Req() req: AdminRequest,
+    @Param('vendorId') vendorId: string,
+    @Param('productId') productId: string,
+  ) {
+    return this.adminService.deleteBusinessProduct(req.adminUser!, vendorId, productId);
+  }
+
   @Get('businesses/:vendorId/campaigns')
   businessCampaigns(@Param('vendorId') vendorId: string) {
     return this.adminService.listBusinessCampaigns(vendorId);
@@ -156,6 +186,15 @@ export class AdminController {
     return this.adminService.toggleBusinessCampaign(req.adminUser!, vendorId, campaignId);
   }
 
+  @Delete('businesses/:vendorId/campaigns/:campaignId')
+  deleteBusinessCampaign(
+    @Req() req: AdminRequest,
+    @Param('vendorId') vendorId: string,
+    @Param('campaignId') campaignId: string,
+  ) {
+    return this.adminService.deleteBusinessCampaign(req.adminUser!, vendorId, campaignId);
+  }
+
   @Get('businesses/:vendorId/profile')
   businessProfile(@Param('vendorId') vendorId: string) {
     return this.adminService.getBusinessProfile(vendorId);
@@ -171,13 +210,18 @@ export class AdminController {
   }
 
   @Get('orders')
-  orders() {
-    return this.adminService.listOrders();
+  orders(@Query() query: Record<string, unknown>) {
+    return this.adminService.listOrders(query);
   }
 
   @Get('users')
-  users() {
-    return this.adminService.listUsers();
+  users(@Query() query: Record<string, unknown>) {
+    return this.adminService.listUsers(query);
+  }
+
+  @Post('users/bulk')
+  bulkUpdateUsers(@Req() req: AdminRequest, @Body() payload: Record<string, unknown>) {
+    return this.adminService.bulkUpdateUsers(req.adminUser!, payload);
   }
 
   @Post('users')
@@ -213,6 +257,11 @@ export class AdminController {
     return this.adminService.updateEvent(req.adminUser!, eventId, payload);
   }
 
+  @Delete('events/:eventId')
+  deleteEvent(@Req() req: AdminRequest, @Param('eventId') eventId: string) {
+    return this.adminService.deleteEvent(req.adminUser!, eventId);
+  }
+
   @Get('finance/summary')
   financeSummary() {
     return this.adminService.getFinanceSummary();
@@ -224,8 +273,8 @@ export class AdminController {
   }
 
   @Get('notifications')
-  notifications() {
-    return this.adminService.listNotifications();
+  notifications(@Query() query: Record<string, unknown>) {
+    return this.adminService.listNotifications(query);
   }
 
   @Post('notifications')
@@ -245,9 +294,17 @@ export class AdminController {
     return this.adminService.updateNotification(req.adminUser!, notificationId, payload);
   }
 
+  @Delete('notifications/:notificationId')
+  deleteNotification(
+    @Req() req: AdminRequest,
+    @Param('notificationId') notificationId: string,
+  ) {
+    return this.adminService.deleteNotification(req.adminUser!, notificationId);
+  }
+
   @Get('support/tickets')
-  supportTickets() {
-    return this.adminService.listSupportTickets();
+  supportTickets(@Query() query: Record<string, unknown>) {
+    return this.adminService.listSupportTickets(query);
   }
 
   @Patch('support/tickets/:ticketId')
@@ -257,6 +314,32 @@ export class AdminController {
     @Body() payload: Record<string, unknown>,
   ) {
     return this.adminService.updateSupportTicket(req.adminUser!, ticketId, payload);
+  }
+
+  @Get('audit-logs')
+  auditLogs(@Query() query: Record<string, unknown>) {
+    return this.adminService.listAuditLogs(query);
+  }
+
+  @Get('export/businesses')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="businesses.csv"')
+  exportBusinesses(@Query() query: Record<string, unknown>) {
+    return this.adminService.exportBusinesses(query);
+  }
+
+  @Get('export/orders')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="orders.csv"')
+  exportOrders(@Query() query: Record<string, unknown>) {
+    return this.adminService.exportOrders(query);
+  }
+
+  @Get('export/users')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="users.csv"')
+  exportUsers(@Query() query: Record<string, unknown>) {
+    return this.adminService.exportUsers(query);
   }
 
   @Get('settings')

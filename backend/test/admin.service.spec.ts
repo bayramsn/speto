@@ -1,4 +1,10 @@
-import { Prisma, Role as PrismaRole, StorefrontType, VendorApprovalStatus } from '@prisma/client';
+import {
+  OrderStatus,
+  Prisma,
+  Role as PrismaRole,
+  StorefrontType,
+  VendorApprovalStatus,
+} from '@prisma/client';
 
 import { AdminService } from '../admin_backend/src/admin/admin.service';
 
@@ -14,9 +20,11 @@ describe('AdminService', () => {
     prisma = {
       $transaction: jest.fn(),
       vendor: {
+        findMany: jest.fn(),
         findUnique: jest.fn(),
         findUniqueOrThrow: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
       },
       pickupPoint: {
         create: jest.fn(),
@@ -24,10 +32,17 @@ describe('AdminService', () => {
       },
       user: {
         create: jest.fn(),
+        findMany: jest.fn(),
+        updateMany: jest.fn(),
+      },
+      order: {
+        findMany: jest.fn(),
+        updateMany: jest.fn(),
       },
       product: {
         create: jest.fn(),
         findUnique: jest.fn(),
+        update: jest.fn(),
       },
       inventoryStock: {
         create: jest.fn(),
@@ -35,6 +50,7 @@ describe('AdminService', () => {
       },
       adminAuditLog: {
         create: jest.fn(),
+        findMany: jest.fn(),
       },
     };
     service = new AdminService(prisma);
@@ -268,5 +284,149 @@ describe('AdminService', () => {
         entityId: 'product-1',
       }),
     });
+  });
+
+  it('lists orders with advanced filters and bounded pagination', async () => {
+    prisma.order.findMany.mockResolvedValue([
+      {
+        id: 'order-1',
+        vendorId: 'vendor-1',
+        pickupCode: 'SP-100',
+        status: OrderStatus.READY,
+        totalAmount: new Prisma.Decimal(120),
+        createdAt: new Date('2026-04-15T12:00:00.000Z'),
+        vendor: { id: 'vendor-1', name: 'Kampus Kafe' },
+        user: { id: 'user-1', displayName: 'Ali Veli', email: 'ali@example.com' },
+        pickupPoint: { label: 'Ana nokta' },
+        items: [{ title: 'Latte', quantity: 2 }],
+      },
+    ]);
+
+    const result = await service.listOrders({
+      status: 'READY',
+      vendorId: 'vendor-1',
+      q: 'ali',
+      take: '25',
+    });
+
+    expect(prisma.order.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: OrderStatus.READY,
+          vendorId: 'vendor-1',
+          OR: expect.any(Array),
+        }),
+        take: 25,
+      }),
+    );
+    expect(result[0]).toEqual(
+      expect.objectContaining({
+        id: 'order-1',
+        vendorName: 'Kampus Kafe',
+        itemCount: 2,
+      }),
+    );
+  });
+
+  it('bulk updates businesses and writes an audit record', async () => {
+    prisma.vendor.updateMany.mockResolvedValue({ count: 2 });
+
+    await expect(
+      service.bulkUpdateBusinesses(adminUser, {
+        vendorIds: ['vendor-1', 'vendor-2', 'vendor-1'],
+        patch: {
+          approvalStatus: 'SUSPENDED',
+          isActive: false,
+          suspendedReason: 'Belge eksik',
+        },
+      }),
+    ).resolves.toEqual({ updatedCount: 2 });
+
+    expect(prisma.vendor.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['vendor-1', 'vendor-2'] } },
+      data: {
+        approvalStatus: VendorApprovalStatus.SUSPENDED,
+        isActive: false,
+        suspendedReason: 'Belge eksik',
+      },
+    });
+    expect(prisma.adminAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'business.bulk.update',
+        entityType: 'vendor',
+        entityId: 'bulk',
+      }),
+    });
+  });
+
+  it('lists audit logs with admin metadata', async () => {
+    prisma.adminAuditLog.findMany.mockResolvedValue([
+      {
+        id: 'audit-1',
+        adminUserId: 'admin-1',
+        action: 'business.update',
+        entityType: 'vendor',
+        entityId: 'vendor-1',
+        metadata: { isActive: false },
+        createdAt: new Date('2026-04-15T13:00:00.000Z'),
+        adminUser: {
+          id: 'admin-1',
+          email: 'admin@speto.app',
+          displayName: 'Speto Admin',
+        },
+      },
+    ]);
+
+    const result = await service.listAuditLogs({
+      entityType: 'vendor',
+      q: 'business',
+      limit: '10',
+    });
+
+    expect(prisma.adminAuditLog.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          entityType: { contains: 'vendor', mode: 'insensitive' },
+          OR: expect.any(Array),
+        }),
+        take: 10,
+      }),
+    );
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: 'audit-1',
+        adminUserEmail: 'admin@speto.app',
+        action: 'business.update',
+      }),
+    ]);
+  });
+
+  it('exports business rows as csv without using localhost-only assumptions', async () => {
+    jest.spyOn(service, 'listBusinesses').mockResolvedValue([
+      {
+        id: 'vendor-1',
+        name: 'Kampus, Kafe',
+        category: 'Kafe',
+        storefrontType: 'MARKET',
+        city: 'Istanbul',
+        district: 'Kadikoy',
+        imageUrl: '',
+        isActive: true,
+        approvalStatus: 'APPROVED',
+        suspendedReason: '',
+        createdAt: '2026-04-15T12:00:00.000Z',
+        operatorsCount: 1,
+        productsCount: 20,
+        ordersCount: 3,
+        activeCampaigns: 2,
+        eventsCount: 0,
+        pendingOrders: 1,
+      },
+    ] as any);
+
+    const csv = await service.exportBusinesses();
+
+    expect(csv).toContain('id,name,category');
+    expect(csv).toContain('"Kampus, Kafe"');
   });
 });
