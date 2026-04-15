@@ -3,7 +3,8 @@ set -euo pipefail
 
 APP_DIR="${1:-.}"
 SDK_DIR="${HOME}/render-flutter-sdk"
-API_BASE_URL="${SPETO_API_BASE_URL:?SPETO_API_BASE_URL must be set}"
+DEFAULT_API_BASE_URL="https://speto-sync-backend-live.onrender.com/api"
+API_BASE_URL="${RENDER_FORCE_SPETO_API_BASE_URL:-${DEFAULT_API_BASE_URL}}"
 
 if [ ! -x "${SDK_DIR}/bin/flutter" ]; then
   rm -rf "${SDK_DIR}"
