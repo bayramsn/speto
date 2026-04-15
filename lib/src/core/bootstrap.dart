@@ -21,12 +21,6 @@ abstract class SpetoAuthRepository {
   Future<String?> readPasswordResetEmail();
 
   Future<void> clearPasswordResetEmail();
-
-  Future<String?> readAccountPassword(String email);
-
-  Future<void> writeAccountPassword(String email, String password);
-
-  Future<void> deleteAccountPassword(String email);
 }
 
 abstract class SpetoCommerceRepository {
@@ -65,51 +59,53 @@ class SpetoBootstrap {
   }
 
   static Future<SpetoBootstrap> persistent() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final LocalSpetoAuthRepository authRepository = LocalSpetoAuthRepository(
+      prefs,
+    );
+    final LocalSpetoCommerceRepository commerceRepository =
+        LocalSpetoCommerceRepository(prefs);
+    SpetoSession? session = await authRepository.readSession();
     final SpetoRemoteApiClient apiClient =
-        await SpetoRemoteApiClient.resolveDefault();
-    final RemoteSpetoAuthRepository remoteAuthRepository =
-        RemoteSpetoAuthRepository(apiClient);
-    final RemoteSpetoCommerceRepository remoteCommerceRepository =
-        RemoteSpetoCommerceRepository(apiClient);
+        await SpetoRemoteApiClient.resolveDefault(session: session);
+    apiClient.setSessionChangedCallback((SpetoSession? nextSession) async {
+      await authRepository.writeSession(nextSession);
+    });
     final SpetoRemoteDomainApi domainApi = SpetoRemoteDomainApi(apiClient);
 
-    try {
-      final SpetoSession? session = await remoteAuthRepository.readSession();
-      return SpetoBootstrap(
-        authRepository: remoteAuthRepository,
-        commerceRepository: remoteCommerceRepository,
-        domainApi: domainApi,
-        session: session,
-        registrationDraft: await remoteAuthRepository.readRegistrationDraft(),
-        passwordResetEmail: await remoteAuthRepository.readPasswordResetEmail(),
-        commerceSnapshot: await remoteCommerceRepository.readSnapshot(
-          scopeKey: session?.email,
-        ),
-      );
-    } catch (error) {
-      debugPrint(
-        'Speto backend unavailable at ${apiClient.baseUrl}. '
-        'Falling back to local persistence. Error: $error',
-      );
-      final SharedPreferences prefs = await SharedPreferences.getInstance();
-      final LocalSpetoAuthRepository authRepository = LocalSpetoAuthRepository(
-        prefs,
-      );
-      final LocalSpetoCommerceRepository commerceRepository =
-          LocalSpetoCommerceRepository(prefs);
-      final SpetoSession? session = await authRepository.readSession();
-      return SpetoBootstrap(
-        authRepository: authRepository,
-        commerceRepository: commerceRepository,
-        domainApi: null,
-        session: session,
-        registrationDraft: await authRepository.readRegistrationDraft(),
-        passwordResetEmail: await authRepository.readPasswordResetEmail(),
-        commerceSnapshot: await commerceRepository.readSnapshot(
-          scopeKey: session?.email,
-        ),
-      );
+    if (session != null) {
+      try {
+        if (session.authToken.trim().isEmpty ||
+            session.refreshToken.trim().isEmpty) {
+          session = null;
+          await authRepository.writeSession(null);
+        } else if (domainApi.shouldRefreshSession() ||
+            session.authToken.trim().isEmpty) {
+          session = await domainApi.refreshSession(
+            refreshToken: session.refreshToken,
+            notifyListeners: false,
+          );
+          await authRepository.writeSession(session);
+        }
+      } catch (error) {
+        debugPrint('Speto session refresh failed during bootstrap: $error');
+        session = null;
+        await authRepository.writeSession(null);
+        domainApi.clearSession();
+      }
     }
+
+    return SpetoBootstrap(
+      authRepository: authRepository,
+      commerceRepository: commerceRepository,
+      domainApi: domainApi,
+      session: session,
+      registrationDraft: await authRepository.readRegistrationDraft(),
+      passwordResetEmail: await authRepository.readPasswordResetEmail(),
+      commerceSnapshot: await commerceRepository.readSnapshot(
+        scopeKey: session?.email,
+      ),
+    );
   }
 }
 
@@ -137,19 +133,12 @@ class RemoteSpetoAuthRepository implements SpetoAuthRepository {
   }
 
   @override
-  Future<String?> readAccountPassword(String email) async {
-    return _readString(
-      'client-state/account-passwords/${Uri.encodeComponent(email)}',
-    );
-  }
-
-  @override
   Future<SpetoSession?> readSession() async {
     final SpetoSession? session = await _readJsonObject(
       'client-state/session',
       SpetoSession.fromJson,
     );
-    _apiClient.setAccessToken(session?.authToken);
+    _apiClient.setSession(session);
     return session;
   }
 
@@ -158,21 +147,6 @@ class RemoteSpetoAuthRepository implements SpetoAuthRepository {
     await _apiClient.put(
       'client-state/password-reset-email',
       body: <String, Object?>{'email': email},
-    );
-  }
-
-  @override
-  Future<void> writeAccountPassword(String email, String password) async {
-    await _apiClient.put(
-      'client-state/account-passwords/${Uri.encodeComponent(email)}',
-      body: <String, Object?>{'password': password},
-    );
-  }
-
-  @override
-  Future<void> deleteAccountPassword(String email) async {
-    await _apiClient.delete(
-      'client-state/account-passwords/${Uri.encodeComponent(email)}',
     );
   }
 
@@ -191,11 +165,11 @@ class RemoteSpetoAuthRepository implements SpetoAuthRepository {
   @override
   Future<void> writeSession(SpetoSession? session) async {
     if (session == null) {
-      _apiClient.clearAccessToken();
+      _apiClient.clearSession();
       await _apiClient.delete('client-state/session');
       return;
     }
-    _apiClient.setAccessToken(session.authToken);
+    _apiClient.setSession(session);
     await _apiClient.put('client-state/session', body: session.toJson());
   }
 
@@ -258,7 +232,6 @@ class InMemorySpetoAuthRepository implements SpetoAuthRepository {
   SpetoSession? _session;
   SpetoRegistrationDraft? _draft;
   String? _passwordResetEmail;
-  final Map<String, String> _passwords = <String, String>{};
 
   @override
   Future<SpetoRegistrationDraft?> readRegistrationDraft() async => _draft;
@@ -272,26 +245,11 @@ class InMemorySpetoAuthRepository implements SpetoAuthRepository {
   }
 
   @override
-  Future<String?> readAccountPassword(String email) async {
-    return _passwords[_accountKey(email)];
-  }
-
-  @override
   Future<SpetoSession?> readSession() async => _session;
 
   @override
   Future<void> rememberPasswordResetEmail(String email) async {
     _passwordResetEmail = email;
-  }
-
-  @override
-  Future<void> writeAccountPassword(String email, String password) async {
-    _passwords[_accountKey(email)] = password;
-  }
-
-  @override
-  Future<void> deleteAccountPassword(String email) async {
-    _passwords.remove(_accountKey(email));
   }
 
   @override
@@ -329,7 +287,6 @@ class LocalSpetoAuthRepository implements SpetoAuthRepository {
   static const String _sessionKey = 'speto.session';
   static const String _draftKey = 'speto.registration_draft';
   static const String _resetEmailKey = 'speto.reset_email';
-  static const String _passwordsKey = 'speto.account_passwords';
 
   final SharedPreferences _prefs;
 
@@ -352,11 +309,6 @@ class LocalSpetoAuthRepository implements SpetoAuthRepository {
   }
 
   @override
-  Future<String?> readAccountPassword(String email) async {
-    return _passwordMap()[_accountKey(email)];
-  }
-
-  @override
   Future<SpetoSession?> readSession() async {
     return _decodeObject(_prefs.getString(_sessionKey), SpetoSession.fromJson);
   }
@@ -364,20 +316,6 @@ class LocalSpetoAuthRepository implements SpetoAuthRepository {
   @override
   Future<void> rememberPasswordResetEmail(String email) async {
     await _prefs.setString(_resetEmailKey, email);
-  }
-
-  @override
-  Future<void> writeAccountPassword(String email, String password) async {
-    final Map<String, String> passwords = _passwordMap();
-    passwords[_accountKey(email)] = password;
-    await _prefs.setString(_passwordsKey, jsonEncode(passwords));
-  }
-
-  @override
-  Future<void> deleteAccountPassword(String email) async {
-    final Map<String, String> passwords = _passwordMap();
-    passwords.remove(_accountKey(email));
-    await _prefs.setString(_passwordsKey, jsonEncode(passwords));
   }
 
   @override
@@ -396,21 +334,6 @@ class LocalSpetoAuthRepository implements SpetoAuthRepository {
       return;
     }
     await _prefs.setString(_sessionKey, jsonEncode(session.toJson()));
-  }
-
-  Map<String, String> _passwordMap() {
-    final String? raw = _prefs.getString(_passwordsKey);
-    if (raw == null || raw.isEmpty) {
-      return <String, String>{};
-    }
-    final Object? decoded = jsonDecode(raw);
-    if (decoded is! Map<String, Object?>) {
-      return <String, String>{};
-    }
-    return decoded.map<String, String>(
-      (String key, Object? value) =>
-          MapEntry<String, String>(key, value?.toString() ?? ''),
-    );
   }
 }
 
@@ -451,8 +374,6 @@ String _snapshotKeyFor(String? scopeKey) {
   }
   return base64Url.encode(utf8.encode(scopeKey.trim().toLowerCase()));
 }
-
-String _accountKey(String email) => email.trim().toLowerCase();
 
 T? _decodeObject<T>(
   String? raw,

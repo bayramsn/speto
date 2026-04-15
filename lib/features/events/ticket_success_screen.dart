@@ -5,12 +5,11 @@ import 'package:flutter/material.dart';
 import '../../core/theme/palette.dart';
 import '../../core/navigation/screen_enum.dart';
 import '../../core/navigation/navigator.dart';
-import '../../core/state/app_state.dart';
 import '../../core/data/default_data.dart';
+import '../../core/state/app_state.dart';
 import '../../src/core/models.dart';
 import '../../shared/widgets/widgets.dart';
 import 'digital_ticket_screen.dart';
-import 'event_data.dart';
 
 class TicketSuccessScreen extends StatefulWidget {
   const TicketSuccessScreen({super.key});
@@ -41,8 +40,39 @@ class _TicketSuccessScreenState extends State<TicketSuccessScreen>
   @override
   Widget build(BuildContext context) {
     final SpetoAppState appState = SpetoAppScope.of(context);
-    final SpetoEventTicket ticket =
-        appState.selectedTicket ?? featuredEventTicket;
+    final SpetoEventTicket? ticket = appState.selectedTicket;
+    if (ticket == null) {
+      return SpetoScreenScaffold(
+        title: 'Bilet Durumu',
+        background: Palette.aubergine,
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+          child: SpetoCard(
+            radius: 24,
+            color: Palette.cardWarm,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Onaylanmış bilet bulunamadı',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Etkinlik bileti satın alındığında başarı durumu burada gösterilecek.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Palette.soft,
+                    height: 1.6,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return SpetoScreenScaffold(
       title: '',
       showBack: false,
@@ -55,9 +85,7 @@ class _TicketSuccessScreenState extends State<TicketSuccessScreen>
               animation: _confettiController,
               builder: (BuildContext context, Widget? child) {
                 return CustomPaint(
-                  painter: ConfettiPainter(
-                    progress: _confettiController.value,
-                  ),
+                  painter: ConfettiPainter(progress: _confettiController.value),
                 );
               },
             ),
@@ -183,10 +211,7 @@ class _TicketSuccessScreenState extends State<TicketSuccessScreen>
                         padding: const EdgeInsets.all(20),
                         child: Column(
                           children: <Widget>[
-                            TicketInfo(
-                              title: 'Tarih',
-                              value: ticket.dateLabel,
-                            ),
+                            TicketInfo(title: 'Tarih', value: ticket.dateLabel),
                             const SizedBox(height: 12),
                             TicketInfo(
                               title: 'Bilet',
@@ -380,4 +405,3 @@ class SpetoAnimatedListItem extends StatelessWidget {
     );
   }
 }
-

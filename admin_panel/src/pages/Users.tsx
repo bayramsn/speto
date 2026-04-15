@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import { useAdminAuth } from '../auth/adminAuth';
 import { BulkBar, EmptyState, LoadingState, Modal, PageHeader, Pagination, Panel, StatusBadge, TextInput, Toast } from '../components/ui';
+import { useLiveReload } from '../hooks/useLiveReload';
 import { formatDate } from '../lib/formatters';
 import type { AdminAppUser, BusinessListItem, PagedResponse, UserRole } from '../lib/types';
 
@@ -45,6 +46,7 @@ export function Users() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState('');
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -96,6 +98,7 @@ export function Users() {
   useEffect(() => {
     void load();
   }, [load]);
+  useLiveReload(load);
 
   function openCreateModal() {
     setDraft(EMPTY_DRAFT);
@@ -181,6 +184,28 @@ export function Users() {
     setSelectedIds((current) =>
       checked ? Array.from(new Set([...current, id])) : current.filter((item) => item !== id),
     );
+  }
+
+  async function deleteUser(user: AdminAppUser) {
+    const confirmed = window.confirm(
+      `${user.displayName} hesabini silmek istiyor musunuz? Gecmis siparis veya destek kaydi olan kullanicilar silinmez.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+    setDeletingId(user.id);
+    setError('');
+    try {
+      await request(`/admin/users/${user.id}`, {
+        method: 'DELETE',
+      });
+      await load();
+      setToast('Kullanici silindi.');
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Kullanici silinemedi.');
+    } finally {
+      setDeletingId('');
+    }
   }
 
   if (loading) {
@@ -349,13 +374,23 @@ export function Users() {
                     </td>
                     <td className="py-4 text-sm text-slate-500">{formatDate(user.lastLoginAt)}</td>
                     <td className="py-4 text-right">
-                      <button
-                        className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold hover:bg-slate-50"
-                        onClick={() => openEditModal(user)}
-                        type="button"
-                      >
-                        Düzenle
-                      </button>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+                          onClick={() => openEditModal(user)}
+                          type="button"
+                        >
+                          Düzenle
+                        </button>
+                        <button
+                          className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                          disabled={deletingId === user.id}
+                          onClick={() => void deleteUser(user)}
+                          type="button"
+                        >
+                          {deletingId === user.id ? 'Siliniyor...' : 'Sil'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

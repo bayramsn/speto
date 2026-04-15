@@ -15,11 +15,29 @@ class OrderTrackingScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final SpetoAppState appState = SpetoAppScope.of(context);
     final NavigatorState navigator = Navigator.of(context);
-    final SpetoOrder order =
-        appState.selectedOrder ??
-        (appState.activeOrders.isNotEmpty
-            ? appState.activeOrders.first
-            : appState.historyOrders.first);
+    final SpetoOrder? order = appState.selectedOrder;
+    if (order == null) {
+      return SpetoScreenScaffold(
+        title: 'Sipariş Takibi',
+        background: Palette.base,
+        showBottomNav: true,
+        activeNav: NavSection.orders,
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
+          child: SpetoEmptyState(
+            icon: Icons.route_outlined,
+            iconColor: Palette.orange,
+            title: 'Takip edilecek sipariş yok',
+            description:
+                'Aktif veya geçmiş bir sipariş oluştuğunda takip ekranı burada açılacak.',
+            primaryButtonLabel: 'Siparişlere Git',
+            primaryButtonIcon: Icons.receipt_long_outlined,
+            onPrimaryButtonTap: () =>
+                openRootScreen(context, SpetoScreen.orderHistory),
+          ),
+        ),
+      );
+    }
     final bool isActive = order.status == SpetoOrderStatus.active;
     return Scaffold(
       backgroundColor: Palette.base,

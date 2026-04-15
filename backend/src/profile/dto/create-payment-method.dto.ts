@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsOptional, IsString, Length, MinLength } from 'class-validator';
 
 export class CreatePaymentMethodDto {
-  @ApiPropertyOptional({ example: 'pm_demo_001' })
+  @ApiPropertyOptional({ example: 'pm_saved_card_001' })
   @IsOptional()
   @IsString()
   id?: string;
@@ -32,7 +32,7 @@ export class CreatePaymentMethodDto {
   @IsBoolean()
   isDefault?: boolean;
 
-  @ApiPropertyOptional({ example: 'pm_demo_001' })
+  @ApiPropertyOptional({ example: 'pm_saved_card_001' })
   @IsOptional()
   @IsString()
   token?: string;

@@ -359,6 +359,53 @@ export class AdminService {
     return this.getBusinessProfile(vendorId);
   }
 
+  async deleteBusiness(adminUser: PrismaUser, vendorId: string) {
+    const existing = await this.prisma.vendor.findUnique({
+      where: { id: vendorId },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        _count: {
+          select: {
+            orders: true,
+            payouts: true,
+            operators: true,
+          },
+        },
+      },
+    });
+    if (!existing) {
+      throw new NotFoundException(`Vendor ${vendorId} not found`);
+    }
+    if (existing._count.orders > 0 || existing._count.payouts > 0) {
+      throw new BadRequestException(
+        'Gecmis siparis veya odeme kaydi olan isletme silinemez. Isletmeyi askiya alin.',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.updateMany({
+        where: { vendorId },
+        data: {
+          vendorId: null,
+          isSuspended: true,
+          suspendedReason: 'Bagli isletme silindi',
+        },
+      });
+      await tx.vendor.delete({
+        where: { id: vendorId },
+      });
+    });
+
+    await this.logAction(adminUser.id, 'business.delete', 'vendor', vendorId, {
+      name: existing.name,
+      slug: existing.slug,
+      detachedOperators: existing._count.operators,
+    });
+    return { deleted: true };
+  }
+
   async bulkUpdateBusinesses(adminUser: PrismaUser, payload: JsonRecord) {
     const vendorIds = this.requiredIdArray(payload.vendorIds || payload.ids, 'İşletme seçimi zorunludur');
     const patch = this.objectPayload(payload.patch || payload);
@@ -1450,6 +1497,55 @@ export class AdminService {
     await this.logAction(adminUser.id, 'user.update', 'user', userId, payload);
     const users = await this.listUsers();
     return Array.isArray(users) ? users.find((user) => user.id === userId) : undefined;
+  }
+
+  async deleteUser(adminUser: PrismaUser, userId: string) {
+    const existing = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        role: true,
+        _count: {
+          select: {
+            orders: true,
+            tickets: true,
+            supportTickets: true,
+            walletEntries: true,
+          },
+        },
+      },
+    });
+    if (!existing) {
+      throw new NotFoundException(`User ${userId} not found`);
+    }
+    if (existing.role === PrismaRole.ADMIN) {
+      throw new BadRequestException('Super admin hesabi silinemez.');
+    }
+    if (existing.id === adminUser.id) {
+      throw new BadRequestException('Kendi hesabinizi silemezsiniz.');
+    }
+    if (
+      existing._count.orders > 0 ||
+      existing._count.tickets > 0 ||
+      existing._count.supportTickets > 0 ||
+      existing._count.walletEntries > 0
+    ) {
+      throw new BadRequestException(
+        'Siparis, bilet, destek veya cuzdan gecmisi olan kullanici silinemez. Hesabi askiya alin veya banlayin.',
+      );
+    }
+
+    await this.prisma.user.delete({
+      where: { id: userId },
+    });
+    await this.logAction(adminUser.id, 'user.delete', 'user', userId, {
+      email: existing.email,
+      displayName: existing.displayName,
+      role: existing.role,
+    });
+    return { deleted: true };
   }
 
   async bulkUpdateUsers(adminUser: PrismaUser, payload: JsonRecord) {

@@ -51,7 +51,7 @@ export class CreateCheckoutSessionDto {
   @MinLength(3)
   pickupPointId!: string;
 
-  @ApiProperty({ example: 'pm_demo_001', required: false })
+  @ApiProperty({ example: 'pm_saved_card_001', required: false })
   @IsOptional()
   @IsString()
   paymentMethodToken?: string;

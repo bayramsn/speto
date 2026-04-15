@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kReleaseMode, visibleForTesting;
 import 'package:flutter/material.dart';
 
 import '../../core/data/default_data.dart';
@@ -47,9 +48,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     }
     SpetoToast.show(
       context,
-      message: isPasswordResetFlow
-          ? 'Yeni test doğrulama kodu gönderildi. Kod: ${appState.testOtpCode}'
-          : 'Yeni test doğrulama kodu gönderildi. Kod: ${appState.testOtpCode}',
+      message: _resendOtpMessage(
+        usesTestOtpMode: appState.usesTestOtpMode,
+        testOtpCode: appState.testOtpCode,
+      ),
       icon: isPasswordResetFlow
           ? Icons.mark_email_read_outlined
           : Icons.sms_outlined,
@@ -113,8 +115,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         const SizedBox(height: 10),
                         Text(
                           isPasswordResetFlow
-                              ? '${maskEmailAddress(resetEmail)} için test doğrulama kodunu girerek yeni şifre oluştur.'
-                              : 'Test doğrulama kodunu girerek hesabınızı tamamlayın.',
+                              ? '${maskEmailAddress(resetEmail)} için doğrulama kodunu girerek yeni şifre oluştur.'
+                              : 'Doğrulama kodunu girerek hesabınızı tamamlayın.',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(color: Palette.soft, height: 1.6),
@@ -157,7 +159,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       height: 1.6,
                     ),
                   ),
-                  if (appState.usesTestOtpMode) ...<Widget>[
+                  if (_shouldShowOtpCodeCard(
+                    usesTestOtpMode: appState.usesTestOtpMode,
+                  )) ...<Widget>[
                     const SizedBox(height: 16),
                     SpetoCard(
                       radius: 16,
@@ -260,16 +264,28 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         );
                         return;
                       }
-                      if (appState.pendingRegistration != null) {
-                        final bool verified = await appState.verifyOtpCode(_code);
-                        if (!verified) {
+                      if (!isPasswordResetFlow) {
+                        final SpetoRegistrationOtpVerificationResult result =
+                            await appState.verifyOtpCode(_code);
+                        if (result !=
+                            SpetoRegistrationOtpVerificationResult.verified) {
                           if (!context.mounted) {
                             return;
                           }
+                          final String message =
+                              result ==
+                                      SpetoRegistrationOtpVerificationResult
+                                          .unavailable &&
+                                  appState.pendingRegistration == null
+                              ? 'Aktif bir doğrulama isteği bulunamadı.'
+                              : _registrationOtpFailureMessage(
+                                  result: result,
+                                  usesTestOtpMode: appState.usesTestOtpMode,
+                                  testOtpCode: appState.testOtpCode,
+                                );
                           SpetoToast.show(
                             context,
-                            message:
-                                'Kod doğrulanamadı veya bu e-posta zaten kayıtlı. Test kodu: ${appState.testOtpCode}',
+                            message: message,
                             icon: Icons.info_outline_rounded,
                           );
                           return;
@@ -279,8 +295,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         }
                         openRootScreen(context, SpetoScreen.home);
                         return;
-                      }
-                      if (isPasswordResetFlow) {
+                      } else if (isPasswordResetFlow) {
                         final bool verified = await appState
                             .verifyPasswordResetOtp(_code);
                         if (!verified) {
@@ -301,11 +316,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         openScreen(context, SpetoScreen.resetPassword);
                         return;
                       }
-                      SpetoToast.show(
-                        context,
-                        message: 'Aktif bir doğrulama isteği bulunamadı.',
-                        icon: Icons.info_outline_rounded,
-                      );
                     },
                   ),
                 ],
@@ -376,4 +386,76 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       ),
     );
   }
+}
+
+@visibleForTesting
+bool shouldShowRegistrationOtpCodeInUi({
+  required bool usesTestOtpMode,
+  bool isReleaseMode = kReleaseMode,
+}) {
+  return usesTestOtpMode && !isReleaseMode;
+}
+
+@visibleForTesting
+String resendRegistrationOtpMessage({
+  required bool usesTestOtpMode,
+  required String testOtpCode,
+  bool isReleaseMode = kReleaseMode,
+}) {
+  if (shouldShowRegistrationOtpCodeInUi(
+    usesTestOtpMode: usesTestOtpMode,
+    isReleaseMode: isReleaseMode,
+  )) {
+    return 'Yeni test doğrulama kodu gönderildi. Kod: $testOtpCode';
+  }
+  return 'Yeni doğrulama kodu gönderildi.';
+}
+
+@visibleForTesting
+String registrationOtpFailureMessage({
+  required SpetoRegistrationOtpVerificationResult result,
+  required bool usesTestOtpMode,
+  required String testOtpCode,
+  bool isReleaseMode = kReleaseMode,
+}) {
+  return switch (result) {
+    SpetoRegistrationOtpVerificationResult.invalidCode =>
+      shouldShowRegistrationOtpCodeInUi(
+            usesTestOtpMode: usesTestOtpMode,
+            isReleaseMode: isReleaseMode,
+          )
+          ? 'Kod doğrulanamadı. Test kodu: $testOtpCode'
+          : 'Kod doğrulanamadı. Lütfen tekrar deneyin.',
+    SpetoRegistrationOtpVerificationResult.emailAlreadyRegistered =>
+      'Bu e-posta zaten kayıtlı. Giriş yapmayı deneyin veya farklı bir e-posta kullanın.',
+    SpetoRegistrationOtpVerificationResult.unavailable =>
+      'Kayıt tamamlanamadı. Lütfen tekrar deneyin.',
+    SpetoRegistrationOtpVerificationResult.verified => '',
+  };
+}
+
+bool _shouldShowOtpCodeCard({required bool usesTestOtpMode}) {
+  return shouldShowRegistrationOtpCodeInUi(usesTestOtpMode: usesTestOtpMode);
+}
+
+String _resendOtpMessage({
+  required bool usesTestOtpMode,
+  required String testOtpCode,
+}) {
+  return resendRegistrationOtpMessage(
+    usesTestOtpMode: usesTestOtpMode,
+    testOtpCode: testOtpCode,
+  );
+}
+
+String _registrationOtpFailureMessage({
+  required SpetoRegistrationOtpVerificationResult result,
+  required bool usesTestOtpMode,
+  required String testOtpCode,
+}) {
+  return registrationOtpFailureMessage(
+    result: result,
+    usesTestOtpMode: usesTestOtpMode,
+    testOtpCode: testOtpCode,
+  );
 }

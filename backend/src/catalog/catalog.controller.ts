@@ -60,7 +60,7 @@ export class CatalogController {
   }
 
   @Get('admin/vendors')
-  @Roles(PrismaRole.ADMIN)
+  @Roles(PrismaRole.ADMIN, PrismaRole.VENDOR)
   adminVendors(@Query('vendorId') vendorId?: string): Promise<unknown[]> {
     return this.catalogService.adminVendors(vendorId);
   }
@@ -72,7 +72,7 @@ export class CatalogController {
   }
 
   @Patch('admin/vendors/:vendorId')
-  @Roles(PrismaRole.ADMIN)
+  @Roles(PrismaRole.ADMIN, PrismaRole.VENDOR)
   updateVendor(
     @Param('vendorId') vendorId: string,
     @Body() payload: Record<string, unknown>,
@@ -81,19 +81,19 @@ export class CatalogController {
   }
 
   @Get('admin/sections')
-  @Roles(PrismaRole.ADMIN)
+  @Roles(PrismaRole.ADMIN, PrismaRole.VENDOR)
   adminSections(@Query('vendorId') vendorId?: string): Promise<unknown[]> {
     return this.catalogService.adminSections(vendorId);
   }
 
   @Post('admin/sections')
-  @Roles(PrismaRole.ADMIN)
+  @Roles(PrismaRole.ADMIN, PrismaRole.VENDOR)
   createSection(@Body() payload: Record<string, unknown>): Promise<unknown> {
     return this.catalogService.createSection(payload);
   }
 
   @Patch('admin/sections/:sectionId')
-  @Roles(PrismaRole.ADMIN)
+  @Roles(PrismaRole.ADMIN, PrismaRole.VENDOR)
   updateSection(
     @Param('sectionId') sectionId: string,
     @Body() payload: Record<string, unknown>,
@@ -102,19 +102,19 @@ export class CatalogController {
   }
 
   @Get('admin/products')
-  @Roles(PrismaRole.ADMIN)
+  @Roles(PrismaRole.ADMIN, PrismaRole.VENDOR)
   adminProducts(@Query('vendorId') vendorId?: string): Promise<unknown[]> {
     return this.catalogService.adminProducts(vendorId);
   }
 
   @Post('admin/products')
-  @Roles(PrismaRole.ADMIN)
+  @Roles(PrismaRole.ADMIN, PrismaRole.VENDOR)
   createProduct(@Body() payload: Record<string, unknown>): Promise<unknown> {
     return this.catalogService.createProduct(payload);
   }
 
   @Patch('admin/products/:productId')
-  @Roles(PrismaRole.ADMIN)
+  @Roles(PrismaRole.ADMIN, PrismaRole.VENDOR)
   updateProduct(
     @Param('productId') productId: string,
     @Body() payload: Record<string, unknown>,

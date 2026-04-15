@@ -37,7 +37,7 @@ Bu repo tek bir urun yerine birden fazla yuzeyi birlikte barindirir:
 - `lib/` altindaki ana uygulama `Riverpod` ile state yonetimi ve `go_router` ile navigasyon kullanir.
 - `packages/speto_shared/` iki Flutter istemcisinin ayni domain modellerini ve typed API client katmanini paylasir.
 - `backend/` altinda `NestJS`, `Fastify`, `Prisma`, `PostgreSQL` ve `Redis` tabanli bir API bulunur.
-- Ana uygulama backend ulasilamazsa oturum ve commerce snapshot verileri icin local persistence fallback kullanir.
+- Ana uygulama katalog, hesap ve siparis durumunu SepetPro backend API uzerinden senkronize eder; local persistence yalniz son oturum/snapshot bilgisini korur.
 - `stock_app` fallback yerine dogrudan backend baglantisina dayanir; operasyon paneli icin API'nin ayakta olmasi gerekir.
 
 ## Hizli Baslangic
@@ -60,7 +60,7 @@ Backend varsayilan olarak su adreslerde acilir:
 - Swagger: `http://localhost:4000/docs`
 - Health check: `http://localhost:4000/api/health`
 
-Ilk basarili baglantida demo vendor, urun, stok, siparis ve entegrasyon verileri seed edilir.
+Demo seed varsayilani kapali gelir (`ENABLE_DEMO_SEED=false`). Daha once yuklenmis demo kayitlar backend acilisinda temizlenir.
 
 ### 2. Ana Flutter uygulamasini calistirin
 
@@ -102,12 +102,10 @@ cd stock_app
 flutter run -d chrome
 ```
 
-## Demo Hesaplari
+## Kimlik ve OTP
 
-- `admin@speto.app / admin123` sadece local/demo seed icindir; production admin
-  hesabi ayri ve guclu parola ile olusturulmalidir.
-- `burger@speto.app / vendor123`
-- `market@speto.app / vendor123`
+- Musteri ve operator oturumlari gercek backend kullanicilariyla acilir; repo icinde hazir demo hesap tutulmaz.
+- Test OTP akisi gerekiyorsa backend tarafinda `OTP_TEST_MODE=true` ve `OTP_TEST_CODE=12345` kullanilabilir.
 
 ## Teknoloji Yigini
 
@@ -124,4 +122,4 @@ flutter run -d chrome
 
 - Proje pickup-only akisa odaklanir.
 - Kurye/delivery akisi bilincli olarak kapsam disidir.
-- Repo demo veri ve urun prototipleme akislarini bir arada tutar; production hardening eksikleri ayrica ele alinmalidir.
+- Repo canli API akislarina odaklanir; production hardening ve gizli veri yonetimi ayrica ele alinmalidir.

@@ -13,13 +13,43 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final SpetoAppState appState = SpetoAppScope.of(context);
-    final SpetoHappyHourOffer offer =
-        appState.selectedHappyHourOffer ??
-        (appState.happyHourOffers.isNotEmpty
-            ? appState.happyHourOffers.first
-            : defaultHappyHourOffers().first);
+    final SpetoHappyHourOffer? offer = appState.selectedHappyHourOffer;
+    if (offer == null) {
+      return SpetoScreenScaffold(
+        title: 'Happy Hour',
+        background: Palette.aubergine,
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+          child: SpetoCard(
+            radius: 24,
+            color: Palette.cardWarm,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Gösterilecek teklif bulunamadı',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Aktif bir kampanya seçildiğinde teklif detayları burada açılacak.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Palette.soft,
+                    height: 1.6,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     final bool canPurchase = appState.canPurchaseProduct(offer.productId);
-    final String? stockWarning = appState.stockWarningForProduct(offer.productId);
+    final String? stockWarning = appState.stockWarningForProduct(
+      offer.productId,
+    );
     final int hours = offer.expiresInMinutes ~/ 60;
     final int minutes = offer.expiresInMinutes % 60;
 
@@ -361,8 +391,9 @@ class HappyHourOfferDetailScreen extends StatelessWidget {
                       children: <Widget>[
                         Text(
                           'Toplam Tutar',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: Palette.muted),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(color: Palette.muted),
                         ),
                         Text(
                           offer.discountedPriceText,

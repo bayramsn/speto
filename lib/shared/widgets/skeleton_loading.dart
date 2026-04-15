@@ -118,7 +118,7 @@ class SkeletonList extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       shrinkWrap: true,
       itemCount: itemCount,
-      itemBuilder: (_, __) => SkeletonCard(height: itemHeight),
+      itemBuilder: (context, index) => SkeletonCard(height: itemHeight),
     );
   }
 }
@@ -142,7 +142,7 @@ class SkeletonGrid extends StatelessWidget {
         childAspectRatio: 0.75,
       ),
       itemCount: itemCount,
-      itemBuilder: (_, __) {
+      itemBuilder: (context, index) {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

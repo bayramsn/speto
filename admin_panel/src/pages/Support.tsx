@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import { useAdminAuth } from '../auth/adminAuth';
 import { EmptyState, LoadingState, Modal, PageHeader, Pagination, Panel, StatusBadge, TextArea, TextInput, Toast } from '../components/ui';
+import { useLiveReload } from '../hooks/useLiveReload';
 import { formatDate, supportStatusLabel } from '../lib/formatters';
 import type { AdminSupportTicket, AdminSupportTicketDetail, PagedResponse, SupportPriority, SupportStatus } from '../lib/types';
 
@@ -52,6 +53,7 @@ export function Support() {
   useEffect(() => {
     void load();
   }, [load]);
+  useLiveReload(load);
 
   async function updateStatus(ticketId: string, status: SupportStatus) {
     setError('');

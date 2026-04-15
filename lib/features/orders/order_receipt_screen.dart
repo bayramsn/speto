@@ -48,11 +48,28 @@ class OrderReceiptScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final SpetoAppState appState = SpetoAppScope.of(context);
-    final SpetoOrder order =
-        appState.selectedOrder ??
-        (appState.historyOrders.isNotEmpty
-            ? appState.historyOrders.first
-            : appState.activeOrders.first);
+    final SpetoOrder? order = appState.selectedOrder;
+    if (order == null) {
+      return SpetoScreenScaffold(
+        title: 'Sipariş Fişi',
+        showBottomNav: true,
+        activeNav: NavSection.orders,
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
+          child: SpetoEmptyState(
+            icon: Icons.receipt_long_outlined,
+            iconColor: Palette.cyan,
+            title: 'Gösterilecek fiş yok',
+            description:
+                'Tamamlanan veya geçmiş sipariş oluştuğunda fiş detayları burada gösterilecek.',
+            primaryButtonLabel: 'Siparişlerime Git',
+            primaryButtonIcon: Icons.history_rounded,
+            onPrimaryButtonTap: () =>
+                openRootScreen(context, SpetoScreen.orderHistory),
+          ),
+        ),
+      );
+    }
     final int? currentRating = appState.ratingForOrder(order.id);
     return SpetoScreenScaffold(
       title: 'Sipariş Fişi',

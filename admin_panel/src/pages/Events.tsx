@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import { useAdminAuth } from '../auth/adminAuth';
 import { EmptyState, LoadingState, Modal, PageHeader, Pagination, Panel, StatusBadge, TextArea, TextInput, Toast } from '../components/ui';
+import { useLiveReload } from '../hooks/useLiveReload';
 import { formatDate } from '../lib/formatters';
 import type { AdminEvent, BusinessListItem, PagedResponse } from '../lib/types';
 
@@ -87,6 +88,7 @@ export function Events() {
   useEffect(() => {
     void load();
   }, [load]);
+  useLiveReload(load);
 
   function openCreateModal() {
     setDraft({

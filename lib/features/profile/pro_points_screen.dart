@@ -3,7 +3,6 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/palette.dart';
-import '../../core/constants/app_images.dart';
 import '../../core/navigation/screen_enum.dart';
 import '../../core/navigation/navigator.dart';
 import '../../core/state/app_state.dart';
@@ -353,6 +352,7 @@ class _ProPointsScreenState extends State<ProPointsScreen> {
   }
 
   Widget _usageSection(BuildContext context, SpetoAppState appState) {
+    final EventExperience? promotedEvent = featuredEventExperience;
     return KeyedSubtree(
       key: const ValueKey<String>('usage-section'),
       child: Column(
@@ -415,54 +415,78 @@ class _ProPointsScreenState extends State<ProPointsScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          SpetoCard(
-            radius: 26,
-            padding: EdgeInsets.zero,
-            color: Palette.cardWarm,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                SpetoImage(url: AppImages.jazz, height: 188, borderRadius: 26),
-                Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        featuredEventTicket.title,
-                        style: context.spetoSectionTitleStyle(fontSize: 18),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${featuredEventTicket.venue} • ${featuredEventTicket.dateLabel} • ${featuredEventTicket.timeLabel}',
-                        style: context.spetoDescriptionStyle(),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: <Widget>[
-                          Text(
-                            formatPoints(featuredEventTicket.pointsCost),
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(
-                                  color: Palette.orange,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                          ),
-                          const Spacer(),
-                          SpetoPrimaryButton(
-                            label: 'Etkinliği Aç',
-                            icon: Icons.arrow_forward_rounded,
-                            onTap: () =>
-                                openScreen(context, SpetoScreen.eventDetail),
-                          ),
-                        ],
-                      ),
-                    ],
+          if (promotedEvent == null)
+            SpetoCard(
+              radius: 24,
+              color: Palette.cardWarm,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Şu anda açılabilir etkinlik yok',
+                    style: context.spetoSectionTitleStyle(fontSize: 18),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 10),
+                  Text(
+                    'Etkinlik akışı geldiğinde Pro ile açılabilen biletler burada gösterilecek.',
+                    style: context.spetoDescriptionStyle(fontSize: 14),
+                  ),
+                ],
+              ),
+            )
+          else
+            SpetoCard(
+              radius: 26,
+              padding: EdgeInsets.zero,
+              color: Palette.cardWarm,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  SpetoImage(
+                    url: promotedEvent.image,
+                    height: 188,
+                    borderRadius: 26,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          promotedEvent.title,
+                          style: context.spetoSectionTitleStyle(fontSize: 18),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${promotedEvent.venue} • ${promotedEvent.dateLabel} • ${promotedEvent.timeLabel}',
+                          style: context.spetoDescriptionStyle(),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: <Widget>[
+                            Text(
+                              formatPoints(promotedEvent.pointsCost),
+                              style: Theme.of(context).textTheme.headlineSmall
+                                  ?.copyWith(
+                                    color: Palette.orange,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                            ),
+                            const Spacer(),
+                            SpetoPrimaryButton(
+                              label: 'Etkinliği Aç',
+                              icon: Icons.arrow_forward_rounded,
+                              onTap: () =>
+                                  openScreen(context, SpetoScreen.eventDetail),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -568,10 +592,7 @@ class _ProPointsScreenState extends State<ProPointsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(
-            label,
-            style: context.spetoMetaStyle(color: Palette.soft),
-          ),
+          Text(label, style: context.spetoMetaStyle(color: Palette.soft)),
           const SizedBox(height: 6),
           Text(
             value,
@@ -619,15 +640,9 @@ class _ProPointsScreenState extends State<ProPointsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(
-                title,
-                style: context.spetoCardTitleStyle(),
-              ),
+              Text(title, style: context.spetoCardTitleStyle()),
               const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: context.spetoMetaStyle(height: 1.42),
-              ),
+              Text(subtitle, style: context.spetoMetaStyle(height: 1.42)),
             ],
           ),
         ),

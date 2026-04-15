@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../core/theme/palette.dart';
-import '../../core/constants/app_images.dart';
 import '../../core/navigation/screen_enum.dart';
 import '../../core/navigation/navigator.dart';
-import '../../core/state/app_state.dart';
 import '../../core/data/default_data.dart';
 import '../../src/core/models.dart';
 import '../../shared/widgets/widgets.dart';
@@ -13,21 +10,57 @@ import 'restaurant_data.dart';
 import 'restaurant_detail_screen.dart';
 
 class MenuItemDetailScreen extends StatelessWidget {
-  const MenuItemDetailScreen({this.item, this.vendor = 'Burger King Kadıköy'});
+  const MenuItemDetailScreen({
+    super.key,
+    this.item,
+    this.vendor = 'Burger King Kadıköy',
+  });
 
   final MenuListItem? item;
   final String vendor;
 
-  static const MenuListItem _fallbackItem = MenuListItem(
-    'Çifte Peynirli Burger',
-    '200 gram ezme dana köftesi, çift cheddar peyniri, turşu, karamelize soğan ve özel ev sosu ile briyoş ekmekte sunulur.',
-    '89 TL',
-    AppImages.burger,
-  );
-
   @override
   Widget build(BuildContext context) {
-    final MenuListItem resolvedItem = item ?? _fallbackItem;
+    final MenuListItem? resolvedItem = item;
+    if (resolvedItem == null) {
+      return SpetoScreenScaffold(
+        title: 'Ürün Detayı',
+        background: Palette.aubergine,
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+          child: SpetoCard(
+            radius: 24,
+            color: Palette.cardWarm,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Gösterilecek ürün bulunamadı',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Ürün katalogdan kaldırılmış olabilir veya detay verisi henüz yüklenmemiş olabilir.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Palette.soft,
+                    height: 1.6,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                SpetoPrimaryButton(
+                  label: 'Restoranlara Dön',
+                  icon: Icons.storefront_outlined,
+                  onTap: () =>
+                      openRootScreen(context, SpetoScreen.restaurantList),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     final List<MapEntry<String, IconData>> highlights = menuHighlightsFor(
       resolvedItem,
     );
@@ -211,9 +244,7 @@ class MenuItemDetailScreen extends StatelessWidget {
                                 width: 46,
                                 height: 46,
                                 decoration: BoxDecoration(
-                                  color: Palette.orange.withValues(
-                                    alpha: 0.12,
-                                  ),
+                                  color: Palette.orange.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                                 child: const Icon(
@@ -378,7 +409,7 @@ class MenuItemDetailScreen extends StatelessWidget {
 }
 
 class InfoTag extends StatelessWidget {
-  const InfoTag({required this.label, required this.icon});
+  const InfoTag({super.key, required this.label, required this.icon});
 
   final String label;
   final IconData icon;

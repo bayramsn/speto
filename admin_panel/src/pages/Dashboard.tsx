@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { useAdminAuth } from '../auth/adminAuth';
 import { EmptyState, LoadingState, MetricCard, PageHeader, Panel, StatusBadge } from '../components/ui';
+import { useLiveReload } from '../hooks/useLiveReload';
 import { formatCurrency, formatDate, orderStatusLabel, orderStatusTone } from '../lib/formatters';
 import type { DashboardSummary } from '../lib/types';
 
@@ -11,31 +12,23 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      setError('');
-      try {
-        const next = await request<DashboardSummary>('/admin/dashboard/summary');
-        if (!cancelled) {
-          setSummary(next);
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : 'Dashboard alınamadı.');
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const next = await request<DashboardSummary>('/admin/dashboard/summary');
+      setSummary(next);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Dashboard alınamadı.');
+    } finally {
+      setLoading(false);
     }
-    void load();
-    return () => {
-      cancelled = true;
-    };
   }, [request]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+  useLiveReload(load);
 
   if (loading) {
     return <LoadingState label="Dashboard verileri hazırlanıyor..." />;

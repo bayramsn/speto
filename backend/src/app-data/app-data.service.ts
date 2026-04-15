@@ -4,6 +4,7 @@ import {
   InternalServerErrorException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import {
@@ -22,6 +23,7 @@ import {
   StorefrontType as PrismaStorefrontType,
   SupportStatus as PrismaSupportStatus,
   SyncRunStatus as PrismaSyncRunStatus,
+  VendorApprovalStatus as PrismaVendorApprovalStatus,
 } from '@prisma/client';
 import { createHash, randomInt, randomUUID } from 'node:crypto';
 import * as bcrypt from 'bcrypt';
@@ -277,6 +279,11 @@ interface IntegrationConnection {
   health: IntegrationHealth;
   lastSync: IntegrationSyncRun;
   skuMappings: Record<string, string>;
+}
+
+interface IntegrationInventoryRecord {
+  sku: string;
+  quantity: number;
 }
 
 interface _EventCatalogItem {
@@ -2456,6 +2463,7 @@ export class AppDataService {
       where: {
         storefrontType: PrismaStorefrontType.RESTAURANT,
         isActive: true,
+        approvalStatus: PrismaVendorApprovalStatus.APPROVED,
       },
       include: catalogVendorInclude,
       orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
@@ -2469,6 +2477,7 @@ export class AppDataService {
       where: {
         storefrontType: PrismaStorefrontType.MARKET,
         isActive: true,
+        approvalStatus: PrismaVendorApprovalStatus.APPROVED,
       },
       include: catalogVendorInclude,
       orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
@@ -2479,7 +2488,14 @@ export class AppDataService {
   async listEvents() {
     await this.ensureInitialized();
     const events = await this.prisma.event.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        vendor: {
+          is: {
+            approvalStatus: PrismaVendorApprovalStatus.APPROVED,
+          },
+        },
+      },
       orderBy: [{ displayOrder: 'asc' }, { startsAt: 'asc' }],
     });
     return events.map((event) => this.toEventDetailPayload(event));
@@ -2500,11 +2516,15 @@ export class AppDataService {
 
   async getVendorCatalog(vendorId: string) {
     await this.ensureInitialized();
-    const vendor = await this.prisma.vendor.findUnique({
-      where: { id: vendorId },
+    const vendor = await this.prisma.vendor.findFirst({
+      where: {
+        id: vendorId,
+        isActive: true,
+        approvalStatus: PrismaVendorApprovalStatus.APPROVED,
+      },
       include: catalogVendorInclude,
     });
-    if (!vendor || !vendor.isActive) {
+    if (!vendor) {
       throw new NotFoundException(`Vendor ${vendorId} not found`);
     }
     return this.toVendorDetailPayload(vendor);
@@ -2524,10 +2544,18 @@ export class AppDataService {
 
   async getEventDetail(eventId: string) {
     await this.ensureInitialized();
-    const event = await this.prisma.event.findUnique({
-      where: { id: eventId },
+    const event = await this.prisma.event.findFirst({
+      where: {
+        id: eventId,
+        isActive: true,
+        vendor: {
+          is: {
+            approvalStatus: PrismaVendorApprovalStatus.APPROVED,
+          },
+        },
+      },
     });
-    if (!event || !event.isActive) {
+    if (!event) {
       throw new NotFoundException(`Event ${eventId} not found`);
     }
     return this.toEventDetailPayload(event);
@@ -2588,11 +2616,17 @@ export class AppDataService {
     const operatorEmail =
       typeof payload['operatorEmail'] === 'string' && payload['operatorEmail'].trim().length > 0
         ? this.normalizeEmail(payload['operatorEmail'])
-        : `ops+${slug}@speto.app`;
+        : '';
+    if (!operatorEmail) {
+      throw new BadRequestException('Operatör e-postası zorunludur');
+    }
     const operatorPassword =
       typeof payload['operatorPassword'] === 'string' && payload['operatorPassword'].trim().length > 0
         ? payload['operatorPassword'].trim()
-        : 'vendor123';
+        : '';
+    if (operatorPassword.length < 8) {
+      throw new BadRequestException('Operatör şifresi en az 8 karakter olmalıdır');
+    }
     const operatorDisplayName =
       typeof payload['operatorDisplayName'] === 'string' &&
       payload['operatorDisplayName'].trim().length > 0
@@ -3505,8 +3539,16 @@ export class AppDataService {
     await this.ensureInitialized();
     const current = await this.requireCurrentUser();
     const ticket = await this.prisma.$transaction(async (tx) => {
-      const event = await tx.event.findUnique({
-        where: { id: eventId },
+      const event = await tx.event.findFirst({
+        where: {
+          id: eventId,
+          isActive: true,
+          vendor: {
+            is: {
+              approvalStatus: PrismaVendorApprovalStatus.APPROVED,
+            },
+          },
+        },
       });
       if (!event) {
         throw new NotFoundException(`Event ${eventId} not found`);
@@ -3847,41 +3889,55 @@ export class AppDataService {
     this.assertVendorAccess(current, connection.vendorId);
     const mappings = this.toSkuMappings(connection.skuMappings);
     const startedAt = new Date();
+    try {
+      const records = await this.fetchIntegrationInventoryRecords(connection);
+      const result = await this.prisma.$transaction(async (tx) => {
+        const processedCount = await this.applyIntegrationInventoryRecords(tx, {
+          vendorId: connection.vendorId,
+          mappings,
+          records,
+          notePrefix: 'Remote sync',
+        });
+        const run = await tx.integrationSyncRun.create({
+          data: {
+            connectionId: connection.id,
+            status: PrismaSyncRunStatus.SUCCESS,
+            processedCount,
+            startedAt,
+            completedAt: new Date(),
+          },
+        });
+        await tx.integrationConnection.update({
+          where: { id: connection.id },
+          data: { health: PrismaIntegrationHealth.HEALTHY },
+        });
+        return run;
+      });
+
+      return this.toSyncRunPayload(result, connectionId);
+    } catch (error) {
+      const message = this.toIntegrationSyncErrorMessage(error);
+      await this.recordFailedIntegrationSync(connection.id, startedAt, message);
+      throw new ServiceUnavailableException(message);
+    }
+  }
+
+  async receiveIntegrationWebhook(
+    connectionId: string,
+    payload: { records: Array<{ sku: string; quantity: number }> },
+  ) {
+    await this.ensureInitialized();
+    const connection = await this.requireIntegration(connectionId);
+    const mappings = this.toSkuMappings(connection.skuMappings);
+    const startedAt = new Date();
 
     const result = await this.prisma.$transaction(async (tx) => {
-      let processedCount = 0;
-      for (const [externalCode, internalSku] of Object.entries(mappings)) {
-        const stock = await tx.inventoryStock.findFirst({
-          where: {
-            vendorId: connection.vendorId,
-            product: { sku: internalSku },
-          },
-          include: stockInclude,
-        });
-        if (!stock) {
-          continue;
-        }
-
-        const nextOnHand = stock.onHand + 2;
-        await tx.inventoryStock.update({
-          where: { id: stock.id },
-          data: { onHand: nextOnHand },
-        });
-        await tx.inventoryMovement.create({
-          data: {
-            productId: stock.productId,
-            vendorId: stock.vendorId,
-            type: PrismaInventoryMovementType.POS_SYNC,
-            quantityDelta: 2,
-            previousOnHand: stock.onHand,
-            nextOnHand,
-            previousReserved: stock.reserved,
-            nextReserved: stock.reserved,
-            note: `Sync ${externalCode} -> ${internalSku}`,
-          },
-        });
-        processedCount += 1;
-      }
+      const processedCount = await this.applyIntegrationInventoryRecords(tx, {
+        vendorId: connection.vendorId,
+        mappings,
+        records: payload.records,
+        notePrefix: 'Webhook sync',
+      });
 
       const run = await tx.integrationSyncRun.create({
         data: {
@@ -3902,36 +3958,181 @@ export class AppDataService {
     return this.toSyncRunPayload(result, connectionId);
   }
 
-  async receiveIntegrationWebhook(
-    connectionId: string,
-    payload: { records: Array<{ sku: string; quantity: number }> },
-  ) {
-    await this.ensureInitialized();
-    const current = await this.requireCurrentUser();
-    this.assertOpsAccess(current);
+  private async fetchIntegrationInventoryRecords(
+    connection: IntegrationRecord,
+  ): Promise<IntegrationInventoryRecord[]> {
+    const normalizedBaseUrl = connection.baseUrl.trim().replace(/\/+$/, '');
+    if (normalizedBaseUrl.length === 0) {
+      throw new ServiceUnavailableException('Integration base URL is missing');
+    }
 
-    const connection = await this.requireIntegration(connectionId);
-    this.assertVendorAccess(current, connection.vendorId);
-    const mappings = this.toSkuMappings(connection.skuMappings);
-    const startedAt = new Date();
+    const candidateUrls = Array.from(
+      new Set([
+        normalizedBaseUrl,
+        `${normalizedBaseUrl}/inventory`,
+        `${normalizedBaseUrl}/stock`,
+        `${normalizedBaseUrl}/sync`,
+      ]),
+    );
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      let processedCount = 0;
+    let lastErrorMessage =
+      'Integration endpoint did not return any inventory records.';
 
-      for (const record of payload.records) {
-        const internalSku = mappings[record.sku] ?? record.sku;
-        const stock = await tx.inventoryStock.findFirst({
-          where: {
-            vendorId: connection.vendorId,
-            product: { sku: internalSku },
-          },
-          include: stockInclude,
+    for (const url of candidateUrls) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8_000);
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          signal: controller.signal,
         });
-        if (!stock) {
+        if (!response.ok) {
+          lastErrorMessage = `Integration endpoint ${url} returned HTTP ${response.status}.`;
           continue;
         }
 
-        const nextOnHand = Math.max(record.quantity, stock.reserved);
+        const payload = (await response.json()) as unknown;
+        const records = this.normalizeIntegrationInventoryPayload(payload);
+        if (records.length > 0) {
+          return records;
+        }
+        lastErrorMessage = `Integration endpoint ${url} returned no usable inventory records.`;
+      } catch (error) {
+        lastErrorMessage = `Integration endpoint ${url} could not be reached: ${this.toIntegrationSyncErrorMessage(
+          error,
+        )}`;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    throw new ServiceUnavailableException(lastErrorMessage);
+  }
+
+  private normalizeIntegrationInventoryPayload(
+    payload: unknown,
+  ): IntegrationInventoryRecord[] {
+    const entries = this.extractIntegrationInventoryEntries(payload);
+    return entries
+      .map((entry) => this.toIntegrationInventoryRecord(entry))
+      .filter((record): record is IntegrationInventoryRecord => record != null);
+  }
+
+  private extractIntegrationInventoryEntries(payload: unknown): unknown[] {
+    if (Array.isArray(payload)) {
+      return payload;
+    }
+
+    const root = this.asPlainObject(payload);
+    if (!root) {
+      return [];
+    }
+
+    const directEntries = [root['records'], root['items'], root['inventory']];
+    for (const value of directEntries) {
+      if (Array.isArray(value)) {
+        return value;
+      }
+    }
+
+    const nestedData = this.asPlainObject(root['data']);
+    if (nestedData) {
+      const nestedEntries = [
+        nestedData['records'],
+        nestedData['items'],
+        nestedData['inventory'],
+      ];
+      for (const value of nestedEntries) {
+        if (Array.isArray(value)) {
+          return value;
+        }
+      }
+    }
+
+    if (this.toIntegrationInventoryRecord(root)) {
+      return [root];
+    }
+    return [];
+  }
+
+  private toIntegrationInventoryRecord(
+    value: unknown,
+  ): IntegrationInventoryRecord | null {
+    const entry = this.asPlainObject(value);
+    if (!entry) {
+      return null;
+    }
+
+    const sku = [
+      entry['sku'],
+      entry['externalCode'],
+      entry['code'],
+      entry['productCode'],
+      entry['product_code'],
+      entry['id'],
+    ].find((candidate) => typeof candidate === 'string' && candidate.trim().length > 0);
+    const quantity = [
+      entry['quantity'],
+      entry['qty'],
+      entry['stock'],
+      entry['onHand'],
+      entry['availableQuantity'],
+      entry['available_quantity'],
+      entry['available'],
+    ]
+      .map((candidate) => this.toIntegrationQuantity(candidate))
+      .find((candidate) => candidate != null);
+
+    if (typeof sku !== 'string' || quantity == null) {
+      return null;
+    }
+
+    return {
+      sku: sku.trim(),
+      quantity,
+    };
+  }
+
+  private toIntegrationQuantity(value: unknown): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return Math.max(0, Math.trunc(value));
+    }
+    if (typeof value === 'string' && value.trim().length > 0) {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) {
+        return Math.max(0, Math.trunc(parsed));
+      }
+    }
+    return null;
+  }
+
+  private async applyIntegrationInventoryRecords(
+    tx: Prisma.TransactionClient,
+    payload: {
+      vendorId: string;
+      mappings: Record<string, string>;
+      records: Array<{ sku: string; quantity: number }>;
+      notePrefix: string;
+    },
+  ) {
+    let processedCount = 0;
+
+    for (const record of payload.records) {
+      const internalSku = payload.mappings[record.sku] ?? record.sku;
+      const stock = await tx.inventoryStock.findFirst({
+        where: {
+          vendorId: payload.vendorId,
+          product: { sku: internalSku },
+        },
+        include: stockInclude,
+      });
+      if (!stock) {
+        continue;
+      }
+
+      const nextOnHand = Math.max(record.quantity, stock.reserved);
+      if (nextOnHand !== stock.onHand) {
         await tx.inventoryStock.update({
           where: { id: stock.id },
           data: { onHand: nextOnHand },
@@ -3948,30 +4149,52 @@ export class AppDataService {
             nextReserved: stock.reserved,
             note:
               nextOnHand !== record.quantity
-                ? `Webhook sync for ${record.sku} (clamped to reserved)`
-                : `Webhook sync for ${record.sku}`,
+                ? `${payload.notePrefix} for ${record.sku} (clamped to reserved)`
+                : `${payload.notePrefix} for ${record.sku}`,
           },
         });
-        processedCount += 1;
       }
+      processedCount += 1;
+    }
 
-      const run = await tx.integrationSyncRun.create({
+    return processedCount;
+  }
+
+  private async recordFailedIntegrationSync(
+    connectionId: string,
+    startedAt: Date,
+    errorMessage: string,
+  ) {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.integrationConnection.update({
+        where: { id: connectionId },
+        data: { health: PrismaIntegrationHealth.FAILED },
+      });
+      await tx.integrationSyncRun.create({
         data: {
-          connectionId: connection.id,
-          status: PrismaSyncRunStatus.SUCCESS,
-          processedCount,
+          connectionId,
+          status: PrismaSyncRunStatus.FAILED,
+          processedCount: 0,
+          errorMessage,
           startedAt,
           completedAt: new Date(),
         },
       });
-      await tx.integrationConnection.update({
-        where: { id: connection.id },
-        data: { health: PrismaIntegrationHealth.HEALTHY },
-      });
-      return run;
     });
+  }
 
-    return this.toSyncRunPayload(result, connectionId);
+  private toIntegrationSyncErrorMessage(error: unknown) {
+    if (error instanceof Error && error.message.trim().length > 0) {
+      return error.message.trim();
+    }
+    return 'Integration sync failed';
+  }
+
+  private asPlainObject(value: unknown): Record<string, unknown> | null {
+    if (typeof value !== 'object' || value == null || Array.isArray(value)) {
+      return null;
+    }
+    return value as Record<string, unknown>;
   }
 
   async listVendorBankAccounts(vendorId?: string) {
@@ -4334,6 +4557,7 @@ export class AppDataService {
         await this.syncCatalogManifestSeed(tx);
 
         if (!this.enableDemoSeed) {
+          await this.purgeDemoData(tx);
           return;
         }
 
@@ -4554,6 +4778,57 @@ export class AppDataService {
         timeout: 30_000,
       },
     );
+  }
+
+  private async purgeDemoData(tx: Prisma.TransactionClient) {
+    const demoUserIds = DEMO_USERS.map((user) => user.id);
+    const demoBankAccountIds = DEMO_VENDOR_BANK_ACCOUNTS.map((account) => account.id);
+    const demoPayoutIds = DEMO_VENDOR_PAYOUTS.map((payout) => payout.id);
+    const demoCampaignIds = DEMO_VENDOR_CAMPAIGNS.map((campaign) => campaign.id);
+    const demoIntegrationIds = _DEMO_INTEGRATIONS.map((integration) => integration.id);
+    const showcaseSectionIds = [
+      ...DEMO_CAFE_SECTIONS.map((section) => section.id),
+      ...DEMO_BURGER_SHOWCASE_SECTIONS.map((section) => section.id),
+    ];
+    const showcaseProductIds = [
+      ...DEMO_CAFE_SECTIONS.flatMap((section) => section.products.map((product) => product.id)),
+      ...DEMO_BURGER_SHOWCASE_SECTIONS.flatMap((section) =>
+        section.products.map((product) => product.id),
+      ),
+    ];
+
+    await tx.user.deleteMany({
+      where: { id: { in: demoUserIds } },
+    });
+    await tx.integrationConnection.deleteMany({
+      where: { id: { in: demoIntegrationIds } },
+    });
+    await tx.vendorPayout.deleteMany({
+      where: { id: { in: demoPayoutIds } },
+    });
+    await tx.vendorBankAccount.deleteMany({
+      where: { id: { in: demoBankAccountIds } },
+    });
+    await tx.vendorCampaign.deleteMany({
+      where: { id: { in: demoCampaignIds } },
+    });
+    await tx.order.deleteMany({
+      where: {
+        OR: [
+          { vendorId: DEMO_CAFE_VENDOR.id },
+          { items: { some: { productId: { in: showcaseProductIds } } } },
+        ],
+      },
+    });
+    await tx.product.deleteMany({
+      where: { id: { in: showcaseProductIds } },
+    });
+    await tx.catalogSection.deleteMany({
+      where: { id: { in: showcaseSectionIds } },
+    });
+    await tx.vendor.deleteMany({
+      where: { id: DEMO_CAFE_VENDOR.id },
+    });
   }
 
   private async syncCatalogManifestSeed(tx: Prisma.TransactionClient) {
@@ -5517,9 +5792,25 @@ export class AppDataService {
         id: true,
         title: true,
         unitPrice: true,
+        isActive: true,
+        isArchived: true,
+        isVisibleInApp: true,
+        vendor: {
+          select: {
+            approvalStatus: true,
+            isActive: true,
+          },
+        },
       },
     });
-    if (exactProduct) {
+    if (
+      exactProduct &&
+      exactProduct.isActive &&
+      !exactProduct.isArchived &&
+      exactProduct.isVisibleInApp &&
+      exactProduct.vendor.isActive &&
+      exactProduct.vendor.approvalStatus === PrismaVendorApprovalStatus.APPROVED
+    ) {
       return {
         ...item,
         productId: exactProduct.id,
@@ -5546,6 +5837,13 @@ export class AppDataService {
       where: {
         isActive: true,
         isArchived: false,
+        isVisibleInApp: true,
+        vendor: {
+          is: {
+            isActive: true,
+            approvalStatus: PrismaVendorApprovalStatus.APPROVED,
+          },
+        },
         ...(candidateVendorIds.length > 0 ? { vendorId: { in: candidateVendorIds } } : {}),
       },
       select: {
@@ -5585,8 +5883,12 @@ export class AppDataService {
     vendorId: string,
     pickupPointRef: string,
   ) {
-    const vendor = await tx.vendor.findUnique({
-      where: { id: vendorId },
+    const vendor = await tx.vendor.findFirst({
+      where: {
+        id: vendorId,
+        isActive: true,
+        approvalStatus: PrismaVendorApprovalStatus.APPROVED,
+      },
       select: {
         name: true,
         pickupPoints: {
@@ -5628,6 +5930,7 @@ export class AppDataService {
     tx: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
     this.assertAccountActive(user);
+    await this.assertVendorSessionAccess(user, tx);
     await tx.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
@@ -5666,6 +5969,7 @@ export class AppDataService {
     const requestScopedUser = await this.currentRequestUser();
     if (requestScopedUser) {
       this.assertAccountActive(requestScopedUser);
+      await this.assertVendorSessionAccess(requestScopedUser);
       return requestScopedUser;
     }
     throw new UnauthorizedException('No active session');
@@ -5674,6 +5978,40 @@ export class AppDataService {
   private assertAccountActive(user: UserRecord) {
     if (user.isBanned || user.isSuspended) {
       throw new UnauthorizedException('Account is not active');
+    }
+  }
+
+  private async assertVendorSessionAccess(
+    user: UserRecord,
+    tx: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    if (user.role !== PrismaRole.VENDOR) {
+      return;
+    }
+    if (!user.vendorId) {
+      throw new UnauthorizedException('Vendor scope mismatch');
+    }
+    const vendor = await tx.vendor.findUnique({
+      where: { id: user.vendorId },
+      select: {
+        approvalStatus: true,
+        isActive: true,
+      },
+    });
+    if (!vendor) {
+      throw new UnauthorizedException('Vendor account is not active');
+    }
+    if (!vendor.isActive) {
+      throw new UnauthorizedException('Vendor account is inactive');
+    }
+    if (vendor.approvalStatus === PrismaVendorApprovalStatus.PENDING) {
+      throw new UnauthorizedException('Vendor account is pending approval');
+    }
+    if (vendor.approvalStatus === PrismaVendorApprovalStatus.REJECTED) {
+      throw new UnauthorizedException('Vendor account has been rejected');
+    }
+    if (vendor.approvalStatus === PrismaVendorApprovalStatus.SUSPENDED) {
+      throw new UnauthorizedException('Vendor account has been suspended');
     }
   }
 
@@ -6099,11 +6437,15 @@ export class AppDataService {
 
   private async requireCatalogVendor(vendorId: string) {
     await this.ensureInitialized();
-    const vendor = await this.prisma.vendor.findUnique({
-      where: { id: vendorId },
+    const vendor = await this.prisma.vendor.findFirst({
+      where: {
+        id: vendorId,
+        isActive: true,
+        approvalStatus: PrismaVendorApprovalStatus.APPROVED,
+      },
       include: catalogVendorInclude,
     });
-    if (!vendor || !vendor.isActive) {
+    if (!vendor) {
       throw new NotFoundException(`Vendor ${vendorId} not found`);
     }
     return vendor;
@@ -6425,11 +6767,11 @@ export class AppDataService {
       await this.upsertVendorOperator(tx, {
         vendorId: vendor.id,
         email: `ops+${vendor.slug}@speto.app`,
-      password: 'vendor123',
-      displayName: `${vendor.name} Operasyon`,
-      phone: '',
-    });
-  }
+        password: randomUUID(),
+        displayName: `${vendor.name} Operasyon`,
+        phone: '',
+      });
+    }
   }
 
   private async upsertVendorOperator(
@@ -6797,7 +7139,12 @@ export class AppDataService {
       where: {
         kind: PrismaCampaignKind.HAPPY_HOUR,
         status: PrismaCampaignStatus.ACTIVE,
-        vendor: { isActive: true },
+        vendor: {
+          is: {
+            isActive: true,
+            approvalStatus: PrismaVendorApprovalStatus.APPROVED,
+          },
+        },
       },
       include: {
         vendor: {
@@ -6838,7 +7185,18 @@ export class AppDataService {
     }
 
     const products = await this.prisma.product.findMany({
-      where: { id: { in: selectedProductIds } },
+      where: {
+        id: { in: selectedProductIds },
+        isActive: true,
+        isArchived: false,
+        isVisibleInApp: true,
+        vendor: {
+          is: {
+            isActive: true,
+            approvalStatus: PrismaVendorApprovalStatus.APPROVED,
+          },
+        },
+      },
       select: {
         id: true,
         vendorId: true,

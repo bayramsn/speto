@@ -1,6 +1,6 @@
 {
-    "name": "stock_app",
-    "short_name": "stock_app",
+    "name": "SepetPro İşyeri",
+    "short_name": "SepetPro İşyeri",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -18,7 +18,47 @@ class EventDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return EventDetailScreenContent(event: featuredEventExperience);
+    final EventExperience? event = featuredEventExperience;
+    if (event == null) {
+      return SpetoScreenScaffold(
+        title: 'Etkinlik',
+        background: Palette.aubergine,
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+          child: SpetoCard(
+            radius: 24,
+            color: Palette.cardWarm,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Aktif etkinlik bulunamadı',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Canlı etkinlik akışı geldiğinde detay ekranı burada açılacak.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Palette.soft,
+                    height: 1.6,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                SpetoPrimaryButton(
+                  label: 'Etkinlikleri Keşfet',
+                  icon: Icons.celebration_outlined,
+                  onTap: () =>
+                      openRootScreen(context, SpetoScreen.eventsDiscovery),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return EventDetailScreenContent(event: event);
   }
 }
 
@@ -34,7 +74,7 @@ void openExternalDirections(
 }
 
 class EventDetailScreenContent extends StatelessWidget {
-  const EventDetailScreenContent({required this.event});
+  const EventDetailScreenContent({super.key, required this.event});
 
   final EventExperience event;
 
@@ -486,8 +526,9 @@ class EventDetailScreenContent extends StatelessWidget {
                       children: <Widget>[
                         Text(
                           'Giriş',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: Palette.muted),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(color: Palette.muted),
                         ),
                         RichText(
                           text: TextSpan(
@@ -538,4 +579,3 @@ class EventDetailScreenContent extends StatelessWidget {
     );
   }
 }
-

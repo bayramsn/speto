@@ -9,7 +9,17 @@ import '../data/default_data.dart';
 const int jazzNightPointsCost = 650;
 const int potteryWorkshopPointsCost = 420;
 
-const String spetoTestOtpCode = '12345';
+const String _spetoOtpTestCodeOverride = String.fromEnvironment(
+  'SPETO_TEST_OTP_CODE',
+);
+const String _defaultRegistrationTestOtpCode = '12345';
+
+enum SpetoRegistrationOtpVerificationResult {
+  verified,
+  invalidCode,
+  emailAlreadyRegistered,
+  unavailable,
+}
 
 class SpetoAppState extends ChangeNotifier {
   SpetoAppState({
@@ -96,8 +106,7 @@ class SpetoAppState extends ChangeNotifier {
   final Map<String, int> _orderRatings;
   final Map<String, SpetoInventoryItem> _inventoryByProductId =
       <String, SpetoInventoryItem>{};
-  final List<SpetoHappyHourOffer> _happyHourOffers =
-      List<SpetoHappyHourOffer>.of(defaultHappyHourOffers());
+  final List<SpetoHappyHourOffer> _happyHourOffers = <SpetoHappyHourOffer>[];
   SpetoSession? _session;
   SpetoRegistrationDraft? _pendingRegistration;
   String? _passwordResetEmail;
@@ -128,9 +137,15 @@ class SpetoAppState extends ChangeNotifier {
   SpetoRegistrationDraft? get pendingRegistration => _pendingRegistration;
   String? get pendingPasswordResetEmail => _passwordResetEmail;
   bool get isPasswordResetOtpVerified => _passwordResetOtpVerified;
-  bool get usesTestOtpMode => true;
-  String get testOtpCode => spetoTestOtpCode;
-  String get displayName => _session?.displayName ?? 'Speto Kullanıcısı';
+  bool get usesTestOtpMode => testOtpCode.isNotEmpty;
+  String get testOtpCode {
+    if (_spetoOtpTestCodeOverride.isNotEmpty) {
+      return _spetoOtpTestCodeOverride;
+    }
+    return _defaultRegistrationTestOtpCode;
+  }
+
+  String get displayName => _session?.displayName ?? 'SepetPro Kullanıcısı';
   String get avatarUrl => _session?.avatarUrl.isNotEmpty == true
       ? _session!.avatarUrl
       : AppImages.profile;
@@ -272,52 +287,16 @@ class SpetoAppState extends ChangeNotifier {
           email: normalizedEmail,
           password: password,
         );
-        await _authRepository.writeAccountPassword(normalizedEmail, password);
         await _authRepository.writeSession(_session);
         await _loadSnapshotForSession(_session);
         await _persistCommerceSnapshot();
         notifyListeners();
         return true;
       } catch (_) {
-        // Fall back to the mirrored local credential store when backend auth
-        // is temporarily unavailable or out of sync with demo data.
+        return false;
       }
     }
-    final String? storedPassword = await _authRepository.readAccountPassword(
-      normalizedEmail,
-    );
-    if (!trustedProvider &&
-        (storedPassword == null || storedPassword != password)) {
-      return false;
-    }
-    final SpetoSession? previousSession =
-        _session != null &&
-            _session!.email.toLowerCase() == normalizedEmail.toLowerCase()
-        ? _session
-        : null;
-    final DateTime now = DateTime.now();
-    _session = SpetoSession(
-      email: normalizedEmail,
-      displayName: displayName != null && displayName.trim().isNotEmpty
-          ? displayName.trim()
-          : previousSession?.displayName ??
-                displayNameFromEmail(normalizedEmail),
-      phone: phone != null && phone.trim().isNotEmpty
-          ? phone.trim()
-          : previousSession?.phone ?? '',
-      authToken: 'local-${password.hashCode}-${now.millisecondsSinceEpoch}',
-      lastLoginIso: now.toIso8601String(),
-      avatarUrl: avatarUrl ?? previousSession?.avatarUrl ?? AppImages.profile,
-      notificationsEnabled: previousSession?.notificationsEnabled ?? true,
-    );
-    if (trustedProvider) {
-      await _authRepository.writeAccountPassword(normalizedEmail, password);
-    }
-    await _authRepository.writeSession(_session);
-    await _loadSnapshotForSession(_session);
-    await _persistCommerceSnapshot();
-    notifyListeners();
-    return true;
+    return false;
   }
 
   Future<bool> hasAccountForEmail(String email) async {
@@ -330,13 +309,10 @@ class SpetoAppState extends ChangeNotifier {
       try {
         return await domainApi.hasAccountForEmail(normalizedEmail);
       } catch (_) {
-        // Fall through to local mirrored credentials if backend lookup fails.
+        return false;
       }
     }
-    final String? storedPassword = await _authRepository.readAccountPassword(
-      normalizedEmail,
-    );
-    return storedPassword != null;
+    return false;
   }
 
   void toggleTheme() {
@@ -371,19 +347,32 @@ class SpetoAppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> verifyOtpCode(String code) async {
-    final SpetoRegistrationDraft? draft = _pendingRegistration;
+  Future<SpetoRegistrationOtpVerificationResult> verifyOtpCode(
+    String code,
+  ) async {
+    final SpetoRegistrationDraft? draft =
+        _pendingRegistration ?? await _authRepository.readRegistrationDraft();
     if (draft == null) {
-      return false;
+      return SpetoRegistrationOtpVerificationResult.unavailable;
     }
-    if (code.trim() != spetoTestOtpCode) {
-      return false;
+    if (_pendingRegistration == null) {
+      _pendingRegistration = draft;
+      notifyListeners();
+    }
+    if (!usesTestOtpMode || code.trim() != testOtpCode) {
+      return SpetoRegistrationOtpVerificationResult.invalidCode;
     }
     try {
       await _completePendingRegistration(verificationToken: code);
-      return true;
+      return SpetoRegistrationOtpVerificationResult.verified;
+    } on SpetoRemoteApiException catch (error) {
+      final String body = (error.body ?? '').toLowerCase();
+      if (body.contains('email already registered')) {
+        return SpetoRegistrationOtpVerificationResult.emailAlreadyRegistered;
+      }
+      return SpetoRegistrationOtpVerificationResult.unavailable;
     } catch (_) {
-      return false;
+      return SpetoRegistrationOtpVerificationResult.unavailable;
     }
   }
 
@@ -422,14 +411,7 @@ class SpetoAppState extends ChangeNotifier {
         completedViaExistingSession = true;
       }
     } else {
-      final DateTime now = DateTime.now();
-      _session = SpetoSession(
-        email: draft.email,
-        displayName: draft.fullName,
-        phone: draft.phone,
-        authToken: 'otp-$verificationToken-${now.millisecondsSinceEpoch}',
-        lastLoginIso: now.toIso8601String(),
-      );
+      throw StateError('Backend registration API is unavailable');
     }
     _pendingRegistration = null;
     await _authRepository.writeRegistrationDraft(null);
@@ -437,7 +419,6 @@ class SpetoAppState extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    await _authRepository.writeAccountPassword(draft.email, draft.password);
     await _authRepository.writeSession(_session);
     await _loadSnapshotForSession(_session);
     await _persistCommerceSnapshot();
@@ -511,16 +492,18 @@ class SpetoAppState extends ChangeNotifier {
     if (_session != null) {
       final SpetoSession session = _session!;
       final SpetoRemoteDomainApi? domainApi = _domainApi;
-      if (domainApi != null) {
-        final bool updated = await domainApi.updatePassword(
-          email: session.email,
-          password: password,
-        );
-        if (!updated) {
-          return false;
-        }
+      if (domainApi == null) {
+        return false;
       }
-      await _authRepository.writeAccountPassword(session.email, password);
+      final bool updated = await domainApi.updatePassword(
+        email: session.email,
+        password: password,
+      );
+      if (!updated) {
+        return false;
+      }
+      _session = domainApi.mergeSession(session);
+      await _authRepository.writeSession(_session);
       notifyListeners();
       return true;
     }
@@ -539,8 +522,9 @@ class SpetoAppState extends ChangeNotifier {
       if (!updated) {
         return false;
       }
+    } else {
+      return false;
     }
-    await _authRepository.writeAccountPassword(resetEmail, password);
     await _authRepository.clearPasswordResetEmail();
     _passwordResetEmail = null;
     _passwordResetOtpVerified = false;
@@ -550,15 +534,13 @@ class SpetoAppState extends ChangeNotifier {
 
   Future<void> signOut() async {
     final SpetoSession? session = _session;
-    if (session != null) {
-      final String? storedPassword = await _authRepository.readAccountPassword(
-        session.email,
-      );
-      if (storedPassword == null) {
-        await _authRepository.writeAccountPassword(
-          session.email,
-          'password123',
-        );
+    final SpetoRemoteDomainApi? domainApi = _domainApi;
+    if (session != null && domainApi != null) {
+      try {
+        await domainApi.logout(refreshToken: session.refreshToken);
+      } catch (error) {
+        debugPrint('Ignoring logout failure during sign-out: $error');
+        domainApi.clearSession();
       }
     }
     _replaceCommerceState(initialCommerceSnapshot(null));
@@ -583,7 +565,6 @@ class SpetoAppState extends ChangeNotifier {
     if (session == null) {
       return;
     }
-    final String previousEmail = session.email;
     final String nextEmail = email.trim();
     final SpetoRemoteDomainApi? domainApi = _domainApi;
     if (domainApi != null) {
@@ -609,14 +590,8 @@ class SpetoAppState extends ChangeNotifier {
         notificationsEnabled: notificationsEnabled,
       );
     }
-    if (previousEmail.toLowerCase() != nextEmail.toLowerCase()) {
-      final String? storedPassword = await _authRepository.readAccountPassword(
-        previousEmail,
-      );
-      if (storedPassword != null) {
-        await _authRepository.writeAccountPassword(nextEmail, storedPassword);
-        await _authRepository.deleteAccountPassword(previousEmail);
-      }
+    if (_session != null && domainApi != null) {
+      _session = domainApi.mergeSession(_session!);
     }
     await _authRepository.writeSession(_session);
     await _persistCommerceSnapshot();
@@ -707,6 +682,9 @@ class SpetoAppState extends ChangeNotifier {
       );
     } else {
       _session = session.copyWith(notificationsEnabled: value);
+    }
+    if (_session != null && domainApi != null) {
+      _session = domainApi.mergeSession(_session!);
     }
     await _authRepository.writeSession(_session);
     await _persistCommerceSnapshot();
@@ -804,18 +782,13 @@ class SpetoAppState extends ChangeNotifier {
     if (domainApi != null) {
       await domainApi.deleteAccount();
     }
-    final SpetoCommerceSnapshot resetSnapshot = normalizeCommerceSnapshot(
-      defaultCommerceSnapshot(),
-    );
+    final SpetoCommerceSnapshot resetSnapshot = initialCommerceSnapshot(null);
     final String? commerceScope = _commerceScopeKey(_session);
     _session = null;
     _pendingRegistration = null;
     _replaceCommerceState(resetSnapshot);
     await _authRepository.writeSession(null);
     await _authRepository.writeRegistrationDraft(null);
-    if (commerceScope != null) {
-      await _authRepository.deleteAccountPassword(commerceScope);
-    }
     await _authRepository.clearPasswordResetEmail();
     await _commerceRepository.writeSnapshot(
       resetSnapshot,
@@ -1073,25 +1046,43 @@ class SpetoAppState extends ChangeNotifier {
         scopeKey: _commerceScopeKey(session),
       ),
     );
-    _replaceCommerceState(snapshot);
-    if (session != null) {
-      _session = session.copyWith(
-        displayName: snapshot.profileDisplayName.isNotEmpty
-            ? snapshot.profileDisplayName
-            : session.displayName,
-        phone: snapshot.profilePhone.isNotEmpty
-            ? snapshot.profilePhone
-            : session.phone,
-        avatarUrl: snapshot.profileAvatarUrl.isNotEmpty
-            ? snapshot.profileAvatarUrl
-            : session.avatarUrl,
-        notificationsEnabled: snapshot.profileNotificationsEnabled,
-      );
-      if (_domainApi != null) {
-        await _syncDomainStateFromBackend();
-      }
-      await _authRepository.writeSession(_session);
+    if (session == null) {
+      _replaceCommerceState(snapshot);
+      return;
     }
+
+    final SpetoSession localSession = session.copyWith(
+      displayName: snapshot.profileDisplayName.isNotEmpty
+          ? snapshot.profileDisplayName
+          : session.displayName,
+      phone: snapshot.profilePhone.isNotEmpty
+          ? snapshot.profilePhone
+          : session.phone,
+      avatarUrl: snapshot.profileAvatarUrl.isNotEmpty
+          ? snapshot.profileAvatarUrl
+          : session.avatarUrl,
+      notificationsEnabled: snapshot.profileNotificationsEnabled,
+    );
+    _session = localSession;
+
+    if (_domainApi == null) {
+      _replaceCommerceState(snapshot);
+      await _authRepository.writeSession(_session);
+      return;
+    }
+
+    try {
+      _replaceCommerceState(defaultCommerceSnapshot());
+      await _syncDomainStateFromBackend();
+    } catch (error) {
+      debugPrint(
+        'Falling back to stored commerce snapshot after backend sync failure: $error',
+      );
+      _session = localSession;
+      _replaceCommerceState(snapshot);
+    }
+
+    await _authRepository.writeSession(_session);
   }
 
   void _replaceCommerceState(SpetoCommerceSnapshot snapshot) {
@@ -1251,12 +1242,13 @@ class SpetoAppState extends ChangeNotifier {
     }
     final List<SpetoHappyHourOffer> offers = await domainApi
         .fetchHappyHourOffers();
-    if (offers.isEmpty) {
-      return;
-    }
     _happyHourOffers
       ..clear()
       ..addAll(offers);
+    if (_happyHourOffers.isEmpty) {
+      _selectedHappyHourOfferId = null;
+      return;
+    }
     if (_selectedHappyHourOfferId != null &&
         !_happyHourOffers.any(
           (SpetoHappyHourOffer offer) => offer.id == _selectedHappyHourOfferId,

@@ -66,7 +66,7 @@ class RestaurantDetailScreen extends StatefulWidget {
 class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
   String _selectedMenuTab = 'Popüler';
 
-  RestaurantCardData _resolveRestaurant() {
+  RestaurantCardData? _resolveRestaurant() {
     for (final RestaurantCardData item in restaurantCards) {
       if (item.id == widget.restaurantId) {
         return item;
@@ -75,11 +75,14 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
     if (restaurantCards.isNotEmpty) {
       return restaurantCards.first;
     }
-    return defaultRestaurantCatalog().first;
+    return null;
   }
 
   void _openMenuItemDetail(BuildContext context, MenuListItem item) {
-    final RestaurantCardData restaurant = _resolveRestaurant();
+    final RestaurantCardData? restaurant = _resolveRestaurant();
+    if (restaurant == null) {
+      return;
+    }
     Navigator.of(context).push(
       spetoRoute(MenuItemDetailScreen(item: item, vendor: restaurant.title)),
     );
@@ -87,14 +90,50 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final RestaurantCardData restaurant = _resolveRestaurant();
+    final RestaurantCardData? restaurant = _resolveRestaurant();
+    if (restaurant == null) {
+      return SpetoScreenScaffold(
+        title: 'Restoran',
+        background: Palette.aubergine,
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+          child: SpetoCard(
+            radius: 24,
+            color: Palette.cardWarm,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Restoran verisi bulunamadı',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Canlı katalogdan restoran geldiğinde detay ekranı burada açılacak.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Palette.soft,
+                    height: 1.6,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     final SpetoAppState appState = SpetoAppScope.of(context);
     final bool isFavorite = appState.isRestaurantFavorite(restaurant.id);
     final Map<String, List<MenuListItem>> menuSections =
         restaurantMenuSectionsFor(restaurant);
     final List<String> menuTabs = menuSections.keys.toList();
-    final List<MenuListItem> selectedItems =
-        menuSections[_selectedMenuTab] ?? const <MenuListItem>[];
+    final String? activeMenuTab = menuTabs.contains(_selectedMenuTab)
+        ? _selectedMenuTab
+        : (menuTabs.isNotEmpty ? menuTabs.first : null);
+    final List<MenuListItem> selectedItems = activeMenuTab == null
+        ? const <MenuListItem>[]
+        : (menuSections[activeMenuTab] ?? const <MenuListItem>[]);
     return Scaffold(
       backgroundColor: Palette.aubergine,
       body: Stack(
@@ -241,37 +280,66 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                             ],
                           ),
                           const SizedBox(height: 16),
-                          SizedBox(
-                            height: 46,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: menuTabs.length,
-                              separatorBuilder:
-                                  (BuildContext context, int index) =>
-                                      const SizedBox(width: 12),
-                              itemBuilder: (BuildContext context, int index) {
-                                final String tab = menuTabs[index];
-                                return TabChip(
-                                  label: tab,
-                                  active: tab == _selectedMenuTab,
-                                  onTap: () =>
-                                      setState(() => _selectedMenuTab = tab),
-                                );
-                              },
+                          if (menuTabs.isNotEmpty) ...<Widget>[
+                            SizedBox(
+                              height: 46,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: menuTabs.length,
+                                separatorBuilder:
+                                    (BuildContext context, int index) =>
+                                        const SizedBox(width: 12),
+                                itemBuilder: (BuildContext context, int index) {
+                                  final String tab = menuTabs[index];
+                                  return TabChip(
+                                    label: tab,
+                                    active: tab == activeMenuTab,
+                                    onTap: () =>
+                                        setState(() => _selectedMenuTab = tab),
+                                  );
+                                },
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 18),
-                          Text(
-                            '$_selectedMenuTab kategorisi • ${selectedItems.length} ürün',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: Palette.soft),
-                          ),
-                          const SizedBox(height: 24),
-                          _menuSection(
-                            context,
-                            title: _selectedMenuTab,
-                            items: selectedItems,
-                          ),
+                            const SizedBox(height: 18),
+                            Text(
+                              '${activeMenuTab ?? 'Menü'} kategorisi • ${selectedItems.length} ürün',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: Palette.soft),
+                            ),
+                            const SizedBox(height: 24),
+                            _menuSection(
+                              context,
+                              title: activeMenuTab ?? 'Menü',
+                              items: selectedItems,
+                            ),
+                          ] else
+                            SpetoCard(
+                              radius: 20,
+                              color: Palette.cardWarm,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
+                                    'Menü henüz yayınlanmadı',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w800),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Bu restoranın canlı menüsü backend tarafında hazır olduğunda burada listelenecek.',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: Palette.soft,
+                                          height: 1.6,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
                         ],
                       ),
                     ),

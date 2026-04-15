@@ -9,30 +9,67 @@ import '../../core/navigation/navigator.dart';
 import '../../core/state/app_state.dart';
 import '../../core/data/default_data.dart';
 import '../../shared/widgets/widgets.dart';
+import '../events/event_data.dart';
 import 'home_data.dart';
+
+class _DiscoverySuggestion {
+  const _DiscoverySuggestion({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.screen,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final SpetoScreen screen;
+}
+
+List<_DiscoverySuggestion> _buildDiscoverySuggestions(SpetoAppState appState) {
+  final List<_DiscoverySuggestion> suggestions = <_DiscoverySuggestion>[];
+  if (restaurantCards.isNotEmpty) {
+    final restaurant = restaurantCards.first;
+    suggestions.add(
+      _DiscoverySuggestion(
+        title: restaurant.title,
+        subtitle: '${restaurant.cuisine} • ${restaurant.etaLabel}',
+        icon: Icons.lunch_dining_rounded,
+        screen: SpetoScreen.restaurantList,
+      ),
+    );
+  }
+  if (appState.happyHourOffers.isNotEmpty) {
+    final offer = appState.happyHourOffers.first;
+    suggestions.add(
+      _DiscoverySuggestion(
+        title: offer.title,
+        subtitle: '${offer.vendorName} • %${offer.discountPercent} indirim',
+        icon: Icons.local_fire_department_rounded,
+        screen: SpetoScreen.happyHourList,
+      ),
+    );
+  }
+  if (eventCatalog.isNotEmpty) {
+    final event = eventCatalog.first;
+    suggestions.add(
+      _DiscoverySuggestion(
+        title: event.title,
+        subtitle: '${event.venue} • ${event.dateLabel}',
+        icon: Icons.music_note_rounded,
+        screen: SpetoScreen.eventDetail,
+      ),
+    );
+  }
+  return suggestions;
+}
 
 Future<void> showDiscoverySearchSheet(BuildContext context) {
   final BuildContext rootContext = context;
-  final List<Map<String, Object>> suggestions = <Map<String, Object>>[
-    <String, Object>{
-      'title': 'Burger Yiyelim',
-      'subtitle': 'Yakınında sıcak gel-al menüler',
-      'icon': Icons.lunch_dining_rounded,
-      'screen': SpetoScreen.restaurantList,
-    },
-    <String, Object>{
-      'title': "Galata'da Caz Gecesi",
-      'subtitle': 'Pro ile açılan etkinlik',
-      'icon': Icons.music_note_rounded,
-      'screen': SpetoScreen.eventDetail,
-    },
-    <String, Object>{
-      'title': 'Fırsat saati kampanyaları',
-      'subtitle': 'Kısa süreli kampanyalar',
-      'icon': Icons.local_fire_department_rounded,
-      'screen': SpetoScreen.happyHourList,
-    },
-  ];
+  final SpetoAppState appState = SpetoAppScope.of(context);
+  final List<_DiscoverySuggestion> suggestions = _buildDiscoverySuggestions(
+    appState,
+  );
 
   return showModalBottomSheet<void>(
     context: context,
@@ -70,9 +107,7 @@ Future<void> showDiscoverySearchSheet(BuildContext context) {
                         Expanded(
                           child: Text(
                             'Keşfet ve Ara',
-                            style: context.spetoSectionTitleStyle(
-                              fontSize: 18,
-                            ),
+                            style: context.spetoSectionTitleStyle(fontSize: 18),
                           ),
                         ),
                         roundButton(
@@ -184,22 +219,38 @@ Future<void> showDiscoverySearchSheet(BuildContext context) {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    Expanded(
-                      child: ListView.separated(
+                    if (suggestions.isEmpty)
+                      SpetoCard(
+                        radius: 22,
+                        color: Palette.cardWarm,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              'Trend araması henüz yok',
+                              style: context.spetoCardTitleStyle(),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Restoran, kampanya ve etkinlik verileri backend’den yüklendiğinde burada anında listelenecek.',
+                              style: context.spetoMetaStyle(),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      ListView.separated(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         itemCount: suggestions.length,
                         separatorBuilder: (BuildContext context, int index) =>
                             const SizedBox(height: 12),
                         itemBuilder: (BuildContext context, int index) {
-                          final Map<String, Object> item = suggestions[index];
+                          final _DiscoverySuggestion item = suggestions[index];
                           return GestureDetector(
                             onTap: () {
                               Navigator.of(context).pop();
-                              openScreen(
-                                rootContext,
-                                item['screen']! as SpetoScreen,
-                              );
+                              openScreen(rootContext, item.screen);
                             },
                             child: SpetoCard(
                               radius: 22,
@@ -215,10 +266,7 @@ Future<void> showDiscoverySearchSheet(BuildContext context) {
                                       ),
                                       borderRadius: BorderRadius.circular(16),
                                     ),
-                                    child: Icon(
-                                      item['icon']! as IconData,
-                                      color: Palette.red,
-                                    ),
+                                    child: Icon(item.icon, color: Palette.red),
                                   ),
                                   const SizedBox(width: 14),
                                   Expanded(
@@ -227,12 +275,12 @@ Future<void> showDiscoverySearchSheet(BuildContext context) {
                                           CrossAxisAlignment.start,
                                       children: <Widget>[
                                         Text(
-                                          item['title']! as String,
+                                          item.title,
                                           style: context.spetoCardTitleStyle(),
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          item['subtitle']! as String,
+                                          item.subtitle,
                                           style: context.spetoMetaStyle(),
                                         ),
                                       ],
@@ -248,7 +296,6 @@ Future<void> showDiscoverySearchSheet(BuildContext context) {
                           );
                         },
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -275,9 +322,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   bool _isRefreshing = false;
 
   Future<void> _onRefresh() async {
+    final SpetoAppState appState = SpetoAppScope.of(context);
     setState(() => _isRefreshing = true);
-    await Future<void>.delayed(const Duration(milliseconds: 1200));
-    if (mounted) setState(() => _isRefreshing = false);
+    try {
+      await initializeSpetoCatalog();
+      await appState.refreshDomainState();
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshing = false);
+      }
+    }
   }
 
   @override
@@ -569,203 +623,234 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                           ],
                         ),
                         const SizedBox(height: 28),
-                        SizedBox(
-                          height: 430,
-                          child: PageView.builder(
-                            controller: _heroController,
-                            onPageChanged: (int value) {
-                              setState(() {
-                                _heroIndex = value;
-                              });
-                            },
-                            itemCount: homeHeroCards.length,
-                            itemBuilder: (BuildContext context, int index) {
-                              final HomeHeroData hero = homeHeroCards[index];
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  right: index == homeHeroCards.length - 1
-                                      ? 0
-                                      : 14,
+                        if (homeHeroCards.isEmpty)
+                          SpetoCard(
+                            radius: 28,
+                            color: Palette.cardWarm,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  'Öne çıkan akış bekleniyor',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w800),
                                 ),
-                                child: GestureDetector(
-                                  onTap: () => openScreen(context, hero.screen),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(40),
-                                      border: Border.all(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.08,
-                                        ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Ana sayfa vitrin kartları backend içerikleri geldiğinde burada görünecek.',
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: Palette.soft,
+                                        height: 1.6,
                                       ),
-                                      boxShadow: <BoxShadow>[
-                                        BoxShadow(
-                                          color: Palette.red.withValues(
-                                            alpha: 0.12,
+                                ),
+                              ],
+                            ),
+                          )
+                        else ...<Widget>[
+                          SizedBox(
+                            height: 430,
+                            child: PageView.builder(
+                              controller: _heroController,
+                              onPageChanged: (int value) {
+                                setState(() {
+                                  _heroIndex = value;
+                                });
+                              },
+                              itemCount: homeHeroCards.length,
+                              itemBuilder: (BuildContext context, int index) {
+                                final HomeHeroData hero = homeHeroCards[index];
+                                return Padding(
+                                  padding: EdgeInsets.only(
+                                    right: index == homeHeroCards.length - 1
+                                        ? 0
+                                        : 14,
+                                  ),
+                                  child: GestureDetector(
+                                    onTap: () =>
+                                        openScreen(context, hero.screen),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(40),
+                                        border: Border.all(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.08,
                                           ),
-                                          blurRadius: 26,
-                                          offset: const Offset(0, 12),
                                         ),
-                                      ],
-                                    ),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: <Widget>[
-                                        SpetoImage(
-                                          url: hero.image,
-                                          height: 430,
-                                          borderRadius: 40,
-                                          overlay: DecoratedBox(
-                                            decoration: BoxDecoration(
-                                              gradient: LinearGradient(
-                                                colors: <Color>[
-                                                  Colors.black.withValues(
-                                                    alpha: 0.10,
-                                                  ),
-                                                  Colors.black.withValues(
-                                                    alpha: 0.74,
-                                                  ),
-                                                  Colors.black.withValues(
-                                                    alpha: 0.92,
-                                                  ),
-                                                ],
-                                                begin: Alignment.topCenter,
-                                                end: Alignment.bottomCenter,
+                                        boxShadow: <BoxShadow>[
+                                          BoxShadow(
+                                            color: Palette.red.withValues(
+                                              alpha: 0.12,
+                                            ),
+                                            blurRadius: 26,
+                                            offset: const Offset(0, 12),
+                                          ),
+                                        ],
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: <Widget>[
+                                          SpetoImage(
+                                            url: hero.image,
+                                            height: 430,
+                                            borderRadius: 40,
+                                            overlay: DecoratedBox(
+                                              decoration: BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  colors: <Color>[
+                                                    Colors.black.withValues(
+                                                      alpha: 0.10,
+                                                    ),
+                                                    Colors.black.withValues(
+                                                      alpha: 0.74,
+                                                    ),
+                                                    Colors.black.withValues(
+                                                      alpha: 0.92,
+                                                    ),
+                                                  ],
+                                                  begin: Alignment.topCenter,
+                                                  end: Alignment.bottomCenter,
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                        Positioned(
-                                          left: 28,
-                                          right: 28,
-                                          top: 26,
-                                          child: Row(
-                                            children: <Widget>[
-                                              LabelChip(
-                                                label: hero.badge,
-                                                background: Colors.white
-                                                    .withValues(alpha: 0.14),
-                                              ),
-                                              const Spacer(),
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 8,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: Palette.base
-                                                      .withValues(alpha: 0.44),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                        999,
-                                                      ),
+                                          Positioned(
+                                            left: 28,
+                                            right: 28,
+                                            top: 26,
+                                            child: Row(
+                                              children: <Widget>[
+                                                LabelChip(
+                                                  label: hero.badge,
+                                                  background: Colors.white
+                                                      .withValues(alpha: 0.14),
                                                 ),
-                                                child: Text(
-                                                  '${index + 1}/${homeHeroCards.length}',
+                                                const Spacer(),
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 12,
+                                                        vertical: 8,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: Palette.base
+                                                        .withValues(
+                                                          alpha: 0.44,
+                                                        ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          999,
+                                                        ),
+                                                  ),
+                                                  child: Text(
+                                                    '${index + 1}/${homeHeroCards.length}',
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .labelMedium
+                                                        ?.copyWith(
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          Positioned(
+                                            left: 28,
+                                            right: 28,
+                                            bottom: 28,
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: <Widget>[
+                                                Text(
+                                                  hero.title,
                                                   style: Theme.of(context)
                                                       .textTheme
-                                                      .labelMedium
+                                                      .headlineMedium
                                                       ?.copyWith(
                                                         fontWeight:
-                                                            FontWeight.w600,
+                                                            FontWeight.w800,
+                                                        height: 1.0,
                                                       ),
                                                 ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        Positioned(
-                                          left: 28,
-                                          right: 28,
-                                          bottom: 28,
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: <Widget>[
-                                              Text(
-                                                hero.title,
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .headlineMedium
-                                                    ?.copyWith(
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                      height: 1.0,
-                                                    ),
-                                              ),
-                                              const SizedBox(height: 12),
-                                              Text(
-                                                hero.subtitle,
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodyLarge
-                                                    ?.copyWith(
-                                                      color: Palette.soft,
-                                                      height: 1.5,
-                                                    ),
-                                              ),
-                                              const SizedBox(height: 18),
-                                              Row(
-                                                children: <Widget>[
-                                                  _heroMetric(
-                                                    context,
-                                                    icon: Icons
-                                                        .local_fire_department,
-                                                    label: 'Canlı kampanya',
-                                                  ),
-                                                  const SizedBox(width: 10),
-                                                  _heroMetric(
-                                                    context,
-                                                    icon: Icons
-                                                        .workspace_premium_rounded,
-                                                    label: 'Özel erişim',
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 20),
-                                              SpetoPrimaryButton(
-                                                label: hero.actionLabel,
-                                                icon:
-                                                    Icons.arrow_forward_rounded,
-                                                onTap: () => openScreen(
-                                                  context,
-                                                  hero.screen,
+                                                const SizedBox(height: 12),
+                                                Text(
+                                                  hero.subtitle,
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodyLarge
+                                                      ?.copyWith(
+                                                        color: Palette.soft,
+                                                        height: 1.5,
+                                                      ),
                                                 ),
-                                              ),
-                                            ],
+                                                const SizedBox(height: 18),
+                                                Row(
+                                                  children: <Widget>[
+                                                    _heroMetric(
+                                                      context,
+                                                      icon: Icons
+                                                          .local_fire_department,
+                                                      label: 'Canlı kampanya',
+                                                    ),
+                                                    const SizedBox(width: 10),
+                                                    _heroMetric(
+                                                      context,
+                                                      icon: Icons
+                                                          .workspace_premium_rounded,
+                                                      label: 'Özel erişim',
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 20),
+                                                SpetoPrimaryButton(
+                                                  label: hero.actionLabel,
+                                                  icon: Icons
+                                                      .arrow_forward_rounded,
+                                                  onTap: () => openScreen(
+                                                    context,
+                                                    hero.screen,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 18),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List<Widget>.generate(
-                            homeHeroCards.length,
-                            (int index) {
-                              final bool active = index == _heroIndex;
-                              return AnimatedContainer(
-                                duration: const Duration(milliseconds: 220),
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
-                                width: active ? 30 : 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: active ? Palette.red : Palette.border,
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                              );
-                            },
+                          const SizedBox(height: 18),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: List<Widget>.generate(
+                              homeHeroCards.length,
+                              (int index) {
+                                final bool active = index == _heroIndex;
+                                return AnimatedContainer(
+                                  duration: const Duration(milliseconds: 220),
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
+                                  width: active ? 30 : 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: active
+                                        ? Palette.red
+                                        : Palette.border,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
             ),

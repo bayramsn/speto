@@ -453,16 +453,41 @@ class _MarketListScreenState extends State<MarketListScreen> {
               ),
             ],
             const SizedBox(height: 20),
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: marketStores.length,
-              separatorBuilder: (BuildContext context, int index) =>
-                  const SizedBox(height: 12),
-              itemBuilder: (BuildContext context, int index) {
-                return _marketSelectionCard(context, marketStores[index]);
-              },
-            ),
+            if (marketStores.isEmpty)
+              SpetoCard(
+                radius: 24,
+                color: Palette.cardWarm,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Market bulunamadı',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Canlı market kataloğu hazır olduğunda listeler burada görünecek.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Palette.soft,
+                        height: 1.6,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: marketStores.length,
+                separatorBuilder: (BuildContext context, int index) =>
+                    const SizedBox(height: 12),
+                itemBuilder: (BuildContext context, int index) {
+                  return _marketSelectionCard(context, marketStores[index]);
+                },
+              ),
           ],
         ),
       ),

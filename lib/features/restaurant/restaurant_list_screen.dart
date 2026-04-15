@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/palette.dart';
-import '../../core/constants/app_images.dart';
 import '../../core/navigation/screen_enum.dart';
 import '../../core/navigation/navigator.dart';
 import '../../core/state/app_state.dart';
-import '../../core/data/default_data.dart';
 import '../../shared/widgets/widgets.dart';
 import 'restaurant_data.dart';
 import '../../features/events/event_data.dart';
@@ -219,9 +217,7 @@ class _RestaurantListScreenState extends State<RestaurantListScreen> {
                   padding: const EdgeInsets.only(bottom: 20),
                   child: GestureDetector(
                     onTap: () => Navigator.of(context).push(
-                      spetoRoute(
-                        RestaurantDetailScreen(restaurantId: item.id),
-                      ),
+                      spetoRoute(RestaurantDetailScreen(restaurantId: item.id)),
                     ),
                     child: SpetoCard(
                       padding: EdgeInsets.zero,
@@ -246,9 +242,7 @@ class _RestaurantListScreenState extends State<RestaurantListScreen> {
                                     vertical: 6,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: Palette.base.withValues(
-                                      alpha: 0.74,
-                                    ),
+                                    color: Palette.base.withValues(alpha: 0.74),
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: Text(

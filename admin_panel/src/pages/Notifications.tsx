@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import { useAdminAuth } from '../auth/adminAuth';
 import { EmptyState, LoadingState, Modal, PageHeader, Pagination, Panel, StatusBadge, TextArea, TextInput, Toast } from '../components/ui';
+import { useLiveReload } from '../hooks/useLiveReload';
 import { formatDate, notificationStatusLabel } from '../lib/formatters';
 import type {
   AdminNotification,
@@ -80,6 +81,7 @@ export function Notifications() {
   useEffect(() => {
     void load();
   }, [load]);
+  useLiveReload(load);
 
   function openCreateModal() {
     setDraft(EMPTY_DRAFT);

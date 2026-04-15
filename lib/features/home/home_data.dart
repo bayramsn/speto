@@ -102,13 +102,9 @@ List<HomeQuickFilter> defaultHomeQuickFilters() {
   ];
 }
 
-List<HomeHeroData> homeHeroCards = List<HomeHeroData>.of(
-  defaultHomeHeroCards(),
-);
+List<HomeHeroData> homeHeroCards = <HomeHeroData>[];
 
-List<HomeQuickFilter> homeQuickFilters = List<HomeQuickFilter>.of(
-  defaultHomeQuickFilters(),
-);
+List<HomeQuickFilter> homeQuickFilters = <HomeQuickFilter>[];
 
 // ---------------------------------------------------------------------------
 // Screen link lists (from the app-map / discovery hub)
@@ -262,4 +258,4 @@ List<String> defaultFilterChips() {
   return <String>['Hepsi', 'Burger', 'Tatlı', 'Kahve'];
 }
 
-List<String> filterChips = List<String>.of(defaultFilterChips());
+List<String> filterChips = <String>['Hepsi'];

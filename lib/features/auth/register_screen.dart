@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../core/navigation/navigator.dart';
 import '../../core/navigation/screen_enum.dart';
 import '../../core/state/app_state.dart';
 import '../../core/theme/palette.dart';
 import '../../shared/widgets/widgets.dart';
-import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({
@@ -35,9 +33,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _acceptTerms = true;
   bool _obscurePassword = true;
 
-  bool get _isSocialRegistration =>
-      widget.socialProviderKey != null && widget.socialProviderLabel != null;
-
   @override
   void initState() {
     super.initState();
@@ -63,19 +58,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
       return;
     }
-    final bool invalidStandardPassword =
+    final bool invalidPassword =
         _passwordController.text.length < 8 ||
         !RegExp(r'[A-ZÇĞİÖŞÜ]').hasMatch(_passwordController.text) ||
         !RegExp(r'\d').hasMatch(_passwordController.text);
     if (_nameController.text.trim().isEmpty ||
         _emailController.text.trim().isEmpty ||
         _phoneController.text.trim().isEmpty ||
-        (!_isSocialRegistration && invalidStandardPassword)) {
+        invalidPassword) {
       SpetoToast.show(
         context,
-        message: _isSocialRegistration
-            ? 'Ad, e-posta ve telefon alanları gerekli.'
-            : 'Ad, e-posta, telefon ve güçlü bir şifre gerekli.',
+        message: 'Ad, e-posta, telefon ve güçlü bir şifre gerekli.',
         icon: Icons.info_outline_rounded,
       );
       return;
@@ -99,9 +92,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       fullName: _nameController.text,
       email: _emailController.text,
       phone: _phoneController.text,
-      password: _isSocialRegistration
-          ? 'social-${widget.socialProviderKey}'
-          : _passwordController.text,
+      password: _passwordController.text,
     );
     final SpetoRegistrationOtpVerificationResult result = await appState
         .verifyOtpCode(appState.testOtpCode);
@@ -127,52 +118,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     openRootScreen(context, SpetoScreen.home);
   }
 
-  Future<void> _continueWithSocialProvider(
-    SpetoAppState appState, {
-    required String provider,
-    required String providerLabel,
-  }) async {
-    final SocialSignInDraft? draft = await showSocialSignInSheet(
-      context,
-      providerLabel: providerLabel,
-    );
-    if (draft == null) {
-      return;
-    }
-    final bool hasAccount = await appState.hasAccountForEmail(draft.email);
-    if (hasAccount) {
-      await appState.signIn(
-        email: draft.email,
-        password: 'social-$provider',
-        displayName: draft.displayName,
-        trustedProvider: true,
-      );
-      if (!mounted) {
-        return;
-      }
-      SpetoToast.show(
-        context,
-        message: '$providerLabel hesabın bulundu, giriş yapıldı.',
-        icon: Icons.login_rounded,
-      );
-      openRootScreen(context, SpetoScreen.home);
-      return;
-    }
-    if (!mounted) {
-      return;
-    }
-    Navigator.of(context).pushReplacement(
-      spetoRoute(
-        RegisterScreen(
-          prefillName: draft.displayName,
-          prefillEmail: draft.email,
-          socialProviderKey: provider,
-          socialProviderLabel: providerLabel,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final SpetoAppState appState = SpetoAppScope.of(context);
@@ -185,18 +130,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              _isSocialRegistration
-                  ? '${widget.socialProviderLabel} ile Kaydı Tamamla'
-                  : "SepetPro'ya Katıl",
+              "SepetPro'ya Katıl",
               style: Theme.of(
                 context,
               ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 12),
             Text(
-              _isSocialRegistration
-                  ? '${widget.socialProviderLabel} hesabınla devam etmek için telefonunu tamamla ve doğrulamayı bitir.'
-                  : 'Hemen üye ol, market ve restoranlardan sipariş vermeye başla.',
+              'Hemen üye ol, market ve restoranlardan sipariş vermeye başla.',
               style: Theme.of(
                 context,
               ).textTheme.bodyLarge?.copyWith(color: Palette.soft, height: 1.6),
@@ -221,65 +162,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
               icon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
             ),
-            if (_isSocialRegistration) ...<Widget>[
-              const SizedBox(height: 16),
-              SpetoCard(
-                radius: 16,
-                color: Palette.cardWarm,
-                child: Row(
-                  children: <Widget>[
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: Palette.red.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: const Icon(
-                        Icons.verified_user_outlined,
-                        color: Palette.red,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        '${widget.socialProviderLabel} hesabın doğrulandıktan sonra bu e-posta ile giriş yapabileceksin.',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Palette.soft,
-                          height: 1.5,
-                        ),
-                      ),
-                    ),
-                  ],
+            const SizedBox(height: 16),
+            LabeledField(
+              label: 'Şifre',
+              controller: _passwordController,
+              icon: Icons.lock_outline_rounded,
+              obscureText: _obscurePassword,
+              trailing: GestureDetector(
+                onTap: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+                child: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                  color: Palette.muted,
+                  size: 20,
                 ),
               ),
-            ] else ...<Widget>[
-              const SizedBox(height: 16),
-              LabeledField(
-                label: 'Şifre',
-                controller: _passwordController,
-                icon: Icons.lock_outline_rounded,
-                obscureText: _obscurePassword,
-                trailing: GestureDetector(
-                  onTap: () =>
-                      setState(() => _obscurePassword = !_obscurePassword),
-                  child: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
-                    color: Palette.muted,
-                    size: 20,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Şifren en az 8 karakter, sayı ve büyük harf içermeli.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: Palette.muted),
-              ),
-            ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Şifren en az 8 karakter, sayı ve büyük harf içermeli.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Palette.muted),
+            ),
             const SizedBox(height: 20),
             _checkRow(
               context,
@@ -296,120 +203,91 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(height: 24),
             SpetoPrimaryButton(
-              label: _isSocialRegistration
-                  ? '${widget.socialProviderLabel} ile Devam Et'
-                  : 'KAYIT OL',
+              label: 'KAYIT OL',
               onTap: () => _submit(appState),
             ),
-            if (!_isSocialRegistration) ...<Widget>[
-              const SizedBox(height: 18),
-              GestureDetector(
-                onTap: () => openScreen(context, SpetoScreen.studentRegister),
-                child: SpetoCard(
-                  radius: 18,
-                  gradient: const LinearGradient(
-                    colors: <Color>[Color(0xFF2B1914), Color(0xFF120F15)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+            const SizedBox(height: 18),
+            GestureDetector(
+              onTap: () => openScreen(context, SpetoScreen.studentRegister),
+              child: SpetoCard(
+                radius: 18,
+                gradient: const LinearGradient(
+                  colors: <Color>[Color(0xFF2B1914), Color(0xFF120F15)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Palette.orange.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(
+                        Icons.school_rounded,
+                        color: Palette.orange,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            'Öğrenci mail adresi ile kayıt ol',
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'edu uzantılı okul mailinle kampüs fırsatlarını ayrı akışta aç.',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: Palette.soft, height: 1.5),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: Palette.soft,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            SpetoCard(
+              radius: 16,
+              color: Palette.cardWarm,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Palette.red.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.lock_person_outlined,
+                      color: Palette.red,
+                      size: 20,
+                    ),
                   ),
-                  child: Row(
-                    children: <Widget>[
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Palette.orange.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Icon(
-                          Icons.school_rounded,
-                          color: Palette.orange,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              'Öğrenci mail adresi ile kayıt ol',
-                              style: Theme.of(context).textTheme.bodyLarge
-                                  ?.copyWith(fontWeight: FontWeight.w800),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'edu uzantılı okul mailinle kampüs fırsatlarını ayrı akışta aç.',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: Palette.soft, height: 1.5),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(
-                        Icons.chevron_right_rounded,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Bu sürümde sosyal kayıt akışları kaldırıldı. Hesap oluşturma yalnız gerçek e-posta, telefon ve şifre ile yapılır.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Palette.soft,
+                        height: 1.5,
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 28),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Divider(color: Colors.white.withValues(alpha: 0.1)),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(
-                    'veya',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelLarge?.copyWith(color: Colors.white54),
-                  ),
-                ),
-                Expanded(
-                  child: Divider(color: Colors.white.withValues(alpha: 0.1)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            SocialProviderCard(
-              label: 'Google ile devam et',
-              icon: googleBrandIcon(),
-              onTap: () => _continueWithSocialProvider(
-                appState,
-                provider: 'google',
-                providerLabel: 'Google',
-              ),
-            ),
-            const SizedBox(height: 16),
-            SocialProviderCard(
-              label: 'Apple ile devam et',
-              icon: const FaIcon(
-                FontAwesomeIcons.apple,
-                color: Colors.white,
-                size: 20,
-              ),
-              onTap: () => _continueWithSocialProvider(
-                appState,
-                provider: 'apple',
-                providerLabel: 'Apple',
-              ),
-            ),
-            const SizedBox(height: 16),
-            SocialProviderCard(
-              label: 'Facebook ile devam et',
-              icon: const FaIcon(
-                FontAwesomeIcons.facebookF,
-                color: Colors.white,
-                size: 18,
-              ),
-              onTap: () => _continueWithSocialProvider(
-                appState,
-                provider: 'facebook',
-                providerLabel: 'Facebook',
+                ],
               ),
             ),
             const SizedBox(height: 16),

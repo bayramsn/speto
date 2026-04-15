@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { useAdminAuth } from '../auth/adminAuth';
 import { EmptyState, LoadingState, MetricCard, Modal, PageHeader, Panel, TextArea, TextInput, Toast } from '../components/ui';
+import { useLiveReload } from '../hooks/useLiveReload';
 import { formatCurrency, formatDate } from '../lib/formatters';
 import type { BusinessListItem, BusinessProfileResponse, FinanceSummary } from '../lib/types';
 
@@ -52,6 +53,7 @@ export function Finance() {
   useEffect(() => {
     void load();
   }, [load]);
+  useLiveReload(load);
 
   async function openPayoutModal() {
     const vendorId = businesses[0]?.id ?? '';

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import { useAdminAuth } from '../auth/adminAuth';
 import { BulkBar, EmptyState, LoadingState, PageHeader, Pagination, Panel, StatusBadge, TextInput, Toast } from '../components/ui';
+import { useLiveReload } from '../hooks/useLiveReload';
 import { formatCurrency, formatDate, orderStatusLabel, orderStatusTone } from '../lib/formatters';
 import type { AdminOrder, OrderStatus, PagedResponse } from '../lib/types';
 
@@ -63,6 +64,7 @@ export function Orders() {
   useEffect(() => {
     void load();
   }, [load]);
+  useLiveReload(load);
 
   async function updateStatus(order: AdminOrder, status: OrderStatus) {
     if (order.status !== status && !window.confirm(`${order.pickupCode} siparişi ${orderStatusLabel(status)} yapılacak. Onaylıyor musunuz?`)) {

@@ -31,9 +31,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     }
     final SpetoAppState appState = SpetoAppScope.of(context);
     final SpetoSession? session = appState.session;
-    _nameController.text = session?.displayName ?? 'Bayram Senbay';
-    _emailController.text = session?.email ?? 'bayram.senbay@example.com';
-    _phoneController.text = session?.phone ?? '+90 555 123 45 67';
+    _nameController.text = session?.displayName ?? '';
+    _emailController.text = session?.email ?? '';
+    _phoneController.text = session?.phone ?? '';
     _selectedAvatarUrl = appState.avatarUrl;
     _notificationsEnabled = appState.notificationsEnabled;
     _initialized = true;
@@ -347,10 +347,9 @@ Future<String?> _showAvatarPickerSheet(
           children: <Widget>[
             Text(
               'Profil Fotoğrafı Seç',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 16),
             Wrap(

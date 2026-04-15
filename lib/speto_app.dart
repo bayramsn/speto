@@ -24,26 +24,35 @@ class SpetoApp extends ConsumerStatefulWidget {
 
 class _SpetoAppState extends ConsumerState<SpetoApp>
     with WidgetsBindingObserver {
+  static const Duration _runtimeRefreshInterval = Duration(seconds: 60);
+
   bool _runtimeRefreshInFlight = false;
+  Timer? _runtimeRefreshTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _startRuntimeRefreshTimer();
     unawaited(_refreshRuntimeData());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _runtimeRefreshTimer?.cancel();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      _startRuntimeRefreshTimer();
       unawaited(_refreshRuntimeData());
+      return;
     }
+    _runtimeRefreshTimer?.cancel();
+    _runtimeRefreshTimer = null;
   }
 
   Future<void> _refreshRuntimeData() async {
@@ -62,6 +71,15 @@ class _SpetoAppState extends ConsumerState<SpetoApp>
     }
   }
 
+  void _startRuntimeRefreshTimer() {
+    if (_runtimeRefreshTimer != null) {
+      return;
+    }
+    _runtimeRefreshTimer = Timer.periodic(_runtimeRefreshInterval, (_) {
+      unawaited(_refreshRuntimeData());
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = ref.watch(appStateProvider);
@@ -73,7 +91,7 @@ class _SpetoAppState extends ConsumerState<SpetoApp>
       notifier: appState,
       child: MaterialApp.router(
         debugShowCheckedModeBanner: false,
-        title: 'Speto',
+        title: 'SepetPro',
         themeMode: appState.themeMode,
         theme: AppTheme.build(isDark: false),
         darkTheme: AppTheme.build(isDark: true),

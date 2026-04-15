@@ -32,12 +32,12 @@ class SpetoCachedImage extends StatelessWidget {
         width: width,
         height: height,
         fit: fit,
-        placeholder: (_, __) => SkeletonLoading(
+        placeholder: (context, imageUrl) => SkeletonLoading(
           width: width,
           height: height ?? 100,
           borderRadius: borderRadius,
         ),
-        errorWidget: (_, __, ___) => Container(
+        errorWidget: (context, imageUrl, error) => Container(
           width: width,
           height: height,
           decoration: BoxDecoration(

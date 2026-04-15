@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/constants/app_images.dart';
@@ -72,16 +71,21 @@ class EventExperience {
   }
 }
 
-List<EventExperience> eventCatalog = defaultEventCatalog();
-List<RestaurantCardData> restaurantCards = defaultRestaurantCatalog();
-List<String> eventFilters = defaultEventFilters();
+List<EventExperience> eventCatalog = <EventExperience>[];
+List<RestaurantCardData> restaurantCards = <RestaurantCardData>[];
+List<String> eventFilters = const <String>['Hepsi'];
 
 const String _catalogBootstrapCacheKey = 'speto.catalog.bootstrap';
 
-EventExperience get featuredEventExperience => eventById('event-galata-jazz');
+EventExperience? get featuredEventExperience =>
+    eventByIdOrNull('event-galata-jazz') ??
+    (eventCatalog.isNotEmpty ? eventCatalog.first : null);
 
-SpetoEventTicket get featuredEventTicket {
-  final EventExperience e = featuredEventExperience;
+SpetoEventTicket? get featuredEventTicket {
+  final EventExperience? e = featuredEventExperience;
+  if (e == null) {
+    return null;
+  }
   return SpetoEventTicket(
     id: e.id,
     title: e.title,
@@ -101,13 +105,13 @@ List<String> defaultEventFilters() {
   return <String>['Hepsi', 'Konser', 'Tiyatro', 'Festival', 'Atölye', 'Sinema'];
 }
 
-EventExperience eventById(String id) {
+EventExperience? eventByIdOrNull(String id) {
   for (final EventExperience item in eventCatalog) {
     if (item.id == id) {
       return item;
     }
   }
-  return eventCatalog.first;
+  return null;
 }
 
 bool isSupportedEventExperience(EventExperience item) {
@@ -138,6 +142,9 @@ bool isSupportedEventExperience(EventExperience item) {
 }
 
 List<EventExperience> eventsForCategory(String category) {
+  if (eventCatalog.isEmpty) {
+    return const <EventExperience>[];
+  }
   if (category == 'Hepsi') {
     return eventCatalog;
   }
@@ -172,13 +179,7 @@ Future<void> initializeSpetoCatalog() async {
     } catch (_) {}
   }
 
-  try {
-    final String raw = await rootBundle.loadString('assets/data/catalog.json');
-    final Map<String, Object?> decoded = _asJsonMap(jsonDecode(raw));
-    _applyAssetFallback(decoded);
-  } catch (_) {
-    _applyDefaultCatalogFallback();
-  }
+  _clearCatalogRuntime();
 }
 
 void _applyBootstrap(SpetoCatalogBootstrap bootstrap) {
@@ -203,20 +204,12 @@ void _applyBootstrap(SpetoCatalogBootstrap bootstrap) {
           },
       };
 
-  if (events.isNotEmpty) {
-    eventCatalog = events;
-  }
-  if (restaurants.isNotEmpty) {
-    restaurantCards = restaurants;
-  }
-  if (markets.isNotEmpty) {
-    marketStores
-      ..clear()
-      ..addAll(markets);
-  }
-  if (runtimeMenus.isNotEmpty) {
-    setRuntimeRestaurantMenuSections(runtimeMenus);
-  }
+  eventCatalog = events;
+  restaurantCards = restaurants;
+  marketStores
+    ..clear()
+    ..addAll(markets);
+  setRuntimeRestaurantMenuSections(runtimeMenus);
   _applyHomeContent(bootstrap.home);
   eventFilters = _deriveEventFilters(events);
 }
@@ -236,63 +229,30 @@ void _applyHomeContent(SpetoCatalogHomeContent home) {
       .where((String label) => label.trim().isNotEmpty)
       .toList(growable: false);
 
-  if (heroes.isNotEmpty) {
-    homeHeroCards
-      ..clear()
-      ..addAll(heroes);
-  }
-  if (quickFilters.isNotEmpty) {
-    homeQuickFilters
-      ..clear()
-      ..addAll(quickFilters);
-  }
-  if (discoveryFilters.isNotEmpty) {
-    filterChips
-      ..clear()
-      ..addAll(discoveryFilters);
-  }
-}
-
-void _applyAssetFallback(Map<String, Object?> decoded) {
-  _applyDefaultCatalogFallback();
-  final List<EventExperience> events =
-      (decoded['events'] as List<Object?>? ?? const <Object?>[])
-          .map(
-            (Object? item) =>
-                EventExperience.fromJson(item! as Map<String, Object?>),
-          )
-          .where(isSupportedEventExperience)
-          .toList(growable: false);
-  final List<RestaurantCardData> restaurants =
-      (decoded['restaurants'] as List<Object?>? ?? const <Object?>[])
-          .map(
-            (Object? item) =>
-                RestaurantCardData.fromJson(item! as Map<String, Object?>),
-          )
-          .toList(growable: false);
-  if (events.isNotEmpty) {
-    eventCatalog = events;
-    eventFilters = _deriveEventFilters(events);
-  }
-  if (restaurants.isNotEmpty) {
-    restaurantCards = restaurants;
-  }
-}
-
-void _applyDefaultCatalogFallback() {
-  eventCatalog = defaultEventCatalog();
-  restaurantCards = defaultRestaurantCatalog();
-  eventFilters = defaultEventFilters();
-  clearRuntimeRestaurantMenuSections();
   homeHeroCards
     ..clear()
-    ..addAll(defaultHomeHeroCards());
+    ..addAll(heroes);
   homeQuickFilters
     ..clear()
-    ..addAll(defaultHomeQuickFilters());
+    ..addAll(quickFilters);
   filterChips
     ..clear()
-    ..addAll(defaultFilterChips());
+    ..addAll(
+      discoveryFilters.isEmpty ? <String>['Hepsi'] : discoveryFilters,
+    );
+}
+
+void _clearCatalogRuntime() {
+  eventCatalog = <EventExperience>[];
+  restaurantCards = <RestaurantCardData>[];
+  eventFilters = const <String>['Hepsi'];
+  marketStores.clear();
+  clearRuntimeRestaurantMenuSections();
+  homeHeroCards.clear();
+  homeQuickFilters.clear();
+  filterChips
+    ..clear()
+    ..addAll(<String>['Hepsi']);
 }
 
 List<String> _deriveEventFilters(List<EventExperience> events) {
@@ -303,7 +263,7 @@ List<String> _deriveEventFilters(List<EventExperience> events) {
     }
   }
   if (categories.isEmpty) {
-    return defaultEventFilters();
+    return const <String>['Hepsi'];
   }
   return <String>['Hepsi', ...categories];
 }

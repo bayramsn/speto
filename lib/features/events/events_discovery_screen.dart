@@ -208,11 +208,20 @@ class _EventsDiscoveryScreenState extends State<EventsDiscoveryScreen> {
   @override
   Widget build(BuildContext context) {
     final SpetoAppState appState = SpetoAppScope.of(context);
-    final String selectedCategory = eventFilters[_selectedEventFilter];
+    final List<String> availableFilters = eventFilters.isEmpty
+        ? const <String>['Hepsi']
+        : eventFilters;
+    final int activeFilterIndex =
+        _selectedEventFilter >= availableFilters.length
+        ? 0
+        : _selectedEventFilter;
+    final String selectedCategory = availableFilters[activeFilterIndex];
     final List<EventExperience> categoryEvents = eventsForCategory(
       selectedCategory,
     );
-    final EventExperience featuredEvent = categoryEvents.first;
+    final EventExperience? featuredEvent = categoryEvents.isNotEmpty
+        ? categoryEvents.first
+        : null;
     final List<EventExperience> secondaryEvents = categoryEvents
         .skip(1)
         .toList();
@@ -293,11 +302,11 @@ class _EventsDiscoveryScreenState extends State<EventsDiscoveryScreen> {
               height: 36,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                itemCount: eventFilters.length,
+                itemCount: availableFilters.length,
                 separatorBuilder: (BuildContext context, int index) =>
                     const SizedBox(width: 10),
                 itemBuilder: (_, int index) {
-                  final bool active = index == _selectedEventFilter;
+                  final bool active = index == activeFilterIndex;
                   return GestureDetector(
                     onTap: () => setState(() => _selectedEventFilter = index),
                     child: Container(
@@ -310,7 +319,7 @@ class _EventsDiscoveryScreenState extends State<EventsDiscoveryScreen> {
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
-                        eventFilters[index],
+                        availableFilters[index],
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: active ? Colors.white : Palette.soft,
                           fontWeight: FontWeight.w700,
@@ -373,197 +382,241 @@ class _EventsDiscoveryScreenState extends State<EventsDiscoveryScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            GestureDetector(
-              onTap: () => Navigator.of(context).push(
-                spetoRoute(EventDetailScreenContent(event: featuredEvent)),
-              ),
-              child: SpetoCard(
-                padding: EdgeInsets.zero,
-                radius: 32,
-                child: SizedBox(
-                  height: 438,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: <Widget>[
-                      SpetoImage(
-                        url: featuredEvent.image,
-                        height: 438,
-                        borderRadius: 32,
-                        heroTag: featuredEvent.image,
-                        overlay: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: <Color>[
-                                Colors.black.withValues(alpha: 0.0),
-                                Colors.black.withValues(alpha: 0.9),
-                              ],
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
+            if (featuredEvent == null)
+              SpetoCard(
+                radius: 24,
+                color: Palette.cardWarm,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Bu kategori için etkinlik bulunamadı',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Canlı etkinlik akışı güncellendiğinde burada otomatik listelenecek.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Palette.soft,
+                        height: 1.6,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              GestureDetector(
+                onTap: () => Navigator.of(context).push(
+                  spetoRoute(EventDetailScreenContent(event: featuredEvent)),
+                ),
+                child: SpetoCard(
+                  padding: EdgeInsets.zero,
+                  radius: 32,
+                  child: SizedBox(
+                    height: 438,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: <Widget>[
+                        SpetoImage(
+                          url: featuredEvent.image,
+                          height: 438,
+                          borderRadius: 32,
+                          heroTag: featuredEvent.image,
+                          overlay: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: <Color>[
+                                  Colors.black.withValues(alpha: 0.0),
+                                  Colors.black.withValues(alpha: 0.9),
+                                ],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      Positioned(
-                        right: 16,
-                        top: 16,
-                        child: Container(
-                          width: 60,
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.92),
-                            borderRadius: BorderRadius.circular(20),
+                        Positioned(
+                          right: 16,
+                          top: 16,
+                          child: Container(
+                            width: 60,
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.92),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Column(
+                              children: <Widget>[
+                                Text(
+                                  featuredEvent.dateLabel
+                                      .split(' ')
+                                      .elementAt(1),
+                                  style: Theme.of(context).textTheme.labelLarge
+                                      ?.copyWith(color: Colors.black54),
+                                ),
+                                Text(
+                                  featuredEvent.dateLabel.split(' ').first,
+                                  style: Theme.of(context).textTheme.titleLarge
+                                      ?.copyWith(
+                                        color: Colors.black,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                ),
+                              ],
+                            ),
                           ),
+                        ),
+                        Positioned(
+                          left: 20,
+                          right: 20,
+                          bottom: 20,
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: <Widget>[
-                              Text(
-                                featuredEvent.dateLabel.split(' ').elementAt(1),
-                                style: Theme.of(context).textTheme.labelLarge
-                                    ?.copyWith(color: Colors.black54),
+                              Row(
+                                children: <Widget>[
+                                  LabelChip(
+                                    label: featuredEvent.primaryTag,
+                                    background: Colors.black54,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  LabelChip(
+                                    label: featuredEvent.secondaryTag,
+                                    background: Colors.black54,
+                                  ),
+                                ],
                               ),
+                              const SizedBox(height: 16),
                               Text(
-                                featuredEvent.dateLabel.split(' ').first,
-                                style: Theme.of(context).textTheme.titleLarge
+                                featuredEvent.title.replaceFirst(' ', '\n'),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineMedium
                                     ?.copyWith(
-                                      color: Colors.black,
                                       fontWeight: FontWeight.w900,
+                                      height: 1.05,
                                     ),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: <Widget>[
+                                  Icon(
+                                    Icons.location_on_outlined,
+                                    size: 16,
+                                    color: Colors.white70,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(featuredEvent.venue),
+                                  const SizedBox(width: 12),
+                                  const Icon(
+                                    Icons.access_time_rounded,
+                                    size: 16,
+                                    color: Colors.white70,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(featuredEvent.timeLabel),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              Row(
+                                children: <Widget>[
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Text(
+                                        'Biletler',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(color: Colors.white70),
+                                      ),
+                                      Text(
+                                        formatPoints(featuredEvent.pointsCost),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .headlineSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                  const Spacer(),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                      vertical: 12,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Palette.red,
+                                      borderRadius: BorderRadius.circular(18),
+                                    ),
+                                    child: const Text(
+                                      'Pro ile Aç',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
                         ),
-                      ),
-                      Positioned(
-                        left: 20,
-                        right: 20,
-                        bottom: 20,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Row(
-                              children: <Widget>[
-                                LabelChip(
-                                  label: featuredEvent.primaryTag,
-                                  background: Colors.black54,
-                                ),
-                                const SizedBox(width: 8),
-                                LabelChip(
-                                  label: featuredEvent.secondaryTag,
-                                  background: Colors.black54,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              featuredEvent.title.replaceFirst(' ', '\n'),
-                              style: Theme.of(context).textTheme.headlineMedium
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w900,
-                                    height: 1.05,
-                                  ),
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: <Widget>[
-                                Icon(
-                                  Icons.location_on_outlined,
-                                  size: 16,
-                                  color: Colors.white70,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(featuredEvent.venue),
-                                const SizedBox(width: 12),
-                                const Icon(
-                                  Icons.access_time_rounded,
-                                  size: 16,
-                                  color: Colors.white70,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(featuredEvent.timeLabel),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-                            Row(
-                              children: <Widget>[
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Text(
-                                      'Biletler',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(color: Colors.white70),
-                                    ),
-                                    Text(
-                                      formatPoints(featuredEvent.pointsCost),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineSmall
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                                const Spacer(),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 12,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Palette.red,
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
-                                  child: const Text(
-                                    'Pro ile Aç',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
             const SizedBox(height: 24),
-            Row(
-              children: <Widget>[
-                Text(
-                  '$selectedCategory Etkinlikleri',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const Spacer(),
-                Text(
-                  'Tümünü Gör',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Palette.red,
-                    fontWeight: FontWeight.w800,
+            if (featuredEvent != null) ...<Widget>[
+              Row(
+                children: <Widget>[
+                  Text(
+                    '$selectedCategory Etkinlikleri',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ...List<Widget>.generate(secondaryEvents.length, (int index) {
-              final EventExperience event = secondaryEvents[index];
-              final bool useMiniCard = index.isEven;
-              return Padding(
-                padding: EdgeInsets.only(
-                  bottom: index == secondaryEvents.length - 1 ? 0 : 16,
-                ),
-                child: useMiniCard
-                    ? _miniEventCard(context, event)
-                    : _compactEventCard(context, event),
-              );
-            }),
+                  const Spacer(),
+                  Text(
+                    'Tümünü Gör',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Palette.red,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (secondaryEvents.isEmpty)
+                SpetoCard(
+                  radius: 20,
+                  color: Palette.cardWarm,
+                  child: Text(
+                    'Bu kategori için gösterilecek ek etkinlik yok.',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: Palette.soft),
+                  ),
+                )
+              else
+                ...List<Widget>.generate(secondaryEvents.length, (int index) {
+                  final EventExperience event = secondaryEvents[index];
+                  final bool useMiniCard = index.isEven;
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      bottom: index == secondaryEvents.length - 1 ? 0 : 16,
+                    ),
+                    child: useMiniCard
+                        ? _miniEventCard(context, event)
+                        : _compactEventCard(context, event),
+                  );
+                }),
+            ],
           ],
         ),
       ),

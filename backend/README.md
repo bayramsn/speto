@@ -26,7 +26,7 @@ npm run start:dev
 API varsayılan olarak `http://localhost:4000/api` altında açılır.
 Swagger çıktısı `http://localhost:4000/docs` altında yayınlanır.
 
-`DATABASE_URL` için örnek değer [backend/.env.example](/Users/bayramsenbay/Downloads/speto/backend/.env.example) içinde bulunur. Varsayılan local portlar çakışmayı önlemek için `55432` (Postgres) ve `6380` (Redis) olarak ayarlanmıştır. Backend ilk başarılı bağlantıda demo vendor, ürün, stok, sipariş ve entegrasyon verilerini Postgres'e seed eder.
+`DATABASE_URL` için örnek değer [backend/.env.example](/Users/bayramsenbay/Downloads/speto/backend/.env.example) içinde bulunur. Varsayılan local portlar çakışmayı önlemek için `55432` (Postgres) ve `6380` (Redis) olarak ayarlanmıştır. `ENABLE_DEMO_SEED=false` varsayılanıdır; servis açılırken önceki demo seed kayıtları temizlenir.
 
 ## Ücretsiz canlı kurulum
 
@@ -48,13 +48,10 @@ RESEND_FROM_EMAIL="Speto <onboarding@resend.dev>"
 - `OTP_TEST_MODE=false`: backend Resend API ile gerçek e-posta gönderir.
 - `RESEND_FROM_EMAIL`: domain doğrulaması yapılmadıysa `onboarding@resend.dev` ile test edilebilir.
 
-## Demo operasyon hesapları
+## Kimlik bilgileri
 
-- `admin@speto.app / admin123` yalnız `ENABLE_DEMO_SEED=true` local/demo
-  seed ortamı içindir; production admin kullanıcısı ayrı ve güçlü parola ile
-  oluşturulmalıdır.
-- `burger@speto.app / vendor123`
-- `market@speto.app / vendor123`
+- Operasyon kullanıcıları ve admin hesapları gerçek backend kayıtlarıyla oluşturulmalıdır.
+- Backend, vendor oluşturma akışlarında varsayılan operatör şifresi üretmez; parola açıkça gönderilmelidir.
 
 ## İlk entegrasyon hedefleri
 

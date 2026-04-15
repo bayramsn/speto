@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import { useAdminAuth } from '../auth/adminAuth';
 import { EmptyState, LoadingState, PageHeader, Pagination, Panel, TextInput } from '../components/ui';
+import { useLiveReload } from '../hooks/useLiveReload';
 import { formatDate } from '../lib/formatters';
 import type { AdminAuditLog, PagedResponse } from '../lib/types';
 
@@ -47,6 +48,7 @@ export function AuditLogs() {
   useEffect(() => {
     void load();
   }, [load]);
+  useLiveReload(load);
 
   function updateParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams);

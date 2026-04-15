@@ -12,6 +12,7 @@ import {
   TextArea,
   TextInput,
 } from '../components/ui';
+import { useLiveReload } from '../hooks/useLiveReload';
 import {
   approvalLabel,
   approvalTone,
@@ -216,6 +217,7 @@ export function BusinessWorkspace() {
     }
     void loadCurrentTab();
   }, [businessId, isValidTab, loadCurrentTab]);
+  useLiveReload(loadCurrentTab, { enabled: Boolean(businessId) && isValidTab });
 
   async function updateOrderStatus(orderId: string, status: OrderStatus) {
     await request(`/admin/businesses/${businessId}/orders/${orderId}/status`, {

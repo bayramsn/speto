@@ -31,8 +31,6 @@ import '../../features/profile/payment_methods_screen.dart';
 import '../../features/profile/account_settings_screen.dart';
 import '../../features/profile/help_center_screen.dart';
 import '../../features/profile/app_map_screen.dart';
-import '../../features/restaurant/restaurant_data.dart';
-import '../../features/events/event_data.dart';
 
 /// Route paths
 class AppRoutes {
@@ -84,113 +82,128 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
 
       // Auth
-      GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
-      GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+        path: '/register',
+        builder: (context, state) => const RegisterScreen(),
+      ),
       GoRoute(
         path: '/student-register',
-        builder: (_, __) => const StudentEmailRegisterScreen(),
+        builder: (context, state) => const StudentEmailRegisterScreen(),
       ),
       GoRoute(
         path: '/forgot-password',
-        builder: (_, __) => const ForgotPasswordScreen(),
+        builder: (context, state) => const ForgotPasswordScreen(),
       ),
       GoRoute(
         path: '/otp-verification',
-        builder: (_, __) => const OtpVerificationScreen(),
+        builder: (context, state) => const OtpVerificationScreen(),
       ),
       GoRoute(
         path: '/reset-password',
-        builder: (_, __) => const ResetPasswordScreen(),
+        builder: (context, state) => const ResetPasswordScreen(),
       ),
       GoRoute(
         path: '/password-success',
-        builder: (_, __) => const PasswordSuccessScreen(),
+        builder: (context, state) => const PasswordSuccessScreen(),
       ),
 
       // Home
-      GoRoute(path: '/', builder: (_, __) => const HomeDashboardScreen()),
+      GoRoute(
+        path: '/',
+        builder: (context, state) => const HomeDashboardScreen(),
+      ),
 
       // Marketplace
-      GoRoute(path: '/market', builder: (_, __) => const MarketListScreen()),
+      GoRoute(
+        path: '/market',
+        builder: (context, state) => const MarketListScreen(),
+      ),
       GoRoute(
         path: '/happy-hour',
-        builder: (_, __) => const HappyHourListScreen(),
+        builder: (context, state) => const HappyHourListScreen(),
       ),
       GoRoute(
         path: '/happy-hour/detail',
-        builder: (_, __) => const HappyHourOfferDetailScreen(),
+        builder: (context, state) => const HappyHourOfferDetailScreen(),
       ),
       GoRoute(
         path: '/happy-hour/checkout',
-        builder: (_, __) => const HappyHourCheckoutScreen(),
+        builder: (context, state) => const HappyHourCheckoutScreen(),
       ),
 
       // Restaurants
       GoRoute(
         path: '/restaurants',
-        builder: (_, __) => const RestaurantListScreen(),
+        builder: (context, state) => const RestaurantListScreen(),
       ),
       GoRoute(
         path: '/restaurants/:id',
-        builder: (context, state) {
-          final id =
-              state.pathParameters['id'] ??
-              (restaurantCards.isNotEmpty
-                  ? restaurantCards.first.id
-                  : defaultRestaurantCatalog().first.id);
-          return RestaurantDetailScreen(restaurantId: id);
-        },
+        builder: (context, state) =>
+            RestaurantDetailScreen(restaurantId: state.pathParameters['id']),
       ),
       GoRoute(
         path: '/menu-item',
-        builder: (_, __) => const MenuItemDetailScreen(),
+        builder: (context, state) => const MenuItemDetailScreen(),
       ),
 
       // Events
       GoRoute(
         path: '/events',
-        builder: (_, __) => const EventsDiscoveryScreen(),
+        builder: (context, state) => const EventsDiscoveryScreen(),
       ),
       GoRoute(
         path: '/events/detail',
-        builder: (_, __) => const EventDetailScreen(),
+        builder: (context, state) => const EventDetailScreen(),
       ),
       GoRoute(
         path: '/digital-ticket',
-        builder: (_, __) => const DigitalTicketScreen(),
+        builder: (context, state) => const DigitalTicketScreen(),
       ),
       GoRoute(
         path: '/ticket-success',
-        builder: (_, __) => const TicketSuccessScreen(),
+        builder: (context, state) => const TicketSuccessScreen(),
       ),
 
       // Orders
-      GoRoute(path: '/orders', builder: (_, __) => const OrderHistoryScreen()),
+      GoRoute(
+        path: '/orders',
+        builder: (context, state) => const OrderHistoryScreen(),
+      ),
       GoRoute(
         path: '/orders/tracking',
-        builder: (_, __) => const OrderTrackingScreen(),
+        builder: (context, state) => const OrderTrackingScreen(),
       ),
       GoRoute(
         path: '/orders/receipt',
-        builder: (_, __) => const OrderReceiptScreen(),
+        builder: (context, state) => const OrderReceiptScreen(),
       ),
 
       // Profile
-      GoRoute(path: '/pro-points', builder: (_, __) => const ProPointsScreen()),
-      GoRoute(path: '/addresses', builder: (_, __) => const AddressesScreen()),
+      GoRoute(
+        path: '/pro-points',
+        builder: (context, state) => const ProPointsScreen(),
+      ),
+      GoRoute(
+        path: '/addresses',
+        builder: (context, state) => const AddressesScreen(),
+      ),
       GoRoute(
         path: '/payment-methods',
-        builder: (_, __) => const PaymentMethodsScreen(),
+        builder: (context, state) => const PaymentMethodsScreen(),
       ),
       GoRoute(
         path: '/account-settings',
-        builder: (_, __) => const AccountSettingsScreen(),
+        builder: (context, state) => const AccountSettingsScreen(),
       ),
       GoRoute(
         path: '/help-center',
-        builder: (_, __) => const HelpCenterScreen(),
+        builder: (context, state) => const HelpCenterScreen(),
       ),
-      GoRoute(path: '/app-map', builder: (_, __) => const AppMapScreen()),
+      GoRoute(
+        path: '/app-map',
+        builder: (context, state) => const AppMapScreen(),
+      ),
     ],
   );
 });

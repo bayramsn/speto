@@ -33,8 +33,6 @@ import '../../features/profile/payment_methods_screen.dart';
 import '../../features/profile/account_settings_screen.dart';
 import '../../features/profile/help_center_screen.dart';
 import '../../features/profile/app_map_screen.dart';
-import '../../features/restaurant/restaurant_data.dart';
-import '../../features/events/event_data.dart';
 
 Widget buildSpetoScreen(SpetoScreen screen) {
   switch (screen) {
@@ -75,11 +73,7 @@ Widget buildSpetoScreen(SpetoScreen screen) {
     case SpetoScreen.restaurantList:
       return const RestaurantListScreen();
     case SpetoScreen.restaurantDetail:
-      return RestaurantDetailScreen(
-        restaurantId: restaurantCards.isNotEmpty
-            ? restaurantCards.first.id
-            : defaultRestaurantCatalog().first.id,
-      );
+      return const RestaurantDetailScreen();
     case SpetoScreen.menuItemDetail:
       return const MenuItemDetailScreen();
     case SpetoScreen.eventsDiscovery:

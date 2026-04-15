@@ -1271,7 +1271,7 @@ class _HappyHourCheckoutScreenState extends State<HappyHourCheckoutScreen> {
   }) {
     return Container(
       width: 144,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: selected ? Palette.cardWarm : Palette.card,
         borderRadius: BorderRadius.circular(20),
@@ -1281,6 +1281,7 @@ class _HappyHourCheckoutScreenState extends State<HappyHourCheckoutScreen> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: <Widget>[
           Align(
             alignment: Alignment.topRight,
@@ -1290,14 +1291,21 @@ class _HappyHourCheckoutScreenState extends State<HappyHourCheckoutScreen> {
               size: 16,
             ),
           ),
-          const Spacer(),
-          Icon(icon, size: 26),
-          const SizedBox(height: 10),
-          Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(icon, size: 24),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ],
           ),
         ],
       ),

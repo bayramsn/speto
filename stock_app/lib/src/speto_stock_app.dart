@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speto_shared/speto_shared.dart';
 
 const Color _sidebar = Color(0xFF16110F);
@@ -36,8 +38,10 @@ enum _StockDestination {
 
 enum _OrderQueueFilter { all, fresh, preparing, ready, delivered, cancelled }
 
+enum _OrderDateFilter { all, today }
+
 LinearGradient get _heroGradient => const LinearGradient(
-  colors: <Color>[Color(0xFFFBE5C5), Color(0xFFE9F0DE), Color(0xFFF7F1E8)],
+  colors: <Color>[Color(0xFFF8F8F4), Color(0xFFF4F6EF), Color(0xFFF8F5F0)],
   begin: Alignment.topLeft,
   end: Alignment.bottomRight,
 );
@@ -137,6 +141,105 @@ List<SpetoOpsOrderStage> _nextOpsStages(SpetoOpsOrderStage current) {
   };
 }
 
+String _ordersStageLabel(SpetoOpsOrderStage stage) {
+  return switch (stage) {
+    SpetoOpsOrderStage.created => 'Yeni',
+    SpetoOpsOrderStage.accepted ||
+    SpetoOpsOrderStage.preparing => 'Hazırlanıyor',
+    SpetoOpsOrderStage.ready => 'Hazır',
+    SpetoOpsOrderStage.completed => 'Tamamlandı',
+    SpetoOpsOrderStage.cancelled => 'İptal',
+  };
+}
+
+Color _ordersStageColor(SpetoOpsOrderStage stage) {
+  return switch (stage) {
+    SpetoOpsOrderStage.created => _success,
+    SpetoOpsOrderStage.accepted || SpetoOpsOrderStage.preparing => _warning,
+    SpetoOpsOrderStage.ready => _accent,
+    SpetoOpsOrderStage.completed => _info,
+    SpetoOpsOrderStage.cancelled => _danger,
+  };
+}
+
+String _orderActionLabel(SpetoOpsOrderStage stage) {
+  return switch (stage) {
+    SpetoOpsOrderStage.accepted => 'Siparişi Onayla',
+    SpetoOpsOrderStage.preparing => 'Hazırlamaya Başla',
+    SpetoOpsOrderStage.ready => 'Hazırlandı',
+    SpetoOpsOrderStage.completed => 'Teslim Edildi',
+    SpetoOpsOrderStage.cancelled => 'Siparişi İptal Et',
+    SpetoOpsOrderStage.created => 'Güncelle',
+  };
+}
+
+String _formatCurrency(double value) {
+  final String fixed = value.toStringAsFixed(2);
+  final List<String> parts = fixed.split('.');
+  return '₺${parts.first},${parts.last}';
+}
+
+DateTime? _parseOrderPlacedAt(SpetoOpsOrder order) {
+  final Match? match = RegExp(
+    r'(\d{2})\.(\d{2})\.(\d{4})\s*•\s*(\d{2}):(\d{2})',
+  ).firstMatch(order.placedAtLabel);
+  if (match == null) {
+    return null;
+  }
+  return DateTime(
+    int.parse(match.group(3)!),
+    int.parse(match.group(2)!),
+    int.parse(match.group(1)!),
+    int.parse(match.group(4)!),
+    int.parse(match.group(5)!),
+  );
+}
+
+bool _isSameCalendarDay(DateTime a, DateTime b) {
+  return a.year == b.year && a.month == b.month && a.day == b.day;
+}
+
+String _orderTimeLabel(SpetoOpsOrder order) {
+  final List<String> parts = order.placedAtLabel.split('•');
+  if (parts.length > 1) {
+    return parts[1].trim();
+  }
+  return order.placedAtLabel;
+}
+
+String _orderDateLabel(SpetoOpsOrder order) {
+  final DateTime? placedAt = _parseOrderPlacedAt(order);
+  if (placedAt == null) {
+    return order.placedAtLabel;
+  }
+  return _isSameCalendarDay(placedAt, DateTime.now())
+      ? 'Bugün'
+      : '${placedAt.day.toString().padLeft(2, '0')}.${placedAt.month.toString().padLeft(2, '0')}.${placedAt.year}';
+}
+
+String _orderReference(SpetoOpsOrder order) {
+  if (order.pickupCode.trim().isNotEmpty) {
+    return order.pickupCode.trim().toUpperCase();
+  }
+  final String normalized = order.id.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+  if (normalized.isEmpty) {
+    return '0000';
+  }
+  return normalized
+      .substring(0, normalized.length < 6 ? normalized.length : 6)
+      .toUpperCase();
+}
+
+String _orderItemsSummary(SpetoOpsOrder order, {int maxItems = 2}) {
+  if (order.items.isEmpty) {
+    return 'Ürün bilgisi yok';
+  }
+  return order.items
+      .take(maxItems)
+      .map((SpetoCartItem item) => item.title)
+      .join(' + ');
+}
+
 class SpetoStockApp extends StatefulWidget {
   const SpetoStockApp({super.key});
 
@@ -145,8 +248,11 @@ class SpetoStockApp extends StatefulWidget {
 }
 
 class _SpetoStockAppState extends State<SpetoStockApp> {
+  static const String _sessionStorageKey = 'stock_app.session';
+
   SpetoRemoteDomainApi? _api;
   SpetoSession? _session;
+  SharedPreferences? _prefs;
 
   @override
   void initState() {
@@ -155,14 +261,71 @@ class _SpetoStockAppState extends State<SpetoStockApp> {
   }
 
   Future<void> _bootstrapApi() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    SpetoSession? session = _readStoredSession(prefs);
     final SpetoRemoteApiClient client =
-        await SpetoRemoteApiClient.resolveDefault();
+        await SpetoRemoteApiClient.resolveDefault(session: session);
+    final SpetoRemoteDomainApi api = SpetoRemoteDomainApi(client);
+    client.setSessionChangedCallback((SpetoSession? nextSession) async {
+      await _persistStoredSession(prefs, nextSession);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _session = nextSession;
+      });
+    });
+    if (session != null) {
+      try {
+        if (session.authToken.trim().isEmpty ||
+            session.refreshToken.trim().isEmpty) {
+          session = null;
+          await _persistStoredSession(prefs, null);
+        } else if (api.shouldRefreshSession() ||
+            session.authToken.trim().isEmpty) {
+          session = await api.refreshSession(
+            refreshToken: session.refreshToken,
+            notifyListeners: false,
+          );
+          await _persistStoredSession(prefs, session);
+        }
+      } catch (_) {
+        session = null;
+        await _persistStoredSession(prefs, null);
+        api.clearSession();
+      }
+    }
     if (!mounted) {
       return;
     }
     setState(() {
-      _api = SpetoRemoteDomainApi(client);
+      _prefs = prefs;
+      _api = api;
+      _session = session;
     });
+  }
+
+  SpetoSession? _readStoredSession(SharedPreferences prefs) {
+    final String? raw = prefs.getString(_sessionStorageKey);
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    final Object? decoded = jsonDecode(raw);
+    if (decoded is! Map<String, Object?>) {
+      return null;
+    }
+    return SpetoSession.fromJson(decoded);
+  }
+
+  Future<void> _persistStoredSession(
+    SharedPreferences prefs,
+    SpetoSession? session,
+  ) async {
+    if (session == null) {
+      await prefs.remove(_sessionStorageKey);
+      return;
+    }
+    await prefs.setString(_sessionStorageKey, jsonEncode(session.toJson()));
   }
 
   @override
@@ -287,7 +450,7 @@ class _SpetoStockAppState extends State<SpetoStockApp> {
     final SpetoRemoteDomainApi? api = _api;
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Speto Stock',
+      title: 'SepetPro İşyeri',
       theme: theme,
       home: api == null
           ? const _BootScreen()
@@ -295,6 +458,10 @@ class _SpetoStockAppState extends State<SpetoStockApp> {
           ? _LoginScreen(
               api: api,
               onLoggedIn: (SpetoSession session) {
+                final SharedPreferences? prefs = _prefs;
+                if (prefs != null) {
+                  unawaited(_persistStoredSession(prefs, session));
+                }
                 setState(() {
                   _session = session;
                 });
@@ -304,7 +471,20 @@ class _SpetoStockAppState extends State<SpetoStockApp> {
               api: api,
               session: _session!,
               onSignOut: () {
-                api.clearSession();
+                final SpetoSession? currentSession = _session;
+                final SharedPreferences? prefs = _prefs;
+                unawaited(() async {
+                  try {
+                    await api.logout(
+                      refreshToken: currentSession?.refreshToken,
+                    );
+                  } catch (_) {
+                    api.clearSession();
+                  }
+                  if (prefs != null) {
+                    await _persistStoredSession(prefs, null);
+                  }
+                }());
                 setState(() {
                   _session = null;
                 });
@@ -337,12 +517,8 @@ class _LoginScreenState extends State<_LoginScreen> {
   static const String _backendOfflineMessage =
       'Backend erişilemiyor. Önce backend servisini başlatın ve sayfayı yenileyin.';
 
-  final TextEditingController _emailController = TextEditingController(
-    text: 'admin@speto.app',
-  );
-  final TextEditingController _passwordController = TextEditingController(
-    text: 'admin123',
-  );
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoading = false;
   bool _isCheckingBackend = true;
@@ -445,7 +621,7 @@ class _LoginScreenState extends State<_LoginScreen> {
     if (error.message.contains('500')) {
       return 'Backend hata verdi. Servis loglarını kontrol edip tekrar deneyin.';
     }
-    return 'Giriş başarısız. Demo hesaplardan biriyle tekrar deneyin.';
+    return 'Giriş başarısız. Lütfen gerçek operatör bilgilerinizi kontrol edin.';
   }
 
   @override
@@ -485,7 +661,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: const Text(
-                            'Speto Stock Ops',
+                            'SepetPro İşyeri',
                             style: TextStyle(
                               color: _accent,
                               fontWeight: FontWeight.w800,
@@ -509,27 +685,6 @@ class _LoginScreenState extends State<_LoginScreen> {
                               ?.copyWith(color: _muted, height: 1.55),
                         ),
                         const SizedBox(height: 24),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: const <Widget>[
-                            _CredentialChip(
-                              label: 'Admin',
-                              email: 'admin@speto.app',
-                              password: 'admin123',
-                            ),
-                            _CredentialChip(
-                              label: 'Burger Mağaza',
-                              email: 'burger@speto.app',
-                              password: 'vendor123',
-                            ),
-                            _CredentialChip(
-                              label: 'Market Mağaza',
-                              email: 'market@speto.app',
-                              password: 'vendor123',
-                            ),
-                          ],
-                        ),
                       ],
                     ),
                   );
@@ -678,45 +833,6 @@ class _LoginScreenState extends State<_LoginScreen> {
   }
 }
 
-class _CredentialChip extends StatelessWidget {
-  const _CredentialChip({
-    required this.label,
-    required this.email,
-    required this.password,
-  });
-
-  final String label;
-  final String email;
-  final String password;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 220,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            label,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: _ink,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(email, style: const TextStyle(color: _muted)),
-          Text(password, style: const TextStyle(color: _muted)),
-        ],
-      ),
-    );
-  }
-}
-
 class _StockShell extends StatefulWidget {
   const _StockShell({
     required this.api,
@@ -736,7 +852,6 @@ class _StockShellState extends State<_StockShell> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   _StockDestination _destination = _StockDestination.dashboard;
-  bool _showTopBar = true;
   bool _loading = true;
   String? _error;
   String? _warningMessage;
@@ -843,23 +958,9 @@ class _StockShellState extends State<_StockShell> {
     return 'İstek başarısız oldu.';
   }
 
-  bool _handleContentScrollNotification(ScrollNotification notification) {
-    if (notification.metrics.axis != Axis.vertical) {
-      return false;
-    }
-    final bool nextValue = notification.metrics.pixels <= 0.5;
-    if (nextValue != _showTopBar) {
-      setState(() {
-        _showTopBar = nextValue;
-      });
-    }
-    return false;
-  }
-
   void _selectDestination(_StockDestination destination) {
     setState(() {
       _destination = destination;
-      _showTopBar = true;
     });
   }
 
@@ -1284,7 +1385,7 @@ class _StockShellState extends State<_StockShell> {
     final TextEditingController operatorEmailController =
         TextEditingController();
     final TextEditingController operatorPasswordController =
-        TextEditingController(text: 'vendor123');
+        TextEditingController();
     final TextEditingController operatorPhoneController =
         TextEditingController();
     bool isMarket = false;
@@ -2942,13 +3043,13 @@ class _StockShellState extends State<_StockShell> {
         _StockDestination.products,
       ),
       _NavItem(
-        'Kampanyalar',
+        'Kampanya',
         Icons.local_offer_outlined,
         'Aktif teklif ve fırsatlar',
         _StockDestination.campaigns,
       ),
       _NavItem(
-        'Hesabım',
+        'Hesap',
         Icons.person_outline_rounded,
         'Profil ve erişim bilgileri',
         _StockDestination.account,
@@ -2965,6 +3066,9 @@ class _StockShellState extends State<_StockShell> {
         ? selectedVendorChoice!.label
         : 'Operasyon paneli';
     final String? selectedVendorId = _normalizedVendorId();
+    final SpetoCatalogVendor? selectedVendor = selectedVendorId == null
+        ? null
+        : _findVendorById(selectedVendorId);
     final SpetoInventorySnapshot? dashboardSnapshot = _dashboard;
     final List<SpetoHappyHourOffer> visibleOffers = _offers
         .where(
@@ -2987,13 +3091,13 @@ class _StockShellState extends State<_StockShell> {
           snapshot: dashboardSnapshot,
           orders: _orders,
         ),
-      _StockDestination.dashboard || _StockDestination.reports =>
-        const _CenterStateMessage(
-          title: 'Anasayfa hazırlanıyor',
-          description:
-              'Özet metrikler yeniden yüklenirken birkaç saniye bekleyin.',
-          icon: Icons.home_rounded,
-        ),
+      _StockDestination.dashboard ||
+      _StockDestination.reports => const _CenterStateMessage(
+        title: 'Anasayfa hazırlanıyor',
+        description:
+            'Özet metrikler yeniden yüklenirken birkaç saniye bekleyin.',
+        icon: Icons.home_rounded,
+      ),
       _StockDestination.orders => _OrdersPage(
         orders: _orders,
         onAdvance: _changeOrderStatus,
@@ -3069,6 +3173,10 @@ class _StockShellState extends State<_StockShell> {
       _StockDestination.account => _AccountPage(
         session: widget.session,
         vendorLabel: selectedVendorLabel,
+        selectedVendor: selectedVendor,
+        vendors: _catalogVendors,
+        integrations: _integrations,
+        orders: _orders,
         snapshot: _dashboard,
         offers: visibleOffers,
         onSignOut: widget.onSignOut,
@@ -3127,53 +3235,24 @@ class _StockShellState extends State<_StockShell> {
                       ),
                       child: Column(
                         children: <Widget>[
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 220),
-                            switchInCurve: Curves.easeOutCubic,
-                            switchOutCurve: Curves.easeInCubic,
-                            transitionBuilder:
-                                (
-                                  Widget child,
-                                  Animation<double> animation,
-                                ) => SizeTransition(
-                                  sizeFactor: animation,
-                                  axisAlignment: -1,
-                                  child: FadeTransition(
-                                    opacity: animation,
-                                    child: child,
+                          if (compact &&
+                              _destination != _StockDestination.account)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 2),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: IconButton.filledTonal(
+                                  style: IconButton.styleFrom(
+                                    minimumSize: const Size(44, 44),
+                                    maximumSize: const Size(44, 44),
+                                    padding: EdgeInsets.zero,
                                   ),
+                                  onPressed: () =>
+                                      _scaffoldKey.currentState?.openDrawer(),
+                                  icon: const Icon(Icons.menu_rounded),
                                 ),
-                            child: !compact || _showTopBar
-                                ? _TopBar(
-                                    key: const ValueKey<String>(
-                                      'top-bar-visible',
-                                    ),
-                                    session: widget.session,
-                                    selectedVendorId: selectedVendorId,
-                                    vendorChoices: _vendorChoices,
-                                    selectedVendorLabel: selectedVendorLabel,
-                                    onVendorChanged:
-                                        widget.session.role ==
-                                            SpetoUserRole.admin
-                                        ? (String? value) async {
-                                            setState(() {
-                                              _selectedVendorId = value;
-                                            });
-                                            await _reload();
-                                          }
-                                        : null,
-                                    onRefresh: _reload,
-                                    onSignOut: widget.onSignOut,
-                                    onMenuPressed: compact
-                                        ? () =>
-                                              _scaffoldKey.currentState
-                                                  ?.openDrawer()
-                                        : null,
-                                  )
-                                : const SizedBox(
-                                    key: ValueKey<String>('top-bar-hidden'),
-                                  ),
-                          ),
+                              ),
+                            ),
                           if (_warningMessage != null)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 12),
@@ -3195,13 +3274,7 @@ class _StockShellState extends State<_StockShell> {
                                     description: _error!,
                                     icon: Icons.cloud_off_outlined,
                                   )
-                                : NotificationListener<ScrollNotification>(
-                                    onNotification:
-                                        compact
-                                        ? _handleContentScrollNotification
-                                        : (_) => false,
-                                    child: currentPage,
-                                  ),
+                                : currentPage,
                           ),
                         ],
                       ),
@@ -3218,7 +3291,12 @@ class _StockShellState extends State<_StockShell> {
               top: false,
               left: false,
               right: false,
-              minimum: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              minimum: EdgeInsets.fromLTRB(
+                0,
+                0,
+                0,
+                _destination == _StockDestination.account ? 4 : 8,
+              ),
               child: _GlassBottomNavBar(
                 items: bottomItems,
                 selectedDestination: _destination,
@@ -3226,213 +3304,6 @@ class _StockShellState extends State<_StockShell> {
               ),
             )
           : null,
-    );
-  }
-}
-
-class _TopBar extends StatelessWidget {
-  const _TopBar({
-    super.key,
-    required this.session,
-    required this.selectedVendorId,
-    required this.vendorChoices,
-    required this.selectedVendorLabel,
-    required this.onVendorChanged,
-    required this.onRefresh,
-    required this.onSignOut,
-    this.onMenuPressed,
-  });
-
-  final SpetoSession session;
-  final String? selectedVendorId;
-  final List<_VendorScopeChoice> vendorChoices;
-  final String selectedVendorLabel;
-  final ValueChanged<String?>? onVendorChanged;
-  final Future<void> Function() onRefresh;
-  final VoidCallback onSignOut;
-  final VoidCallback? onMenuPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final bool compact = constraints.maxWidth < 880;
-        final double vendorFieldWidth = compact ? constraints.maxWidth : 320;
-        final ButtonStyle filledButtonStyle = FilledButton.styleFrom(
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 14 : 18,
-            vertical: compact ? 12 : 14,
-          ),
-          minimumSize: Size(0, compact ? 46 : 52),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          textStyle: TextStyle(
-            fontSize: compact ? 15 : 16,
-            fontWeight: FontWeight.w700,
-          ),
-        );
-        final ButtonStyle outlinedButtonStyle = OutlinedButton.styleFrom(
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 14 : 18,
-            vertical: compact ? 12 : 14,
-          ),
-          minimumSize: Size(0, compact ? 46 : 52),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          textStyle: TextStyle(
-            fontSize: compact ? 15 : 16,
-            fontWeight: FontWeight.w700,
-          ),
-        );
-        final Widget heading = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            if (compact && onMenuPressed != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: IconButton.filledTonal(
-                  style: IconButton.styleFrom(
-                    minimumSize: const Size(44, 44),
-                    maximumSize: const Size(44, 44),
-                    padding: EdgeInsets.zero,
-                  ),
-                  onPressed: onMenuPressed,
-                  icon: const Icon(Icons.menu_rounded),
-                ),
-              ),
-            _StatusPill(
-              label: compact ? _roleLabel(session.role) : selectedVendorLabel,
-              color: _accent,
-              backgroundColor: _accentSoft,
-              compact: compact,
-            ),
-            SizedBox(height: compact ? 10 : 12),
-            Text(
-              'Operasyon Merkezi',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: _ink,
-                fontWeight: FontWeight.w800,
-                fontSize: compact ? 18 : null,
-              ),
-            ),
-            SizedBox(height: compact ? 4 : 6),
-            Text(
-              '${session.displayName} • ${_roleLabel(session.role)} • Canlı operasyon paneli',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: _muted,
-                fontWeight: FontWeight.w600,
-                fontSize: compact ? 13.5 : null,
-                height: compact ? 1.35 : null,
-              ),
-            ),
-          ],
-        );
-
-        final List<Widget> controls = <Widget>[
-          if (onVendorChanged != null)
-            SizedBox(
-              width: vendorFieldWidth,
-              child: DropdownButtonFormField<String>(
-                initialValue: selectedVendorId,
-                isExpanded: true,
-                selectedItemBuilder: (BuildContext context) {
-                  return vendorChoices
-                      .map(
-                        (_VendorScopeChoice choice) => Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            choice.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      )
-                      .toList(growable: false);
-                },
-                items: vendorChoices
-                    .map(
-                      (_VendorScopeChoice choice) => DropdownMenuItem<String>(
-                        value: choice.id,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: <Widget>[
-                              Text(
-                                choice.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              Text(
-                                choice.caption,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: _muted,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: onVendorChanged,
-                decoration: const InputDecoration(
-                  labelText: 'Çalışma kapsamı',
-                  contentPadding: EdgeInsets.fromLTRB(16, 20, 16, 14),
-                ),
-              ),
-            ),
-          FilledButton.tonalIcon(
-            onPressed: onRefresh,
-            style: filledButtonStyle,
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Yenile'),
-          ),
-          OutlinedButton.icon(
-            onPressed: onSignOut,
-            style: outlinedButtonStyle,
-            icon: const Icon(Icons.logout_rounded),
-            label: const Text('Çıkış'),
-          ),
-        ];
-
-        return Padding(
-          padding: EdgeInsets.only(bottom: compact ? 8 : 12),
-          child: _SurfaceCard(
-            padding: EdgeInsets.all(compact ? 16 : 20),
-            child: compact
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      heading,
-                      const SizedBox(height: 12),
-                      Wrap(spacing: 8, runSpacing: 8, children: controls),
-                    ],
-                  )
-                : Row(
-                    children: <Widget>[
-                      Expanded(child: heading),
-                      const SizedBox(width: 16),
-                      ...controls
-                          .expand(
-                            (Widget widget) => <Widget>[
-                              widget,
-                              const SizedBox(width: 10),
-                            ],
-                          )
-                          .toList(growable: false)
-                        ..removeLast(),
-                    ],
-                  ),
-          ),
-        );
-      },
     );
   }
 }
@@ -3479,75 +3350,133 @@ class _DashboardPage extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final bool compact = constraints.maxWidth < 900;
-        final List<Widget> metricCards = <Widget>[
-          _MetricCard(
-            compact: compact,
-            emphasis: true,
-            label: 'Satılabilir stok',
-            value: '${snapshot.totalAvailableUnits}',
-            caption: 'Bugün canlı satılabilir toplam adet',
-            accent: _ink,
-            icon: Icons.inventory_rounded,
-          ),
-          _MetricCard(
-            compact: compact,
-            label: 'Açık sipariş',
-            value: '${snapshot.openOrdersCount}',
-            caption: 'Anlık operasyon yükü',
-            accent: _success,
-            icon: Icons.receipt_long_rounded,
-          ),
-          _MetricCard(
-            compact: compact,
-            label: 'Kritik ürün',
-            value: '${snapshot.lowStockCount}',
-            caption: 'Yakın zamanda müdahale gerektirir',
-            accent: _warning,
-            icon: Icons.warning_amber_rounded,
-          ),
-          _MetricCard(
-            compact: compact,
-            label: 'Senkron alarmı',
-            value: '${snapshot.integrationErrorCount}',
-            caption: 'ERP / POS tarafında aksiyon bekliyor',
-            accent: _danger,
-            icon: Icons.hub_rounded,
-            highlight: snapshot.integrationErrorCount > 0,
-          ),
-        ];
+        final List<SpetoOpsOrder> recentOrders = orders
+            .take(compact ? 4 : 5)
+            .toList(growable: false);
         return SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(4, 4, 4, 24),
+          padding: EdgeInsets.fromLTRB(4, 4, 4, compact ? 16 : 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              _DashboardHero(
+              _OpsPageIntroCard(
                 compact: compact,
-                vendorLabel: vendorLabel,
-                snapshot: snapshot,
-                failedIntegrations: failedIntegrations,
-                warningIntegrations: warningIntegrations,
-                onNavigate: onNavigate,
+                icon: Icons.home_rounded,
+                title: 'Ana sayfa',
+                subtitle:
+                    '$vendorLabel operasyonu için sipariş, stok ve bağlantı sağlığını tek yerden izle.',
+                tone: _success,
+                trailing: _StatusPill(
+                  label: '${snapshot.openOrdersCount} açık sipariş',
+                  color: _success,
+                  backgroundColor: _successSoft,
+                ),
+                badges: <Widget>[
+                  _OpsInlineStat(
+                    label: 'Hazır stok',
+                    value: '${snapshot.totalAvailableUnits}',
+                    tone: _success,
+                  ),
+                  _OpsInlineStat(
+                    label: 'Kritik SKU',
+                    value:
+                        '${snapshot.lowStockCount + snapshot.outOfStockCount}',
+                    tone: _warning,
+                  ),
+                  _OpsInlineStat(
+                    label: 'Sync alarmı',
+                    value: '${failedIntegrations + warningIntegrations}',
+                    tone: failedIntegrations > 0 ? _danger : _info,
+                  ),
+                ],
               ),
-              const SizedBox(height: 18),
-              if (compact)
-                Column(
-                  children: metricCards
-                      .map(
-                        (Widget card) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: card,
-                        ),
-                      )
-                      .toList(growable: false),
-                )
-              else
-                Wrap(spacing: 16, runSpacing: 16, children: metricCards),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
+              _ResponsiveCardGrid(
+                minItemWidth: compact ? 156 : 210,
+                children: <Widget>[
+                  _SummaryStatCard(
+                    label: 'Satılabilir stok',
+                    value: '${snapshot.totalAvailableUnits}',
+                    tone: _success,
+                    note: 'Canlı satışa açık toplam birim',
+                  ),
+                  _SummaryStatCard(
+                    label: 'Açık sipariş',
+                    value: '${snapshot.openOrdersCount}',
+                    tone: _info,
+                    note: 'Hazırlık ve teslim akışındaki iş yükü',
+                  ),
+                  _SummaryStatCard(
+                    label: 'Kritik ürün',
+                    value: '${snapshot.lowStockCount}',
+                    tone: _warning,
+                    note: 'Yakında müdahale gerektiren stok kartı',
+                  ),
+                  _SummaryStatCard(
+                    label: 'Senkron alarmı',
+                    value: '${snapshot.integrationErrorCount}',
+                    tone: snapshot.integrationErrorCount > 0
+                        ? _danger
+                        : _success,
+                    note: 'Bağlantı veya eşleşme kaynaklı bekleyen konu',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _SectionCard(
+                title: 'Hızlı erişim',
+                subtitle:
+                    'Operasyon sırasında en sık açılan ekranlara tek dokunuşla geç.',
+                child: Column(
+                  children: <Widget>[
+                    _DetailListTile(
+                      icon: Icons.receipt_long_outlined,
+                      title: 'Sipariş kuyruğu',
+                      subtitle: 'Yeni ve hazırlanan siparişleri yönet',
+                      iconTone: _success,
+                      onTap: () => onNavigate(_StockDestination.orders),
+                    ),
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: _line.withValues(alpha: 0.7),
+                      indent: 68,
+                      endIndent: 18,
+                    ),
+                    _DetailListTile(
+                      icon: Icons.inventory_2_outlined,
+                      title: 'Ürün ve stok',
+                      subtitle: 'Kritik SKU, stok düzeltme ve giriş akışını aç',
+                      iconTone: _success,
+                      onTap: () => onNavigate(_StockDestination.products),
+                    ),
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: _line.withValues(alpha: 0.7),
+                      indent: 68,
+                      endIndent: 18,
+                    ),
+                    _DetailListTile(
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'Gelir ve ödemeler',
+                      subtitle: 'Tahsilat ve ödeme yöntemi dağılımını izle',
+                      iconTone: _success,
+                      onTap: () => onNavigate(_StockDestination.revenue),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
               if (compact) ...<Widget>[
                 _SectionCard(
                   title: 'Kritik ürünler',
-                  subtitle:
-                      'Stok seviyesi düşen veya satışa kapanan ürünleri ilk sırada görün.',
+                  subtitle: 'Öncelikli müdahale bekleyen stok listesi.',
+                  trailing: criticalItems.isEmpty
+                      ? null
+                      : _InfoPill(
+                          label: '${criticalItems.length} SKU',
+                          compact: true,
+                        ),
                   child: criticalItems.isEmpty
                       ? const _EmptyState(
                           title: 'Kritik ürün görünmüyor',
@@ -3564,11 +3493,16 @@ class _DashboardPage extends StatelessWidget {
                               .toList(growable: false),
                         ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 _SectionCard(
                   title: 'Bağlantı sağlığı',
-                  subtitle:
-                      'Senkron kalitesi, son hata ve mapping kapsamı tek yerde.',
+                  subtitle: 'POS ve ERP akışının canlı durum görünümü.',
+                  trailing: visibleIntegrations.isEmpty
+                      ? null
+                      : _InfoPill(
+                          label: '${visibleIntegrations.length} bağlantı',
+                          compact: true,
+                        ),
                   child: visibleIntegrations.isEmpty
                       ? const _EmptyState(
                           title: 'Bağlantı tanımı yok',
@@ -3643,17 +3577,18 @@ class _DashboardPage extends StatelessWidget {
                     ),
                   ],
                 ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               _SectionCard(
-                title: 'Sipariş akışı',
-                subtitle:
-                    'Hazırlık hattındaki siparişleri aşama ve hız riskiyle birlikte takip et.',
+                title: 'Canlı sipariş görünümü',
+                subtitle: compact
+                    ? 'Hazırlık ve teslim akışındaki son operasyonlar.'
+                    : 'Yeni açılan siparişleri teslim süreciyle birlikte takip et.',
                 trailing: orders.isEmpty
                     ? null
                     : _StatusPill(
                         label: '${orders.length} aktif iş',
-                        color: _accent,
-                        backgroundColor: _accentSoft,
+                        color: _success,
+                        backgroundColor: _successSoft,
                       ),
                 child: orders.isEmpty
                     ? const _EmptyState(
@@ -3663,8 +3598,7 @@ class _DashboardPage extends StatelessWidget {
                         icon: Icons.schedule_rounded,
                       )
                     : Column(
-                        children: orders
-                            .take(6)
+                        children: recentOrders
                             .map(
                               (SpetoOpsOrder order) =>
                                   _OrderTimelineRow(order: order),
@@ -3714,9 +3648,21 @@ class _InventoryPageState extends State<_InventoryPage> {
   @override
   Widget build(BuildContext context) {
     final bool compact = MediaQuery.of(context).size.width < 1180;
+    final int lowStockCount = widget.items
+        .where((SpetoInventoryItem item) => item.stockStatus.lowStock)
+        .length;
+    final int purchasableCount = widget.items
+        .where(
+          (SpetoInventoryItem item) =>
+              item.stockStatus.canPurchase && !item.isArchived,
+        )
+        .length;
+    final int archivedCount = widget.items
+        .where((SpetoInventoryItem item) => item.isArchived)
+        .length;
     if (widget.items.isEmpty) {
       return const Padding(
-        padding: EdgeInsets.fromLTRB(4, 4, 4, 24),
+        padding: EdgeInsets.fromLTRB(4, 4, 4, 12),
         child: _SectionCard(
           title: 'Envanter',
           subtitle: 'Canlı stok kartları, detay akışı ve hareket geçmişi',
@@ -3751,56 +3697,129 @@ class _InventoryPageState extends State<_InventoryPage> {
           orElse: () => visibleItems.isNotEmpty ? visibleItems.first : null,
         );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 4, 4, 24),
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
       child: compact
-          ? ListView(
-              children: <Widget>[
-                _SectionCard(
-                  title: 'Envanter çalışma alanı',
-                  subtitle:
-                      'Ürünleri ara, seç ve detay kartından stok müdahalesi yap.',
-                  child: Column(
-                    children: <Widget>[
-                      TextField(
-                        controller: _searchController,
-                        onChanged: (String value) {
-                          setState(() {
-                            _query = value;
-                          });
-                        },
-                        decoration: const InputDecoration(
-                          labelText: 'Ürün, SKU veya barkod ara',
-                          prefixIcon: Icon(Icons.search_rounded),
+          ? LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints constraints) {
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight > 0
+                          ? constraints.maxHeight
+                          : 0,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        _SurfaceCard(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: const <Widget>[
+                                        Text(
+                                          'Stok ve ürünler',
+                                          style: TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        SizedBox(height: 4),
+                                        Text(
+                                          'Ürünleri ara, stok durumunu kontrol et ve hızlı müdahale uygula.',
+                                          style: TextStyle(
+                                            color: _muted,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  _StatusPill(
+                                    label: '${visibleItems.length} SKU',
+                                    color: _success,
+                                    backgroundColor: _successSoft,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              TextField(
+                                controller: _searchController,
+                                onChanged: (String value) {
+                                  setState(() {
+                                    _query = value;
+                                  });
+                                },
+                                decoration: const InputDecoration(
+                                  labelText: 'Ürün, SKU veya barkod ara',
+                                  prefixIcon: Icon(Icons.search_rounded),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              _ResponsiveCardGrid(
+                                minItemWidth: 136,
+                                children: <Widget>[
+                                  _CompactMetricTile(
+                                    label: 'Kritik stok',
+                                    value: '$lowStockCount',
+                                    tone: _warning,
+                                  ),
+                                  _CompactMetricTile(
+                                    label: 'Satışa açık',
+                                    value: '$purchasableCount',
+                                    tone: _success,
+                                  ),
+                                  _CompactMetricTile(
+                                    label: 'Arşivde',
+                                    value: '$archivedCount',
+                                    tone: _muted,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      if (hasQuery && visibleItems.isEmpty)
-                        const _EmptyState(
-                          title: 'Aramaya uygun ürün yok',
-                          description:
-                              'Farklı bir ürün adı, SKU veya barkod ile tekrar dene.',
-                          icon: Icons.search_off_rounded,
-                        )
-                      else
-                        ...visibleItems.map((SpetoInventoryItem item) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _InventoryCard(
-                              item: item,
-                              selected: item.id == selected?.id,
-                              movements: item.id == selected?.id
-                                  ? widget.movements
-                                  : const <SpetoInventoryMovement>[],
-                              onTap: () => widget.onSelected(item.id),
-                              onAdjust: () => widget.onAdjust(item),
-                              onRestock: () => widget.onRestock(item),
-                            ),
-                          );
-                        }),
-                    ],
+                        const SizedBox(height: 12),
+                        if (hasQuery && visibleItems.isEmpty)
+                          const _EmptyState(
+                            title: 'Aramaya uygun ürün yok',
+                            description:
+                                'Farklı bir ürün adı, SKU veya barkod ile tekrar dene.',
+                            icon: Icons.search_off_rounded,
+                          )
+                        else
+                          Column(
+                            children: visibleItems
+                                .map((SpetoInventoryItem item) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: _InventoryCard(
+                                      item: item,
+                                      selected: item.id == selected?.id,
+                                      movements: item.id == selected?.id
+                                          ? widget.movements
+                                          : const <SpetoInventoryMovement>[],
+                                      onTap: () => widget.onSelected(item.id),
+                                      onAdjust: () => widget.onAdjust(item),
+                                      onRestock: () => widget.onRestock(item),
+                                    ),
+                                  );
+                                })
+                                .toList(growable: false),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                );
+              },
             )
           : Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -3957,156 +3976,221 @@ class _InventoryCard extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final bool compact = constraints.maxWidth < 430;
+        final Color stockTone = _stockColor(item.stockStatus);
+        final List<SpetoInventoryMovement> recentMovements = movements
+            .take(3)
+            .toList(growable: false);
         return InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(28),
           child: _SurfaceCard(
-            padding: const EdgeInsets.all(20),
-            tint: selected ? _accentSoft.withValues(alpha: 0.35) : _panelStrong,
+            padding: EdgeInsets.all(compact ? 18 : 20),
+            tint: selected
+                ? _successSoft.withValues(alpha: 0.48)
+                : _panelStrong,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                if (compact)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Row(
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    _ThumbImage(
+                      imageUrl: item.imageUrl,
+                      label: item.title,
+                      size: compact ? 66 : 72,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          _ThumbImage(
-                            imageUrl: item.imageUrl,
-                            label: item.title,
-                            size: 64,
+                          Text(
+                            item.title,
+                            maxLines: compact ? 2 : 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: compact ? 20 : null,
+                                ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  item.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.titleLarge
-                                      ?.copyWith(fontWeight: FontWeight.w800),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${item.vendorName} • ${item.locationLabel}',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: _muted),
-                                ),
-                              ],
+                          const SizedBox(height: 4),
+                          Text(
+                            item.vendorName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _muted,
+                              fontWeight: FontWeight.w600,
                             ),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: <Widget>[
+                              _StatusPill(
+                                label: _stockLabel(item.stockStatus),
+                                color: stockTone,
+                                backgroundColor: stockTone.withValues(
+                                  alpha: 0.12,
+                                ),
+                              ),
+                              _InfoPill(
+                                label:
+                                    '${item.unitPrice.toStringAsFixed(0)} TL',
+                                compact: true,
+                              ),
+                              _InfoPill(
+                                label: item.locationLabel.isEmpty
+                                    ? 'Konum yok'
+                                    : item.locationLabel,
+                                compact: true,
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      _StatusPill(
-                        label: _stockLabel(item.stockStatus),
-                        color: _stockColor(item.stockStatus),
-                        backgroundColor: _stockColor(
-                          item.stockStatus,
-                        ).withValues(alpha: 0.12),
+                    ),
+                    if (item.isArchived) ...<Widget>[
+                      const SizedBox(width: 12),
+                      const _StatusPill(
+                        label: 'Arşiv',
+                        color: _muted,
+                        backgroundColor: _accentSoft,
                       ),
                     ],
-                  )
-                else
-                  Row(
-                    children: <Widget>[
-                      _ThumbImage(
-                        imageUrl: item.imageUrl,
-                        label: item.title,
-                        size: 64,
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _ResponsiveCardGrid(
+                  minItemWidth: compact ? 128 : 150,
+                  children: <Widget>[
+                    _CompactMetricTile(
+                      label: 'Fiziksel',
+                      value: '${item.onHand}',
+                      tone: _info,
+                    ),
+                    _CompactMetricTile(
+                      label: 'Satılabilir',
+                      value: '${item.availableQuantity}',
+                      tone: _success,
+                    ),
+                    _CompactMetricTile(
+                      label: 'Rezerve',
+                      value: '${item.reserved}',
+                      tone: _warning,
+                    ),
+                    _CompactMetricTile(
+                      label: 'Kritik seviye',
+                      value: '${item.reorderLevel}',
+                      tone: _accent,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: onAdjust,
+                        icon: const Icon(Icons.tune_rounded),
+                        label: const Text('Düzelt'),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: onRestock,
+                        icon: const Icon(Icons.add_shopping_cart_rounded),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _success,
+                          foregroundColor: Colors.white,
+                        ),
+                        label: const Text('Stok girişi'),
+                      ),
+                    ),
+                  ],
+                ),
+                if (recentMovements.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 18),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: _panel,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: _line.withValues(alpha: 0.8)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
                           children: <Widget>[
-                            Text(
-                              item.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            const Expanded(
+                              child: Text(
+                                'Son hareketler',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${item.vendorName} • ${item.locationLabel}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: _muted),
+                            _InfoPill(
+                              label: '${recentMovements.length} kayıt',
+                              compact: true,
                             ),
                           ],
                         ),
-                      ),
-                      _StatusPill(
-                        label: _stockLabel(item.stockStatus),
-                        color: _stockColor(item.stockStatus),
-                        backgroundColor: _stockColor(
-                          item.stockStatus,
-                        ).withValues(alpha: 0.12),
-                      ),
-                    ],
+                        const SizedBox(height: 10),
+                        ...List<Widget>.generate(recentMovements.length, (
+                          int index,
+                        ) {
+                          final SpetoInventoryMovement movement =
+                              recentMovements[index];
+                          final bool positive = movement.quantityDelta >= 0;
+                          return Padding(
+                            padding: EdgeInsets.only(
+                              bottom: index == recentMovements.length - 1
+                                  ? 0
+                                  : 10,
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Text(
+                                        _inventoryMovementLabel(movement.type),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        movement.createdAtLabel,
+                                        style: const TextStyle(
+                                          color: _muted,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  '${positive ? '+' : ''}${movement.quantityDelta}',
+                                  style: TextStyle(
+                                    color: positive ? _success : _danger,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
                   ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: <Widget>[
-                    _InfoPill(label: 'Fiziksel ${item.onHand}'),
-                    _InfoPill(label: 'Rezerve ${item.reserved}'),
-                    _InfoPill(label: 'Satılabilir ${item.availableQuantity}'),
-                    _InfoPill(label: 'Kritik seviye ${item.reorderLevel}'),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: <Widget>[
-                    OutlinedButton.icon(
-                      onPressed: onAdjust,
-                      icon: const Icon(Icons.tune_rounded),
-                      label: const Text('Düzelt'),
-                    ),
-                    FilledButton.icon(
-                      onPressed: onRestock,
-                      icon: const Icon(Icons.add_shopping_cart_rounded),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _ink,
-                        foregroundColor: Colors.white,
-                      ),
-                      label: const Text('Stok girişi'),
-                    ),
-                  ],
-                ),
-                if (movements.isNotEmpty) ...<Widget>[
-                  const SizedBox(height: 18),
-                  Text(
-                    'Hareket geçmişi',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ...movements.take(4).map((SpetoInventoryMovement movement) {
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(_inventoryMovementLabel(movement.type)),
-                      subtitle: Text(movement.createdAtLabel),
-                      trailing: Text(
-                        '${movement.quantityDelta >= 0 ? '+' : ''}${movement.quantityDelta}',
-                        style: TextStyle(
-                          color: movement.quantityDelta >= 0
-                              ? _success
-                              : _danger,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    );
-                  }),
                 ],
               ],
             ),
@@ -4128,136 +4212,800 @@ class _OrdersPage extends StatefulWidget {
   State<_OrdersPage> createState() => _OrdersPageState();
 }
 
-class _OrdersPageState extends State<_OrdersPage> {
+class _OrdersPageState extends State<_OrdersPage>
+    with SingleTickerProviderStateMixin {
   static const List<(_OrderQueueFilter, String)> _filters =
       <(_OrderQueueFilter, String)>[
         (_OrderQueueFilter.all, 'Tümü'),
         (_OrderQueueFilter.fresh, 'Yeni'),
         (_OrderQueueFilter.preparing, 'Hazırlanıyor'),
         (_OrderQueueFilter.ready, 'Hazır'),
-        (_OrderQueueFilter.delivered, 'Teslim Edildi'),
-        (_OrderQueueFilter.cancelled, 'İptal Edilen'),
+        (_OrderQueueFilter.delivered, 'Tamamlandı'),
+        (_OrderQueueFilter.cancelled, 'İptal'),
       ];
 
-  List<SpetoOpsOrder> _filteredOrders(_OrderQueueFilter filter) {
-    return widget.orders
-        .where((SpetoOpsOrder order) {
-          return switch (filter) {
-            _OrderQueueFilter.all => true,
-            _OrderQueueFilter.fresh =>
-              order.opsStatus == SpetoOpsOrderStage.created,
-            _OrderQueueFilter.preparing =>
-              order.opsStatus == SpetoOpsOrderStage.accepted ||
-                  order.opsStatus == SpetoOpsOrderStage.preparing,
-            _OrderQueueFilter.ready =>
-              order.opsStatus == SpetoOpsOrderStage.ready,
-            _OrderQueueFilter.delivered =>
-              order.opsStatus == SpetoOpsOrderStage.completed ||
-                  order.status == SpetoOrderStatus.completed,
-            _OrderQueueFilter.cancelled =>
-              order.opsStatus == SpetoOpsOrderStage.cancelled ||
-                  order.status == SpetoOrderStatus.cancelled,
-          };
-        })
-        .toList(growable: false);
+  final TextEditingController _searchController = TextEditingController();
+  late final TabController _tabController;
+  String _query = '';
+  _OrderDateFilter _dateFilter = _OrderDateFilter.all;
+  String? _paymentFilter;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: _filters.length, vsync: this);
+    _tabController.addListener(_handleTabChanged);
   }
 
-  int _countFor(_OrderQueueFilter filter) => _filteredOrders(filter).length;
+  @override
+  void dispose() {
+    _tabController.removeListener(_handleTabChanged);
+    _tabController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _handleTabChanged() {
+    if (!mounted || _tabController.indexIsChanging) {
+      return;
+    }
+    setState(() {});
+  }
+
+  List<String> get _paymentOptions {
+    final LinkedHashSet<String> methods = LinkedHashSet<String>.from(
+      widget.orders
+          .map((SpetoOpsOrder order) => order.paymentMethod.trim())
+          .where((String value) => value.isNotEmpty),
+    );
+    return methods.toList(growable: false);
+  }
+
+  int get _currentTabIndex {
+    final int index = _tabController.index;
+    if (index < 0) {
+      return 0;
+    }
+    if (index >= _filters.length) {
+      return _filters.length - 1;
+    }
+    return index;
+  }
+
+  _OrderQueueFilter get _currentFilter => _filters[_currentTabIndex].$1;
+
+  int get _activeFilterCount {
+    int count = 0;
+    if (_dateFilter != _OrderDateFilter.all) {
+      count += 1;
+    }
+    if (_paymentFilter != null) {
+      count += 1;
+    }
+    return count;
+  }
+
+  bool _matchesSearch(SpetoOpsOrder order, String normalizedQuery) {
+    if (normalizedQuery.isEmpty) {
+      return true;
+    }
+    final String haystack = <String>[
+      order.vendor,
+      order.id,
+      order.pickupCode,
+      order.deliveryAddress,
+      order.paymentMethod,
+      order.promoCode,
+      ...order.items.map((SpetoCartItem item) => item.title),
+    ].join(' ').toLowerCase();
+    return haystack.contains(normalizedQuery);
+  }
+
+  bool _matchesBaseFilters(
+    SpetoOpsOrder order,
+    String normalizedQuery,
+    DateTime today,
+  ) {
+    if (!_matchesSearch(order, normalizedQuery)) {
+      return false;
+    }
+    if (_paymentFilter != null && order.paymentMethod != _paymentFilter) {
+      return false;
+    }
+    if (_dateFilter == _OrderDateFilter.today) {
+      final DateTime? placedAt = _parseOrderPlacedAt(order);
+      if (placedAt == null || !_isSameCalendarDay(placedAt, today)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _matchesStatusFilter(SpetoOpsOrder order, _OrderQueueFilter filter) {
+    return switch (filter) {
+      _OrderQueueFilter.all => true,
+      _OrderQueueFilter.fresh => order.opsStatus == SpetoOpsOrderStage.created,
+      _OrderQueueFilter.preparing =>
+        order.opsStatus == SpetoOpsOrderStage.accepted ||
+            order.opsStatus == SpetoOpsOrderStage.preparing,
+      _OrderQueueFilter.ready => order.opsStatus == SpetoOpsOrderStage.ready,
+      _OrderQueueFilter.delivered =>
+        order.opsStatus == SpetoOpsOrderStage.completed ||
+            order.status == SpetoOrderStatus.completed,
+      _OrderQueueFilter.cancelled =>
+        order.opsStatus == SpetoOpsOrderStage.cancelled ||
+            order.status == SpetoOrderStatus.cancelled,
+    };
+  }
+
+  List<SpetoOpsOrder> _filteredOrders(_OrderQueueFilter filter) {
+    final String normalizedQuery = _query.trim().toLowerCase();
+    final DateTime today = DateTime.now();
+    final List<SpetoOpsOrder> filtered = widget.orders.where((
+      SpetoOpsOrder order,
+    ) {
+      return _matchesBaseFilters(order, normalizedQuery, today) &&
+          _matchesStatusFilter(order, filter);
+    }).toList();
+    filtered.sort((SpetoOpsOrder a, SpetoOpsOrder b) {
+      final DateTime? left = _parseOrderPlacedAt(a);
+      final DateTime? right = _parseOrderPlacedAt(b);
+      if (left == null || right == null) {
+        return 0;
+      }
+      return right.compareTo(left);
+    });
+    return filtered;
+  }
+
+  void _openOrderHistory() {
+    final int deliveredIndex = _filters.indexWhere(
+      (((_OrderQueueFilter, String) entry) =>
+          entry.$1 == _OrderQueueFilter.delivered),
+    );
+    if (deliveredIndex >= 0) {
+      _tabController.animateTo(deliveredIndex);
+    }
+  }
+
+  void _openAllOrders() {
+    final int allIndex = _filters.indexWhere(
+      (((_OrderQueueFilter, String) entry) =>
+          entry.$1 == _OrderQueueFilter.all),
+    );
+    if (allIndex >= 0) {
+      _tabController.animateTo(allIndex);
+    }
+  }
+
+  int _todayOrdersCount() {
+    final DateTime today = DateTime.now();
+    return _filteredOrders(_OrderQueueFilter.all).where((SpetoOpsOrder order) {
+      final DateTime? placedAt = _parseOrderPlacedAt(order);
+      return placedAt != null && _isSameCalendarDay(placedAt, today);
+    }).length;
+  }
+
+  int _activeOrdersCount() {
+    return _filteredOrders(_OrderQueueFilter.all)
+        .where((SpetoOpsOrder order) => order.status == SpetoOrderStatus.active)
+        .length;
+  }
+
+  String _sectionTitle(_OrderQueueFilter filter) {
+    return switch (filter) {
+      _OrderQueueFilter.all => 'Tüm Siparişler',
+      _OrderQueueFilter.fresh => 'Yeni Siparişler',
+      _OrderQueueFilter.preparing => 'Hazırlanan Siparişler',
+      _OrderQueueFilter.ready => 'Hazır Siparişler',
+      _OrderQueueFilter.delivered => 'Tamamlanan Siparişler',
+      _OrderQueueFilter.cancelled => 'İptal Siparişleri',
+    };
+  }
+
+  String _emptyDescription(_OrderQueueFilter filter) {
+    return switch (filter) {
+      _OrderQueueFilter.all =>
+        'Henüz görüntülenecek sipariş yok. Yeni siparişler geldiğinde burada listelenecek.',
+      _OrderQueueFilter.fresh => 'Onay bekleyen yeni sipariş görünmüyor.',
+      _OrderQueueFilter.preparing =>
+        'Hazırlık hattında bekleyen sipariş görünmüyor.',
+      _OrderQueueFilter.ready => 'Teslime hazır sipariş görünmüyor.',
+      _OrderQueueFilter.delivered => 'Tamamlanan sipariş henüz oluşmadı.',
+      _OrderQueueFilter.cancelled => 'İptal edilen sipariş görünmüyor.',
+    };
+  }
+
+  Future<void> _openFilters() async {
+    _OrderDateFilter selectedDateFilter = _dateFilter;
+    String? selectedPayment = _paymentFilter;
+    _OrderQueueFilter selectedStatus = _currentFilter;
+
+    final _OrdersFilterSheetResult?
+    result = await showModalBottomSheet<_OrdersFilterSheetResult>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder:
+              (
+                BuildContext context,
+                void Function(void Function()) setSheetState,
+              ) {
+                return Padding(
+                  padding: EdgeInsets.only(
+                    left: 12,
+                    right: 12,
+                    bottom: MediaQuery.of(context).viewInsets.bottom,
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                      decoration: const BoxDecoration(
+                        color: _panelStrong,
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(32),
+                        ),
+                      ),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Row(
+                              children: <Widget>[
+                                const Expanded(
+                                  child: Text(
+                                    'Filtrele',
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w800,
+                                      color: _success,
+                                    ),
+                                  ),
+                                ),
+                                if (selectedDateFilter !=
+                                        _OrderDateFilter.all ||
+                                    selectedPayment != null ||
+                                    selectedStatus != _OrderQueueFilter.all)
+                                  TextButton(
+                                    onPressed: () {
+                                      setSheetState(() {
+                                        selectedDateFilter =
+                                            _OrderDateFilter.all;
+                                        selectedPayment = null;
+                                        selectedStatus = _OrderQueueFilter.all;
+                                      });
+                                    },
+                                    child: const Text('Temizle'),
+                                  ),
+                                IconButton(
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  icon: const Icon(Icons.close_rounded),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            const _OrdersFilterSectionLabel(label: 'Tarih'),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: <Widget>[
+                                _OrdersFilterChoiceChip(
+                                  label: 'Tümü',
+                                  selected:
+                                      selectedDateFilter ==
+                                      _OrderDateFilter.all,
+                                  onTap: () {
+                                    setSheetState(() {
+                                      selectedDateFilter = _OrderDateFilter.all;
+                                    });
+                                  },
+                                ),
+                                _OrdersFilterChoiceChip(
+                                  label: 'Bugün',
+                                  selected:
+                                      selectedDateFilter ==
+                                      _OrderDateFilter.today,
+                                  onTap: () {
+                                    setSheetState(() {
+                                      selectedDateFilter =
+                                          _OrderDateFilter.today;
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+                            const _OrdersFilterSectionLabel(
+                              label: 'Ödeme Tipi',
+                            ),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: <Widget>[
+                                _OrdersFilterChoiceChip(
+                                  label: 'Tümü',
+                                  selected: selectedPayment == null,
+                                  onTap: () {
+                                    setSheetState(() {
+                                      selectedPayment = null;
+                                    });
+                                  },
+                                ),
+                                ..._paymentOptions.map((String method) {
+                                  return _OrdersFilterChoiceChip(
+                                    label: method,
+                                    selected: selectedPayment == method,
+                                    onTap: () {
+                                      setSheetState(() {
+                                        selectedPayment = method;
+                                      });
+                                    },
+                                  );
+                                }),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+                            const _OrdersFilterSectionLabel(label: 'Durum'),
+                            const SizedBox(height: 10),
+                            ..._filters.map((
+                              (_OrderQueueFilter, String) entry,
+                            ) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _OrdersStatusSheetTile(
+                                  label: entry.$2,
+                                  selected: selectedStatus == entry.$1,
+                                  onTap: () {
+                                    setSheetState(() {
+                                      selectedStatus = entry.$1;
+                                    });
+                                  },
+                                ),
+                              );
+                            }),
+                            const SizedBox(height: 14),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton(
+                                onPressed: () {
+                                  Navigator.of(context).pop(
+                                    _OrdersFilterSheetResult(
+                                      dateFilter: selectedDateFilter,
+                                      paymentMethod: selectedPayment,
+                                      statusFilter: selectedStatus,
+                                    ),
+                                  );
+                                },
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFFE7F3E8),
+                                  foregroundColor: _success,
+                                ),
+                                child: const Text('Sonuçları Göster'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+        );
+      },
+    );
+    if (!mounted || result == null) {
+      return;
+    }
+    setState(() {
+      _dateFilter = result.dateFilter;
+      _paymentFilter = result.paymentMethod;
+    });
+    final int nextIndex = _filters.indexWhere(
+      (((_OrderQueueFilter, String) entry) => entry.$1 == result.statusFilter),
+    );
+    if (nextIndex >= 0 && nextIndex != _currentTabIndex) {
+      _tabController.animateTo(nextIndex);
+    }
+  }
+
+  Widget _buildCompactView(BuildContext context) {
+    final int todayOrders = _todayOrdersCount();
+    final int activeOrders = _activeOrdersCount();
+    final int freshCount = _filteredOrders(_OrderQueueFilter.fresh).length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: _success,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.receipt_long_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Siparişler',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                  color: _ink,
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ),
+            IconButton.filledTonal(
+              onPressed: _openOrderHistory,
+              style: IconButton.styleFrom(
+                minimumSize: const Size(46, 46),
+                maximumSize: const Size(46, 46),
+                padding: EdgeInsets.zero,
+                backgroundColor: Colors.white.withValues(alpha: 0.92),
+              ),
+              icon: const Icon(Icons.notifications_none_rounded),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _searchController,
+          onChanged: (String value) {
+            setState(() {
+              _query = value;
+            });
+          },
+          decoration: InputDecoration(
+            hintText: 'Siparişler',
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 18,
+              vertical: 16,
+            ),
+            suffixIconConstraints: const BoxConstraints(minWidth: 96),
+            suffixIcon: Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  if (_query.isNotEmpty)
+                    IconButton(
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {
+                          _query = '';
+                        });
+                      },
+                      icon: const Icon(Icons.close_rounded),
+                    )
+                  else
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: Icon(Icons.search_rounded, color: _muted),
+                    ),
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: <Widget>[
+                      IconButton(
+                        onPressed: _openFilters,
+                        icon: const Icon(Icons.tune_rounded),
+                      ),
+                      if (_activeFilterCount > 0)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: _accent,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.white,
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.8),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _line.withValues(alpha: 0.92)),
+          ),
+          child: TabBar(
+            controller: _tabController,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            labelColor: _success,
+            unselectedLabelColor: _muted,
+            dividerColor: Colors.transparent,
+            splashFactory: NoSplash.splashFactory,
+            labelStyle: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+            ),
+            unselectedLabelStyle: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+            indicator: BoxDecoration(
+              color: _successSoft,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFD6EBDD)),
+            ),
+            indicatorSize: TabBarIndicatorSize.tab,
+            labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+            tabs: _filters
+                .map(
+                  (((_OrderQueueFilter, String) entry) => Tab(
+                    height: 38,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(entry.$2),
+                    ),
+                  )),
+                )
+                .toList(growable: false),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: _CompactOrderStatCard(
+                icon: Icons.calendar_today_outlined,
+                label: 'Bugünkü Sipariş',
+                value: '$todayOrders',
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _CompactOrderStatCard(
+                icon: Icons.notifications_none_rounded,
+                label: 'Aktif Sipariş',
+                value: '$activeOrders',
+                trailing: const Icon(
+                  Icons.chevron_right_rounded,
+                  color: _muted,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (freshCount > 0) ...<Widget>[
+          const SizedBox(height: 12),
+          _OrdersAlertCard(
+            count: freshCount,
+            onTap: () {
+              final int freshIndex = _filters.indexWhere(
+                (((_OrderQueueFilter, String) entry) =>
+                    entry.$1 == _OrderQueueFilter.fresh),
+              );
+              if (freshIndex >= 0) {
+                _tabController.animateTo(freshIndex);
+              }
+            },
+          ),
+        ],
+        const SizedBox(height: 14),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: _filters
+                .map(
+                  (((_OrderQueueFilter, String) entry) => _CompactOrdersList(
+                    title: _sectionTitle(entry.$1),
+                    subtitle: '${_filteredOrders(entry.$1).length} sipariş',
+                    orders: _filteredOrders(entry.$1),
+                    emptyDescription: _emptyDescription(entry.$1),
+                    onAdvance: widget.onAdvance,
+                    onShowAll: entry.$1 == _OrderQueueFilter.all
+                        ? null
+                        : _openAllOrders,
+                  )),
+                )
+                .toList(growable: false),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopView(BuildContext context) {
+    final int freshCount = _filteredOrders(_OrderQueueFilter.fresh).length;
+    final int preparingCount = _filteredOrders(
+      _OrderQueueFilter.preparing,
+    ).length;
+    final int readyCount = _filteredOrders(_OrderQueueFilter.ready).length;
+    final int deliveredCount = _filteredOrders(
+      _OrderQueueFilter.delivered,
+    ).length;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _OpsPageIntroCard(
+            compact: false,
+            icon: Icons.receipt_long_rounded,
+            title: 'Siparişler',
+            subtitle:
+                'Yeni, hazırlanan, hazır ve tamamlanan siparişleri tek akıştan yönet.',
+            tone: _success,
+            trailing: _HeaderActionPill(
+              label: 'Sipariş geçmişi',
+              icon: Icons.history_rounded,
+              onTap: _openOrderHistory,
+            ),
+            badges: <Widget>[
+              _OpsInlineStat(
+                label: 'Toplam',
+                value: '${_filteredOrders(_OrderQueueFilter.all).length}',
+                tone: _success,
+              ),
+              _OpsInlineStat(label: 'Yeni', value: '$freshCount', tone: _info),
+              _OpsInlineStat(
+                label: 'Hazırlık',
+                value: '$preparingCount',
+                tone: _warning,
+              ),
+              _OpsInlineStat(
+                label: 'Hazır',
+                value: '$readyCount',
+                tone: _accent,
+              ),
+              _OpsInlineStat(
+                label: 'Teslim',
+                value: '$deliveredCount',
+                tone: _success,
+              ),
+            ],
+            footer: Column(
+              children: <Widget>[
+                TextField(
+                  controller: _searchController,
+                  onChanged: (String value) {
+                    setState(() {
+                      _query = value;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Sipariş, mağaza veya ödeme yöntemi ara',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: IconButton(
+                      onPressed: _openFilters,
+                      icon: Stack(
+                        clipBehavior: Clip.none,
+                        children: <Widget>[
+                          const Icon(Icons.tune_rounded),
+                          if (_activeFilterCount > 0)
+                            Positioned(
+                              top: 1,
+                              right: 0,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: _accent,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 1.3,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF6FAF7),
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: const Color(0xFFDDECE4)),
+                  ),
+                  child: TabBar(
+                    controller: _tabController,
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    labelColor: _success,
+                    unselectedLabelColor: _muted,
+                    dividerColor: Colors.transparent,
+                    splashFactory: NoSplash.splashFactory,
+                    labelStyle: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    unselectedLabelStyle: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    indicator: BoxDecoration(
+                      color: _successSoft,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: const Color(0xFFD6EBDD)),
+                    ),
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    tabs: _filters
+                        .map(
+                          (((_OrderQueueFilter, String) entry) => Tab(
+                            height: 44,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                              ),
+                              child: Text(entry.$2),
+                            ),
+                          )),
+                        )
+                        .toList(growable: false),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: _SurfaceCard(
+              padding: const EdgeInsets.all(14),
+              child: TabBarView(
+                controller: _tabController,
+                children: _filters
+                    .map(
+                      (((_OrderQueueFilter, String) entry) => _OrdersTabBody(
+                        filter: entry.$1,
+                        title: entry.$2,
+                        orders: _filteredOrders(entry.$1),
+                        compact: false,
+                        onAdvance: widget.onAdvance,
+                      )),
+                    )
+                    .toList(growable: false),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final bool compact = MediaQuery.sizeOf(context).width < 860;
-    return DefaultTabController(
-      length: _filters.length,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(4, 4, 4, 24),
-        child: _SurfaceCard(
-          padding: const EdgeInsets.all(22),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          'Tüm siparişler',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Yeni, hazırlanan, hazır, teslim edilen ve iptal edilen siparişleri aynı akıştan yönet.',
-                          style: TextStyle(color: _muted, height: 1.5),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  _StatusPill(
-                    label: '${widget.orders.length} toplam sipariş',
-                    color: _accent,
-                    backgroundColor: _accentSoft,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _filters
-                    .map(
-                      ((entry) => _InfoPill(
-                        label: '${entry.$2} • ${_countFor(entry.$1)}',
-                      )),
-                    )
-                    .toList(growable: false),
-              ),
-              const SizedBox(height: 18),
-              TabBar(
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                labelColor: _ink,
-                unselectedLabelColor: _muted,
-                dividerColor: Colors.transparent,
-                indicator: BoxDecoration(
-                  color: _accentSoft,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: const Color(0xFFFFD6A3)),
-                ),
-                tabs: _filters
-                    .map(
-                      ((entry) => Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Tab(text: entry.$2),
-                      )),
-                    )
-                    .toList(growable: false),
-              ),
-              const SizedBox(height: 18),
-              Expanded(
-                child: TabBarView(
-                  children: _filters
-                      .map(
-                        ((entry) => _OrdersTabBody(
-                          filter: entry.$1,
-                          title: entry.$2,
-                          orders: _filteredOrders(entry.$1),
-                          compact: compact,
-                          onAdvance: widget.onAdvance,
-                        )),
-                      )
-                      .toList(growable: false),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    return compact ? _buildCompactView(context) : _buildDesktopView(context);
   }
 }
 
@@ -4290,14 +5038,14 @@ class _OrdersTabBody extends StatelessWidget {
     if (filter == _OrderQueueFilter.all) {
       return _AllOrdersList(
         orders: orders,
-        compact: compact,
+        compact: false,
         onAdvance: onAdvance,
       );
     }
     if (filter == _OrderQueueFilter.preparing) {
       return _AllOrdersList(
         orders: orders,
-        compact: compact,
+        compact: false,
         onAdvance: onAdvance,
         headerLabel: 'Hazırlık hattı',
       );
@@ -4310,16 +5058,6 @@ class _OrdersTabBody extends StatelessWidget {
       _OrderQueueFilter.all ||
       _OrderQueueFilter.preparing => SpetoOpsOrderStage.created,
     };
-    if (compact) {
-      return SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 92),
-        child: _MobileOrderStageSection(
-          stage: stage,
-          orders: orders,
-          onAdvance: onAdvance,
-        ),
-      );
-    }
     return Center(
       child: SizedBox(
         height: 560,
@@ -4327,6 +5065,350 @@ class _OrdersTabBody extends StatelessWidget {
           stage: stage,
           orders: orders,
           onAdvance: onAdvance,
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactOrdersList extends StatelessWidget {
+  const _CompactOrdersList({
+    required this.title,
+    required this.subtitle,
+    required this.orders,
+    required this.emptyDescription,
+    required this.onAdvance,
+    this.onShowAll,
+  });
+
+  final String title;
+  final String subtitle;
+  final List<SpetoOpsOrder> orders;
+  final String emptyDescription;
+  final Future<void> Function(SpetoOpsOrder order, SpetoOpsOrderStage stage)
+  onAdvance;
+  final VoidCallback? onShowAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool empty = orders.isEmpty;
+    return ListView.separated(
+      padding: const EdgeInsets.only(bottom: 12),
+      itemCount: empty ? 2 : orders.length + 1,
+      separatorBuilder: (_, int index) =>
+          SizedBox(height: index == 0 ? 12 : 10),
+      itemBuilder: (BuildContext context, int index) {
+        if (index == 0) {
+          return _OrdersSectionHeader(
+            title: title,
+            subtitle: subtitle,
+            onShowAll: onShowAll,
+          );
+        }
+        if (empty) {
+          return _EmptyState(
+            title: '$title boş',
+            description: emptyDescription,
+            icon: Icons.inbox_outlined,
+          );
+        }
+        final SpetoOpsOrder order = orders[index - 1];
+        return _MobileOrderCard(order: order, onAdvance: onAdvance);
+      },
+    );
+  }
+}
+
+class _OrdersFilterSheetResult {
+  const _OrdersFilterSheetResult({
+    required this.dateFilter,
+    required this.paymentMethod,
+    required this.statusFilter,
+  });
+
+  final _OrderDateFilter dateFilter;
+  final String? paymentMethod;
+  final _OrderQueueFilter statusFilter;
+}
+
+class _CompactOrderStatCard extends StatelessWidget {
+  const _CompactOrderStatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.trailing,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _line.withValues(alpha: 0.94)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: _successSoft,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: _success, size: 18),
+              ),
+              const Spacer(),
+              if (trailing case final Widget trailingWidget) trailingWidget,
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            label,
+            style: const TextStyle(
+              color: _muted,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              color: _ink,
+              fontWeight: FontWeight.w900,
+              fontSize: 32,
+              height: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrdersAlertCard extends StatelessWidget {
+  const _OrdersAlertCard({required this.count, this.onTap});
+
+  final int count;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget child = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: _warningSoft,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFF2E3B5)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1D88E),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.notifications_rounded,
+              color: _accentDeep,
+              size: 17,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              '$count yeni sipariş bekliyor',
+              style: const TextStyle(fontWeight: FontWeight.w800, color: _ink),
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: _muted),
+        ],
+      ),
+    );
+    if (onTap == null) {
+      return child;
+    }
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _OrdersSectionHeader extends StatelessWidget {
+  const _OrdersSectionHeader({
+    required this.title,
+    required this.subtitle,
+    this.onShowAll,
+  });
+
+  final String title;
+  final String subtitle;
+  final VoidCallback? onShowAll;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  color: _ink,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  color: _muted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (onShowAll != null)
+          TextButton.icon(
+            onPressed: onShowAll,
+            iconAlignment: IconAlignment.end,
+            icon: const Icon(Icons.chevron_right_rounded, size: 18),
+            label: const Text('Tümünü Gör'),
+          ),
+      ],
+    );
+  }
+}
+
+class _OrdersFilterSectionLabel extends StatelessWidget {
+  const _OrdersFilterSectionLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(
+        color: _ink,
+        fontWeight: FontWeight.w800,
+        fontSize: 16,
+      ),
+    );
+  }
+}
+
+class _OrdersFilterChoiceChip extends StatelessWidget {
+  const _OrdersFilterChoiceChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: selected ? _successSoft : const Color(0xFFF4F1EA),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? const Color(0xFFD7EDE2) : _line,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? _success : _muted,
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OrdersStatusSheetTile extends StatelessWidget {
+  const _OrdersStatusSheetTile({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected ? const Color(0xFFD7EDE2) : _line,
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                selected
+                    ? Icons.check_circle_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                color: selected ? _success : _muted,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: _ink,
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: _muted),
+            ],
+          ),
         ),
       ),
     );
@@ -4350,7 +5432,7 @@ class _AllOrdersList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Widget content = ListView.separated(
-      padding: EdgeInsets.only(bottom: compact ? 96 : 8),
+      padding: EdgeInsets.only(bottom: compact ? 4 : 8),
       itemCount: orders.length,
       separatorBuilder: (_, int index) => const SizedBox(height: 12),
       itemBuilder: (BuildContext context, int index) {
@@ -4506,6 +5588,7 @@ class _SalesReportsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool compact = MediaQuery.sizeOf(context).width < 760;
     final List<SpetoOpsOrder> completedOrders = orders
         .where(
           (SpetoOpsOrder order) =>
@@ -4556,9 +5639,12 @@ class _SalesReportsPage extends StatelessWidget {
             title: 'Satış raporları',
             subtitle:
                 '$vendorLabel için ciro, ürün hızı ve operasyon verimini tek akışta izle.',
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
+            trailing: _InfoPill(
+              label: '${completedOrders.length} teslim',
+              compact: true,
+            ),
+            child: _ResponsiveCardGrid(
+              minItemWidth: compact ? 150 : 210,
               children: <Widget>[
                 _SummaryStatCard(
                   label: 'Toplam ciro',
@@ -4688,7 +5774,7 @@ class _SalesReportsPage extends StatelessWidget {
   }
 }
 
-class _ProductsManagementPage extends StatelessWidget {
+class _ProductsManagementPage extends StatefulWidget {
   const _ProductsManagementPage({
     required this.session,
     required this.items,
@@ -4734,12 +5820,33 @@ class _ProductsManagementPage extends StatelessWidget {
   final ValueChanged<SpetoCatalogContentBlock> onEditContentBlock;
 
   @override
+  State<_ProductsManagementPage> createState() =>
+      _ProductsManagementPageState();
+}
+
+class _ProductsManagementPageState extends State<_ProductsManagementPage> {
+  bool _showSummary = true;
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) {
+      return false;
+    }
+    final bool nextValue = notification.metrics.pixels <= 0.5;
+    if (nextValue != _showSummary) {
+      setState(() {
+        _showSummary = nextValue;
+      });
+    }
+    return false;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final int totalSections = vendors.fold<int>(
+    final int totalSections = widget.vendors.fold<int>(
       0,
       (int sum, SpetoCatalogVendor vendor) => sum + vendor.sections.length,
     );
-    final int totalProducts = vendors.fold<int>(
+    final int totalProducts = widget.vendors.fold<int>(
       0,
       (int sum, SpetoCatalogVendor vendor) =>
           sum +
@@ -4752,11 +5859,6 @@ class _ProductsManagementPage extends StatelessWidget {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final bool compact = constraints.maxWidth < 760;
-        final List<Widget> summaryPills = <Widget>[
-          _InfoPill(label: '${items.length} stok kartı'),
-          _InfoPill(label: '$totalSections kategori'),
-          _InfoPill(label: '$totalProducts vitrin ürünü'),
-        ];
         return DefaultTabController(
           length: 2,
           child: Padding(
@@ -4764,115 +5866,171 @@ class _ProductsManagementPage extends StatelessWidget {
             child: Column(
               children: <Widget>[
                 _SurfaceCard(
-                  padding: EdgeInsets.all(compact ? 14 : 20),
+                  padding: EdgeInsets.all(compact ? 14 : 18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      if (compact)
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              'Ürün yönetimi',
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 20,
-                                  ),
-                            ),
-                            const SizedBox(height: 6),
-                            const Text(
-                              'Stok operasyonu ile vitrin/katalog düzenini tek merkezden yönet.',
-                              style: TextStyle(color: _muted, height: 1.45),
-                            ),
-                            const SizedBox(height: 10),
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: <Widget>[
-                                  summaryPills[0],
-                                  const SizedBox(width: 8),
-                                  summaryPills[1],
-                                  const SizedBox(width: 8),
-                                  summaryPills[2],
-                                ],
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder:
+                            (Widget child, Animation<double> animation) {
+                              return SizeTransition(
+                                sizeFactor: animation,
+                                axisAlignment: -1,
+                                child: FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                ),
+                              );
+                            },
+                        child: !compact || _showSummary
+                            ? Padding(
+                                key: const ValueKey<String>(
+                                  'products-summary-visible',
+                                ),
+                                padding: EdgeInsets.only(
+                                  bottom: compact ? 12 : 16,
+                                ),
+                                child: _OpsPageIntroHeader(
+                                  icon: Icons.inventory_2_outlined,
+                                  title: 'Ürünler',
+                                  subtitle:
+                                      'Stok operasyonu ile vitrin ve katalog düzenini aynı çalışma alanında yönet.',
+                                  tone: _success,
+                                  compact: compact,
+                                ),
+                              )
+                            : const SizedBox(
+                                key: ValueKey<String>(
+                                  'products-summary-hidden',
+                                ),
                               ),
-                            ),
-                          ],
-                        )
-                      else
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      ),
+                      if (!compact || _showSummary) ...<Widget>[
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
                           children: <Widget>[
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Text(
-                                    'Ürün yönetimi',
-                                    style: Theme.of(context).textTheme.titleLarge
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  const Text(
-                                    'Stok operasyonu ile vitrin/katalog düzenini tek merkezden yönet.',
-                                    style: TextStyle(
-                                      color: _muted,
-                                      height: 1.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            _OpsInlineStat(
+                              label: 'Stok kartı',
+                              value: '${widget.items.length}',
+                              tone: _success,
                             ),
-                            const SizedBox(width: 12),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: summaryPills,
+                            _OpsInlineStat(
+                              label: 'Kategori',
+                              value: '$totalSections',
+                              tone: _info,
+                            ),
+                            _OpsInlineStat(
+                              label: 'Vitrin ürünü',
+                              value: '$totalProducts',
+                              tone: _accent,
                             ),
                           ],
                         ),
-                      SizedBox(height: compact ? 12 : 18),
-                      const TabBar(
-                        isScrollable: true,
-                        tabAlignment: TabAlignment.start,
-                        tabs: <Widget>[
-                          Tab(text: 'Stok ve ürünler'),
-                          Tab(text: 'Vitrin ve katalog'),
-                        ],
+                        SizedBox(height: compact ? 12 : 16),
+                      ],
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: compact ? 6 : 8,
+                          vertical: compact ? 5 : 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF6FAF7),
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: const Color(0xFFDDECE4)),
+                        ),
+                        child: TabBar(
+                          isScrollable: true,
+                          tabAlignment: TabAlignment.start,
+                          labelColor: _success,
+                          unselectedLabelColor: _muted,
+                          dividerColor: Colors.transparent,
+                          splashFactory: NoSplash.splashFactory,
+                          labelStyle: TextStyle(
+                            fontSize: compact ? 14 : 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          unselectedLabelStyle: TextStyle(
+                            fontSize: compact ? 14 : 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          indicatorSize: TabBarIndicatorSize.tab,
+                          indicator: BoxDecoration(
+                            color: _successSoft,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: const Color(0xFFD6EBDD)),
+                          ),
+                          onTap: (_) {
+                            if (!_showSummary) {
+                              setState(() {
+                                _showSummary = true;
+                              });
+                            }
+                          },
+                          tabs: <Widget>[
+                            Tab(
+                              height: compact ? 40 : 44,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                ),
+                                child: const Text('Stok ve ürünler'),
+                              ),
+                            ),
+                            Tab(
+                              height: compact ? 40 : 44,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                ),
+                                child: const Text('Vitrin ve katalog'),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 Expanded(
-                  child: TabBarView(
-                    children: <Widget>[
-                      _InventoryPage(
-                        items: items,
-                        selectedId: selectedId,
-                        movements: movements,
-                        onSelected: onSelected,
-                        onAdjust: onAdjust,
-                        onRestock: onRestock,
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: compact
+                        ? _handleScrollNotification
+                        : (_) => false,
+                    child: _SurfaceCard(
+                      padding: EdgeInsets.all(compact ? 10 : 14),
+                      child: TabBarView(
+                        children: <Widget>[
+                          _InventoryPage(
+                            items: widget.items,
+                            selectedId: widget.selectedId,
+                            movements: widget.movements,
+                            onSelected: widget.onSelected,
+                            onAdjust: widget.onAdjust,
+                            onRestock: widget.onRestock,
+                          ),
+                          _CatalogPage(
+                            session: widget.session,
+                            vendors: widget.vendors,
+                            events: widget.events,
+                            contentBlocks: widget.contentBlocks,
+                            onCreateVendor: widget.onCreateVendor,
+                            onEditVendor: widget.onEditVendor,
+                            onCreateSection: widget.onCreateSection,
+                            onEditSection: widget.onEditSection,
+                            onCreateProduct: widget.onCreateProduct,
+                            onEditProduct: widget.onEditProduct,
+                            onEditEvent: widget.onEditEvent,
+                            onEditContentBlock: widget.onEditContentBlock,
+                          ),
+                        ],
                       ),
-                      _CatalogPage(
-                        session: session,
-                        vendors: vendors,
-                        events: events,
-                        contentBlocks: contentBlocks,
-                        onCreateVendor: onCreateVendor,
-                        onEditVendor: onEditVendor,
-                        onCreateSection: onCreateSection,
-                        onEditSection: onEditSection,
-                        onCreateProduct: onCreateProduct,
-                        onEditProduct: onEditProduct,
-                        onEditEvent: onEditEvent,
-                        onEditContentBlock: onEditContentBlock,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ],
@@ -4897,6 +6055,7 @@ class _CampaignsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool compact = MediaQuery.sizeOf(context).width < 760;
     final double averageDiscount = offers.isEmpty
         ? 0
         : offers.fold<int>(
@@ -4917,41 +6076,66 @@ class _CampaignsPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          _SectionCard(
+          _OpsPageIntroCard(
+            compact: compact,
+            icon: Icons.local_offer_outlined,
             title: 'Kampanyalar',
             subtitle:
-                '$vendorLabel için vitrine çıkan fırsatları, indirim temposunu ve stok riskini yönet.',
+                '$vendorLabel için vitrine çıkan teklifleri, indirim temposunu ve stok riskini tek görünümde takip et.',
+            tone: _success,
             trailing: FilledButton.tonalIcon(
               onPressed: () => onNavigate(_StockDestination.products),
               icon: const Icon(Icons.inventory_2_outlined),
               label: const Text('Ürünlere git'),
             ),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: <Widget>[
-                _SummaryStatCard(
-                  label: 'Aktif kampanya',
-                  value: '${offers.length}',
-                  tone: _accent,
-                  note: 'Vitrinde yayınlanan teklif',
-                ),
-                _SummaryStatCard(
-                  label: 'Ortalama indirim',
-                  value: '%${averageDiscount.toStringAsFixed(0)}',
-                  tone: _success,
-                  note: '$expiringSoon kampanya 1 saat içinde bitiyor',
-                ),
-                _SummaryStatCard(
-                  label: 'Stok riski',
-                  value: '$stockRiskCount',
-                  tone: _danger,
-                  note: 'Stok problemi olan kampanya',
-                ),
-              ],
-            ),
+            badges: <Widget>[
+              _OpsInlineStat(
+                label: 'Aktif',
+                value: '${offers.length}',
+                tone: _success,
+              ),
+              _OpsInlineStat(
+                label: 'Ort. indirim',
+                value: '%${averageDiscount.toStringAsFixed(0)}',
+                tone: _accent,
+              ),
+              _OpsInlineStat(
+                label: 'Bitiyor',
+                value: '$expiringSoon',
+                tone: _warning,
+              ),
+              _OpsInlineStat(
+                label: 'Riskli stok',
+                value: '$stockRiskCount',
+                tone: _danger,
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
+          _ResponsiveCardGrid(
+            minItemWidth: compact ? 156 : 210,
+            children: <Widget>[
+              _SummaryStatCard(
+                label: 'Aktif kampanya',
+                value: '${offers.length}',
+                tone: _success,
+                note: 'Vitrinde yayınlanan teklif',
+              ),
+              _SummaryStatCard(
+                label: 'Ortalama indirim',
+                value: '%${averageDiscount.toStringAsFixed(0)}',
+                tone: _accent,
+                note: '$expiringSoon kampanya 1 saat içinde bitiyor',
+              ),
+              _SummaryStatCard(
+                label: 'Stok riski',
+                value: '$stockRiskCount',
+                tone: _danger,
+                note: 'Stok problemi olan kampanya',
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
           _SectionCard(
             title: 'Yayındaki teklifler',
             subtitle:
@@ -4995,6 +6179,7 @@ class _RevenuePaymentsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool compact = MediaQuery.sizeOf(context).width < 760;
     final List<SpetoOpsOrder> settledOrders = orders
         .where(
           (SpetoOpsOrder order) =>
@@ -5031,7 +6216,7 @@ class _RevenuePaymentsPage extends StatelessWidget {
         child: Column(
           children: <Widget>[
             _SurfaceCard(
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.all(compact ? 16 : 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
@@ -5046,15 +6231,63 @@ class _RevenuePaymentsPage extends StatelessWidget {
                     'Tahsil edilen siparişleri, ödeme yöntemi dağılımını ve entegrasyon bağlantılarını aynı görünümde takip et.',
                     style: TextStyle(color: _muted, height: 1.5),
                   ),
-                  const SizedBox(height: 18),
-                  const TabBar(
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.start,
-                    tabs: <Widget>[
-                      Tab(text: 'Gelir özeti'),
-                      Tab(text: 'Ödeme yöntemleri'),
-                      Tab(text: 'Bağlantılar'),
-                    ],
+                  SizedBox(height: compact ? 14 : 18),
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compact ? 6 : 8,
+                      vertical: compact ? 5 : 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _panel,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: const Color(0x1FD27A1F)),
+                    ),
+                    child: TabBar(
+                      isScrollable: true,
+                      tabAlignment: TabAlignment.start,
+                      labelColor: _ink,
+                      unselectedLabelColor: _muted,
+                      dividerColor: Colors.transparent,
+                      splashFactory: NoSplash.splashFactory,
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      labelStyle: TextStyle(
+                        fontSize: compact ? 14 : 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      unselectedLabelStyle: TextStyle(
+                        fontSize: compact ? 14 : 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      indicator: BoxDecoration(
+                        color: _accentSoft,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: const Color(0xFFFFD6A3)),
+                      ),
+                      tabs: <Widget>[
+                        Tab(
+                          height: compact ? 40 : 44,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: const Text('Gelir özeti'),
+                          ),
+                        ),
+                        Tab(
+                          height: compact ? 40 : 44,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: const Text('Ödeme yöntemleri'),
+                          ),
+                        ),
+                        Tab(
+                          height: compact ? 40 : 44,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: const Text('Bağlantılar'),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -5070,9 +6303,8 @@ class _RevenuePaymentsPage extends StatelessWidget {
                       children: <Widget>[
                         _SectionCard(
                           title: 'Tahsilat özeti',
-                          child: Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
+                          child: _ResponsiveCardGrid(
+                            minItemWidth: compact ? 156 : 210,
                             children: <Widget>[
                               _SummaryStatCard(
                                 label: 'Tahsil edilen gelir',
@@ -5217,6 +6449,7 @@ class _HelpCenterPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool compact = MediaQuery.sizeOf(context).width < 760;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(4, 4, 4, 24),
       child: Column(
@@ -5226,9 +6459,8 @@ class _HelpCenterPage extends StatelessWidget {
             title: 'Yardım merkezi',
             subtitle:
                 '$vendorLabel operasyonu için hızlı çözüm adımlarını ve destek temaslarını burada tut.',
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
+            child: _ResponsiveCardGrid(
+              minItemWidth: compact ? 156 : 210,
               children: const <Widget>[
                 _SummaryStatCard(
                   label: 'Öncelik 1',
@@ -5293,6 +6525,10 @@ class _AccountPage extends StatelessWidget {
   const _AccountPage({
     required this.session,
     required this.vendorLabel,
+    required this.selectedVendor,
+    required this.vendors,
+    required this.integrations,
+    required this.orders,
     required this.snapshot,
     required this.offers,
     required this.onSignOut,
@@ -5300,106 +6536,1854 @@ class _AccountPage extends StatelessWidget {
 
   final SpetoSession session;
   final String vendorLabel;
+  final SpetoCatalogVendor? selectedVendor;
+  final List<SpetoCatalogVendor> vendors;
+  final List<SpetoIntegrationConnection> integrations;
+  final List<SpetoOpsOrder> orders;
   final SpetoInventorySnapshot? snapshot;
   final List<SpetoHappyHourOffer> offers;
   final VoidCallback onSignOut;
 
+  void _pushPage(BuildContext context, Widget page) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (BuildContext context) => page));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bool compact = MediaQuery.sizeOf(context).width < 760;
+    final int openOrders = snapshot?.openOrdersCount ?? 0;
+    final int lowStock = snapshot?.lowStockCount ?? 0;
+    final List<SpetoCatalogVendor> resolvedVendors = vendors.isNotEmpty
+        ? vendors
+        : selectedVendor == null
+        ? const <SpetoCatalogVendor>[]
+        : <SpetoCatalogVendor>[selectedVendor!];
+    final SpetoCatalogVendor? vendor =
+        selectedVendor ??
+        (resolvedVendors.isNotEmpty ? resolvedVendors.first : null);
+    final List<SpetoCatalogOperatorAccount> operatorAccounts =
+        vendor != null && vendor.operatorAccounts.isNotEmpty
+        ? vendor.operatorAccounts
+        : resolvedVendors
+              .expand((SpetoCatalogVendor vendor) => vendor.operatorAccounts)
+              .toList(growable: false);
+    final Iterable<String> categorySource = vendor?.cuisine.isNotEmpty == true
+        ? vendor!.cuisine
+              .split(',')
+              .map((String item) => item.trim())
+              .where((String value) => value.isNotEmpty)
+        : (snapshot?.items ?? const <SpetoInventoryItem>[])
+              .map((SpetoInventoryItem item) => item.category.trim())
+              .where((String value) => value.isNotEmpty)
+              .toSet();
+    final String categoryLine = categorySource
+        .take(3)
+        .toList(growable: false)
+        .join(' • ');
+    final String accessLabel = session.vendorScopes.length <= 1
+        ? 'Merkez şube'
+        : '${session.vendorScopes.length} şube erişimi';
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(4, 4, 4, 24),
-      child: Column(
+      padding: EdgeInsets.fromLTRB(
+        compact ? 6 : 16,
+        compact ? 4 : 8,
+        compact ? 6 : 16,
+        compact ? 112 : 28,
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 620),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      'Hesabım',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  _AccountIconButton(
+                    icon: Icons.notifications_none_rounded,
+                    badgeColor: _accent,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _AccountStoreCard(
+                vendorLabel: vendorLabel,
+                roleLabel: _roleLabel(session.role),
+                email: session.email,
+                accessLabel: accessLabel,
+                categoryLine: categoryLine,
+                onTap: () {
+                  _pushPage(
+                    context,
+                    _AccountBranchManagementPage(
+                      vendors: resolvedVendors,
+                      selectedVendorId: vendor?.vendorId,
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              _AccountMenuGroup(
+                items: <_AccountMenuEntry>[
+                  _AccountMenuEntry(
+                    icon: Icons.person_outline_rounded,
+                    tone: _success,
+                    title: 'Profil Bilgileri',
+                    subtitle: 'İşletme ve iletişim bilgilerinizi düzenleyin',
+                    onTap: () {
+                      _pushPage(
+                        context,
+                        _AccountProfileInfoPage(
+                          session: session,
+                          vendorLabel: vendorLabel,
+                          vendor: vendor,
+                          vendors: resolvedVendors,
+                          operatorAccounts: operatorAccounts,
+                        ),
+                      );
+                    },
+                  ),
+                  _AccountMenuEntry(
+                    icon: Icons.access_time_rounded,
+                    tone: _success,
+                    title: 'Çalışma Saatleri',
+                    subtitle: 'Açılış, kapanış ve tatil günlerini yönetin',
+                    onTap: () {
+                      _pushPage(
+                        context,
+                        _AccountWorkingHoursPage(vendor: vendor),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _AccountMenuGroup(
+                items: <_AccountMenuEntry>[
+                  _AccountMenuEntry(
+                    icon: Icons.account_balance_wallet_outlined,
+                    tone: _success,
+                    title: 'Ödeme ve Finans',
+                    subtitle:
+                        '$openOrders açık sipariş ve ${offers.length} aktif kampanya ile kazanç akışını izleyin',
+                    onTap: () {
+                      _pushPage(
+                        context,
+                        _AccountPaymentFinancePage(
+                          vendorLabel: vendorLabel,
+                          orders: orders,
+                          offers: offers,
+                        ),
+                      );
+                    },
+                  ),
+                  _AccountMenuEntry(
+                    icon: Icons.notifications_active_outlined,
+                    tone: _success,
+                    title: 'Bildirim Ayarları',
+                    subtitle:
+                        '$lowStock kritik stok ve operasyon uyarılarını yönetin',
+                    onTap: () {
+                      _pushPage(
+                        context,
+                        _AccountNotificationsPage(
+                          notificationsEnabled: session.notificationsEnabled,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _AccountMenuGroup(
+                items: <_AccountMenuEntry>[
+                  _AccountMenuEntry(
+                    icon: Icons.extension_outlined,
+                    tone: _success,
+                    title: 'Entegrasyonlar',
+                    subtitle:
+                        'POS, yazarkasa ve ${session.vendorScopes.length} kapsam için bağlantıları yönetin',
+                    onTap: () {
+                      _pushPage(
+                        context,
+                        _AccountIntegrationsSettingsPage(
+                          integrations: integrations,
+                        ),
+                      );
+                    },
+                  ),
+                  _AccountMenuEntry(
+                    icon: Icons.headset_mic_outlined,
+                    tone: _success,
+                    title: 'Destek Merkezi',
+                    subtitle: 'Yardım alın ve destek talebi oluşturun',
+                    onTap: () {
+                      _pushPage(context, const _AccountSupportCenterPage());
+                    },
+                  ),
+                  _AccountMenuEntry(
+                    icon: Icons.shield_outlined,
+                    tone: _success,
+                    title: 'Güvenlik',
+                    subtitle: session.phone.isEmpty
+                        ? 'Şifre ve oturum ayarları'
+                        : 'Şifre, 2FA ve oturum ayarlarını yönetin',
+                    onTap: () {
+                      _pushPage(
+                        context,
+                        _AccountSecurityPage(session: session),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              _AccountLogoutCard(onTap: onSignOut),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountStoreCard extends StatelessWidget {
+  const _AccountStoreCard({
+    required this.vendorLabel,
+    required this.roleLabel,
+    required this.email,
+    required this.accessLabel,
+    required this.categoryLine,
+    this.onTap,
+  });
+
+  final String vendorLabel;
+  final String roleLabel;
+  final String email;
+  final String accessLabel;
+  final String categoryLine;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget card = _SurfaceCard(
+      padding: const EdgeInsets.all(16),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          _SectionCard(
-            title: 'Hesabım',
-            subtitle: 'Oturum bilgisi, erişim kapsamı ve operasyon profili.',
-            trailing: OutlinedButton.icon(
-              onPressed: onSignOut,
-              icon: const Icon(Icons.logout_rounded),
-              label: const Text('Çıkış'),
-            ),
-            child: Row(
-              children: <Widget>[
-                CircleAvatar(
-                  radius: 34,
-                  backgroundColor: _accentSoft,
-                  foregroundColor: _accentDeep,
-                  child: Text(
-                    session.displayName.isEmpty
-                        ? '?'
-                        : session.displayName.characters.first.toUpperCase(),
-                    style: const TextStyle(fontWeight: FontWeight.w800),
+          Stack(
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              Container(
+                width: 76,
+                height: 76,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF232229),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                alignment: Alignment.center,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const <Widget>[
+                    Icon(
+                      Icons.lunch_dining_rounded,
+                      color: Color(0xFFF6B24A),
+                      size: 28,
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'SPETO',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 9,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Positioned(
+                right: -1,
+                bottom: -1,
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: _success,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.white, width: 3),
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        session.displayName,
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        vendorLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
+                        ),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${session.email} • ${_roleLabel(session.role)}',
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _successSoft,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Text(
+                        'Açık',
+                        style: TextStyle(
+                          color: _success,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  categoryLine.isEmpty ? roleLabel : categoryLine,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _muted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: <Widget>[
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 16,
+                      color: _muted,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        accessLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: _muted),
                       ),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: <Widget>[
-                          _InfoPill(label: vendorLabel),
-                          _InfoPill(
-                            label: session.phone.isEmpty
-                                ? 'Telefon yok'
-                                : session.phone,
-                          ),
-                          _InfoPill(
-                            label:
-                                '${session.vendorScopes.length} erişim kapsamı',
-                          ),
-                        ],
+                    ),
+                  ],
+                ),
+                if (email.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Text(
+                    email,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: _muted, fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(Icons.chevron_right_rounded, color: _muted),
+        ],
+      ),
+    );
+    if (onTap == null) {
+      return card;
+    }
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(28),
+        child: card,
+      ),
+    );
+  }
+}
+
+class _AccountMenuGroup extends StatelessWidget {
+  const _AccountMenuGroup({required this.items});
+
+  final List<_AccountMenuEntry> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _line),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x0A1E1917),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        children: List<Widget>.generate(items.length, (int index) {
+          final _AccountMenuEntry entry = items[index];
+          return Column(
+            children: <Widget>[
+              _AccountMenuTile(entry: entry),
+              if (index != items.length - 1)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: _line.withValues(alpha: 0.7),
+                  indent: 68,
+                  endIndent: 18,
+                ),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class _AccountMenuTile extends StatelessWidget {
+  const _AccountMenuTile({required this.entry});
+
+  final _AccountMenuEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: entry.onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: entry.tone.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                alignment: Alignment.center,
+                child: Icon(entry.icon, size: 22, color: entry.tone),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      entry.title,
+                      style: const TextStyle(
+                        color: _ink,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
                       ),
-                    ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      entry.subtitle,
+                      style: const TextStyle(
+                        color: _muted,
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right_rounded, color: _muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountLogoutCard extends StatelessWidget {
+  const _AccountLogoutCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF1F1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFF5D8D8)),
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Icon(Icons.logout_rounded, color: _danger, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Çıkış Yap',
+                style: TextStyle(
+                  color: _danger,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountIconButton extends StatelessWidget {
+  const _AccountIconButton({required this.icon, this.badgeColor});
+
+  final IconData icon;
+  final Color? badgeColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: <Widget>[
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.88),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _line),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, color: _ink),
+        ),
+        if (badgeColor != null)
+          Positioned(
+            right: 2,
+            top: 2,
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: badgeColor,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _AccountMenuEntry {
+  const _AccountMenuEntry({
+    required this.icon,
+    required this.tone,
+    required this.title,
+    required this.subtitle,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final Color tone;
+  final String title;
+  final String subtitle;
+  final VoidCallback? onTap;
+}
+
+class _AccountDetailScaffold extends StatelessWidget {
+  const _AccountDetailScaffold({
+    required this.title,
+    required this.child,
+    this.trailing,
+    this.bottomAction,
+  });
+
+  final String title;
+  final Widget child;
+  final Widget? trailing;
+  final Widget? bottomAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F8F4),
+      body: SafeArea(
+        child: Column(
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+              child: Row(
+                children: <Widget>[
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                  ),
+                  Expanded(
+                    child: Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 44, child: trailing ?? const SizedBox()),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+                child: child,
+              ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: bottomAction == null
+          ? null
+          : SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: bottomAction,
+              ),
+            ),
+    );
+  }
+}
+
+class _DetailSectionCard extends StatelessWidget {
+  const _DetailSectionCard({required this.child, this.padding});
+
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SurfaceCard(
+      padding: padding ?? const EdgeInsets.all(16),
+      child: child,
+    );
+  }
+}
+
+class _DetailListTile extends StatelessWidget {
+  const _DetailListTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.trailing,
+    this.onTap,
+    this.iconTone = _success,
+    this.compact = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final Color iconTone;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget row = Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 12 : 14,
+        vertical: compact ? 10 : 12,
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            width: compact ? 36 : 40,
+            height: compact ? 36 : 40,
+            decoration: BoxDecoration(
+              color: iconTone.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, color: iconTone, size: compact ? 19 : 21),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: _muted,
+                    fontSize: 12.5,
+                    height: 1.35,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          _SectionCard(
-            title: 'Hesap özeti',
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
+          const SizedBox(width: 8),
+          trailing ?? const Icon(Icons.chevron_right_rounded, color: _muted),
+        ],
+      ),
+    );
+    if (onTap == null) {
+      return row;
+    }
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(onTap: onTap, child: row),
+    );
+  }
+}
+
+class _SettingsFooterButton extends StatelessWidget {
+  const _SettingsFooterButton({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton(
+        onPressed: () {},
+        style: FilledButton.styleFrom(
+          backgroundColor: _success,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountProfileInfoPage extends StatelessWidget {
+  const _AccountProfileInfoPage({
+    required this.session,
+    required this.vendorLabel,
+    required this.vendor,
+    required this.vendors,
+    required this.operatorAccounts,
+  });
+
+  final SpetoSession session;
+  final String vendorLabel;
+  final SpetoCatalogVendor? vendor;
+  final List<SpetoCatalogVendor> vendors;
+  final List<SpetoCatalogOperatorAccount> operatorAccounts;
+
+  @override
+  Widget build(BuildContext context) {
+    final String address = vendor?.pickupPoints.isNotEmpty == true
+        ? vendor!.pickupPoints.first.address
+        : 'Merkez şube';
+    return _AccountDetailScaffold(
+      title: 'Profil Bilgileri',
+      trailing: operatorAccounts.isEmpty
+          ? null
+          : IconButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (BuildContext context) =>
+                        _AccountUserManagementPage(
+                          operatorAccounts: operatorAccounts,
+                          vendorLabel: vendorLabel,
+                        ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.group_outlined),
+            ),
+      bottomAction: const _SettingsFooterButton(label: 'Kaydet'),
+      child: Column(
+        children: <Widget>[
+          _DetailSectionCard(
+            child: Column(
               children: <Widget>[
-                _SummaryStatCard(
-                  label: 'Aktif sipariş',
-                  value: '${snapshot?.openOrdersCount ?? 0}',
-                  tone: _success,
-                  note: 'Canlı operasyon yükü',
+                Center(
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: <Widget>[
+                      Container(
+                        width: 88,
+                        height: 88,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF232229),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const <Widget>[
+                            Icon(
+                              Icons.lunch_dining_rounded,
+                              color: Color(0xFFF6B24A),
+                              size: 32,
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'SPETO',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 10,
+                                letterSpacing: 0.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: Container(
+                          width: 26,
+                          height: 26,
+                          decoration: BoxDecoration(
+                            color: _success,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: Colors.white, width: 3),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                _SummaryStatCard(
-                  label: 'Kritik stok',
-                  value: '${snapshot?.lowStockCount ?? 0}',
-                  tone: _warning,
-                  note: 'Müdahale bekleyen SKU',
+                const SizedBox(height: 14),
+                Text(
+                  vendorLabel,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
-                _SummaryStatCard(
-                  label: 'Aktif kampanya',
-                  value: '${offers.length}',
-                  tone: _accent,
-                  note: 'Bu mağaza için vitrinde',
+                const SizedBox(height: 4),
+                Text(
+                  vendor?.cuisine.isNotEmpty == true
+                      ? vendor!.cuisine
+                      : _roleLabel(session.role),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: _muted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _DetailSectionCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: <Widget>[
+                _DetailListTile(
+                  icon: Icons.storefront_outlined,
+                  title: 'İşletme Adı',
+                  subtitle: vendorLabel,
+                  trailing: const SizedBox.shrink(),
+                ),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: _line.withValues(alpha: 0.7),
+                  indent: 64,
+                  endIndent: 14,
+                ),
+                _DetailListTile(
+                  icon: Icons.badge_outlined,
+                  title: 'Yetkili',
+                  subtitle: session.displayName,
+                  trailing: const SizedBox.shrink(),
+                ),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: _line.withValues(alpha: 0.7),
+                  indent: 64,
+                  endIndent: 14,
+                ),
+                _DetailListTile(
+                  icon: Icons.phone_outlined,
+                  title: 'Telefon',
+                  subtitle: session.phone.isEmpty
+                      ? 'Tanımlı değil'
+                      : session.phone,
+                  trailing: const SizedBox.shrink(),
+                ),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: _line.withValues(alpha: 0.7),
+                  indent: 64,
+                  endIndent: 14,
+                ),
+                _DetailListTile(
+                  icon: Icons.mail_outline_rounded,
+                  title: 'E-posta',
+                  subtitle: session.email,
+                  trailing: const SizedBox.shrink(),
+                ),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: _line.withValues(alpha: 0.7),
+                  indent: 64,
+                  endIndent: 14,
+                ),
+                _DetailListTile(
+                  icon: Icons.location_on_outlined,
+                  title: 'Adres',
+                  subtitle: address,
+                  trailing: const SizedBox.shrink(),
+                ),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: _line.withValues(alpha: 0.7),
+                  indent: 64,
+                  endIndent: 14,
+                ),
+                _DetailListTile(
+                  icon: Icons.apartment_rounded,
+                  title: 'Şube Yönetimi',
+                  subtitle: '${vendors.length} şube ve teslim noktası görünümü',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (BuildContext context) =>
+                            _AccountBranchManagementPage(
+                              vendors: vendors,
+                              selectedVendorId: vendor?.vendorId,
+                            ),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AccountWorkingHoursPage extends StatefulWidget {
+  const _AccountWorkingHoursPage({required this.vendor});
+
+  final SpetoCatalogVendor? vendor;
+
+  @override
+  State<_AccountWorkingHoursPage> createState() =>
+      _AccountWorkingHoursPageState();
+}
+
+class _AccountWorkingHoursPageState extends State<_AccountWorkingHoursPage> {
+  late final List<_WorkingHourSlot> _slots = <_WorkingHourSlot>[
+    _WorkingHourSlot(day: 'Pazartesi', hours: '09:00 - 23:00'),
+    _WorkingHourSlot(day: 'Salı', hours: '09:00 - 23:00'),
+    _WorkingHourSlot(day: 'Çarşamba', hours: '09:00 - 23:00'),
+    _WorkingHourSlot(day: 'Perşembe', hours: '09:00 - 23:00'),
+    _WorkingHourSlot(day: 'Cuma', hours: '09:00 - 23:00'),
+    _WorkingHourSlot(day: 'Cumartesi', hours: '10:00 - 23:00'),
+    _WorkingHourSlot(day: 'Pazar', hours: '10:00 - 22:30', enabled: false),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return _AccountDetailScaffold(
+      title: 'Çalışma Saatleri',
+      bottomAction: const _SettingsFooterButton(label: 'Kaydet'),
+      child: Column(
+        children: <Widget>[
+          _DetailSectionCard(
+            child: Column(
+              children: <Widget>[
+                Text(
+                  widget.vendor?.workingHoursLabel.isNotEmpty == true
+                      ? widget.vendor!.workingHoursLabel
+                      : 'Servis saatlerini güncelleyin',
+                  style: const TextStyle(color: _muted),
+                ),
+                const SizedBox(height: 14),
+                ...List<Widget>.generate(_slots.length, (int index) {
+                  final _WorkingHourSlot slot = _slots[index];
+                  return Column(
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              slot.day,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            slot.hours,
+                            style: const TextStyle(
+                              color: _muted,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Switch.adaptive(
+                            value: slot.enabled,
+                            activeTrackColor: _success.withValues(alpha: 0.4),
+                            activeThumbColor: _success,
+                            onChanged: (bool value) {
+                              setState(() {
+                                _slots[index] = slot.copyWith(enabled: value);
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      if (index != _slots.length - 1)
+                        Divider(
+                          height: 18,
+                          thickness: 1,
+                          color: _line.withValues(alpha: 0.7),
+                        ),
+                    ],
+                  );
+                }),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _DetailSectionCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Text(
+                  'Özel Günler',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                ),
+                const SizedBox(height: 10),
+                _DetailListTile(
+                  icon: Icons.event_note_outlined,
+                  title: 'Yeni Yıl',
+                  subtitle: '31 Ocak 2026',
+                  trailing: const Text(
+                    'Kapalı',
+                    style: TextStyle(
+                      color: _danger,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  compact: true,
+                ),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: _line.withValues(alpha: 0.7),
+                  indent: 60,
+                  endIndent: 12,
+                ),
+                _DetailListTile(
+                  icon: Icons.celebration_outlined,
+                  title: 'Ramazan Bayramı',
+                  subtitle: '30 Mar - 01 Nis 10:00 - 18:00',
+                  trailing: const Icon(
+                    Icons.chevron_right_rounded,
+                    color: _muted,
+                  ),
+                  compact: true,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountBranchManagementPage extends StatelessWidget {
+  const _AccountBranchManagementPage({
+    required this.vendors,
+    required this.selectedVendorId,
+  });
+
+  final List<SpetoCatalogVendor> vendors;
+  final String? selectedVendorId;
+
+  @override
+  Widget build(BuildContext context) {
+    return _AccountDetailScaffold(
+      title: 'Şube Yönetimi',
+      child: Column(
+        children: <Widget>[
+          _DetailSectionCard(
+            child: Column(
+              children: vendors.isEmpty
+                  ? const <Widget>[
+                      _EmptyState(
+                        title: 'Şube bulunamadı',
+                        description: 'Tanımlı şubeler burada listelenir.',
+                        icon: Icons.storefront_outlined,
+                      ),
+                    ]
+                  : List<Widget>.generate(vendors.length, (int index) {
+                      final SpetoCatalogVendor vendor = vendors[index];
+                      return Column(
+                        children: <Widget>[
+                          _DetailListTile(
+                            icon: Icons.store_mall_directory_outlined,
+                            title: vendor.title,
+                            subtitle: vendor.pickupPoints.isNotEmpty
+                                ? vendor.pickupPoints.first.address
+                                : vendor.subtitle,
+                            iconTone: vendor.vendorId == selectedVendorId
+                                ? _success
+                                : _info,
+                            trailing: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: vendor.isActive
+                                    ? _successSoft
+                                    : _dangerSoft,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                vendor.isActive ? 'Aktif' : 'Pasif',
+                                style: TextStyle(
+                                  color: vendor.isActive ? _success : _danger,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            compact: true,
+                          ),
+                          if (index != vendors.length - 1)
+                            Divider(
+                              height: 1,
+                              thickness: 1,
+                              color: _line.withValues(alpha: 0.7),
+                              indent: 60,
+                              endIndent: 12,
+                            ),
+                        ],
+                      );
+                    }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountPaymentFinancePage extends StatelessWidget {
+  const _AccountPaymentFinancePage({
+    required this.vendorLabel,
+    required this.orders,
+    required this.offers,
+  });
+
+  final String vendorLabel;
+  final List<SpetoOpsOrder> orders;
+  final List<SpetoHappyHourOffer> offers;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<SpetoOpsOrder> completedOrders = orders
+        .where(
+          (SpetoOpsOrder order) =>
+              order.status == SpetoOrderStatus.completed ||
+              order.opsStatus == SpetoOpsOrderStage.completed,
+        )
+        .toList(growable: false);
+    final List<SpetoOpsOrder> openOrders = orders
+        .where((SpetoOpsOrder order) => order.status == SpetoOrderStatus.active)
+        .toList(growable: false);
+    final double settledTotal = completedOrders.fold<double>(
+      0,
+      (double sum, SpetoOpsOrder order) => sum + order.payableTotal,
+    );
+    final double pendingTotal = openOrders.fold<double>(
+      0,
+      (double sum, SpetoOpsOrder order) => sum + order.payableTotal,
+    );
+    return _AccountDetailScaffold(
+      title: 'Ödeme ve Finans',
+      bottomAction: const _SettingsFooterButton(label: 'Raporu İndir'),
+      child: Column(
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: _FinanceSummaryCard(
+                  title: 'Toplam Tahsilat',
+                  value: '${settledTotal.toStringAsFixed(0)} TL',
+                  accent: _success,
+                  subtitle: vendorLabel,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _FinanceSummaryCard(
+                  title: 'Bekleyen Tutar',
+                  value: '${pendingTotal.toStringAsFixed(0)} TL',
+                  accent: _warning,
+                  subtitle: '${openOrders.length} açık sipariş',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _DetailSectionCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: <Widget>[
+                const _DetailListTile(
+                  icon: Icons.account_balance_outlined,
+                  title: 'Banka Hesap Bilgileri',
+                  subtitle: 'TR12 0001 2000 0000 0000 1234 56',
+                  trailing: Text(
+                    'Düzenle',
+                    style: TextStyle(
+                      color: _success,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: _line.withValues(alpha: 0.7),
+                  indent: 64,
+                  endIndent: 14,
+                ),
+                _DetailListTile(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'Komisyon Oranları',
+                  subtitle: '%${offers.isEmpty ? '0' : '12'} servis ücreti',
+                ),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: _line.withValues(alpha: 0.7),
+                  indent: 64,
+                  endIndent: 14,
+                ),
+                _DetailListTile(
+                  icon: Icons.history_toggle_off_rounded,
+                  title: 'Ödeme Geçmişi',
+                  subtitle: '${completedOrders.length} teslim edilen sipariş',
+                ),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: _line.withValues(alpha: 0.7),
+                  indent: 64,
+                  endIndent: 14,
+                ),
+                _DetailListTile(
+                  icon: Icons.pie_chart_outline_rounded,
+                  title: 'Kazanç Raporları',
+                  subtitle: 'Günlük, haftalık ve aylık kırılım',
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountNotificationsPage extends StatefulWidget {
+  const _AccountNotificationsPage({required this.notificationsEnabled});
+
+  final bool notificationsEnabled;
+
+  @override
+  State<_AccountNotificationsPage> createState() =>
+      _AccountNotificationsPageState();
+}
+
+class _AccountNotificationsPageState extends State<_AccountNotificationsPage> {
+  late final List<_NotificationPreference> _items = <_NotificationPreference>[
+    _NotificationPreference(
+      title: 'Yeni Sipariş',
+      subtitle: 'Yeni sipariş geldiğinde',
+      enabled: widget.notificationsEnabled,
+    ),
+    _NotificationPreference(
+      title: 'İptal Siparişi',
+      subtitle: 'İptal olan siparişlerde',
+      enabled: true,
+    ),
+    _NotificationPreference(
+      title: 'Hazır Sipariş',
+      subtitle: 'Hazır olan siparişlerde',
+      enabled: true,
+    ),
+    _NotificationPreference(
+      title: 'Kampanyalar',
+      subtitle: 'Kampanya değişikliklerinde',
+      enabled: false,
+    ),
+    _NotificationPreference(
+      title: 'Kritik Uyarılar',
+      subtitle: 'Stok uyarılarında',
+      enabled: true,
+    ),
+    _NotificationPreference(
+      title: 'Happy Hour',
+      subtitle: 'Happy hour başlangıcında',
+      enabled: false,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return _AccountDetailScaffold(
+      title: 'Bildirim Ayarları',
+      bottomAction: const _SettingsFooterButton(label: 'Kaydet'),
+      child: _DetailSectionCard(
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: List<Widget>.generate(_items.length, (int index) {
+            final _NotificationPreference item = _items[index];
+            return Column(
+              children: <Widget>[
+                _DetailListTile(
+                  icon: Icons.notifications_active_outlined,
+                  title: item.title,
+                  subtitle: item.subtitle,
+                  trailing: Switch.adaptive(
+                    value: item.enabled,
+                    activeTrackColor: _success.withValues(alpha: 0.4),
+                    activeThumbColor: _success,
+                    onChanged: (bool value) {
+                      setState(() {
+                        _items[index] = item.copyWith(enabled: value);
+                      });
+                    },
+                  ),
+                  compact: true,
+                ),
+                if (index != _items.length - 1)
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: _line.withValues(alpha: 0.7),
+                    indent: 60,
+                    endIndent: 12,
+                  ),
+              ],
+            );
+          }),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountUserManagementPage extends StatelessWidget {
+  const _AccountUserManagementPage({
+    required this.operatorAccounts,
+    required this.vendorLabel,
+  });
+
+  final List<SpetoCatalogOperatorAccount> operatorAccounts;
+  final String vendorLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return _AccountDetailScaffold(
+      title: 'Kullanıcı Yönetimi',
+      child: Column(
+        children: <Widget>[
+          _DetailSectionCard(
+            child: Row(
+              children: <Widget>[
+                const Icon(Icons.groups_rounded, color: _success),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '${operatorAccounts.length} kullanıcı aktif',
+                    style: const TextStyle(
+                      color: _success,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _DetailSectionCard(
+            padding: EdgeInsets.zero,
+            child: operatorAccounts.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(18),
+                    child: _EmptyState(
+                      title: 'Kullanıcı bulunamadı',
+                      description: 'Şube kullanıcıları burada listelenir.',
+                      icon: Icons.group_off_rounded,
+                    ),
+                  )
+                : Column(
+                    children: List<Widget>.generate(operatorAccounts.length, (
+                      int index,
+                    ) {
+                      final SpetoCatalogOperatorAccount operator =
+                          operatorAccounts[index];
+                      final Color tone = <Color>[
+                        _success,
+                        _info,
+                        _accent,
+                        _danger,
+                      ][index % 4];
+                      final String roleLabel = <String>[
+                        'Yönetici',
+                        'Vardiya Müdürü',
+                        'Kasiyer',
+                        'Mutfak',
+                      ][index % 4];
+                      return Column(
+                        children: <Widget>[
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            child: Row(
+                              children: <Widget>[
+                                CircleAvatar(
+                                  radius: 22,
+                                  backgroundColor: tone.withValues(alpha: 0.12),
+                                  foregroundColor: tone,
+                                  child: Text(
+                                    operator.displayName.isEmpty
+                                        ? '?'
+                                        : operator.displayName.characters.first
+                                              .toUpperCase(),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Text(
+                                        operator.displayName,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        operator.email.isNotEmpty
+                                            ? operator.email
+                                            : vendorLabel,
+                                        style: const TextStyle(
+                                          color: _muted,
+                                          fontSize: 12.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: tone.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    roleLabel,
+                                    style: TextStyle(
+                                      color: tone,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (index != operatorAccounts.length - 1)
+                            Divider(
+                              height: 1,
+                              thickness: 1,
+                              color: _line.withValues(alpha: 0.7),
+                              indent: 68,
+                              endIndent: 14,
+                            ),
+                        ],
+                      );
+                    }),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountIntegrationsSettingsPage extends StatelessWidget {
+  const _AccountIntegrationsSettingsPage({required this.integrations});
+
+  final List<SpetoIntegrationConnection> integrations;
+
+  @override
+  Widget build(BuildContext context) {
+    return _AccountDetailScaffold(
+      title: 'Entegrasyonlar',
+      child: _DetailSectionCard(
+        padding: EdgeInsets.zero,
+        child: integrations.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.all(18),
+                child: _EmptyState(
+                  title: 'Entegrasyon bulunamadı',
+                  description: 'Bağlı servisler burada listelenir.',
+                  icon: Icons.link_off_rounded,
+                ),
+              )
+            : Column(
+                children: List<Widget>.generate(integrations.length, (
+                  int index,
+                ) {
+                  final SpetoIntegrationConnection integration =
+                      integrations[index];
+                  final Color tone = _healthColor(integration.health);
+                  return Column(
+                    children: <Widget>[
+                      _DetailListTile(
+                        icon: Icons.settings_ethernet_rounded,
+                        title: integration.name,
+                        subtitle:
+                            '${integration.provider} • ${integration.type.name}',
+                        iconTone: tone,
+                        trailing: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: tone.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            _healthLabel(integration.health),
+                            style: TextStyle(
+                              color: tone,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (index != integrations.length - 1)
+                        Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: _line.withValues(alpha: 0.7),
+                          indent: 60,
+                          endIndent: 12,
+                        ),
+                    ],
+                  );
+                }),
+              ),
+      ),
+    );
+  }
+}
+
+class _AccountSupportCenterPage extends StatelessWidget {
+  const _AccountSupportCenterPage();
+
+  @override
+  Widget build(BuildContext context) {
+    return _AccountDetailScaffold(
+      title: 'Destek Merkezi',
+      child: Column(
+        children: <Widget>[
+          _DetailSectionCard(
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: _successSoft,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Row(
+                children: const <Widget>[
+                  Icon(Icons.support_agent_rounded, color: _success),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Canlı Destek',
+                      style: TextStyle(
+                        color: _success,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: _success),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          _DetailSectionCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: const <Widget>[
+                _DetailListTile(
+                  icon: Icons.assignment_outlined,
+                  title: 'Destek Talebi Oluştur',
+                  subtitle: 'Sorunları kayıt altına alın',
+                ),
+                Divider(indent: 60, endIndent: 12, height: 1, thickness: 1),
+                _DetailListTile(
+                  icon: Icons.help_outline_rounded,
+                  title: 'Yardım Merkezi',
+                  subtitle: 'Sık sorulan sorular ve çözümler',
+                ),
+                Divider(indent: 60, endIndent: 12, height: 1, thickness: 1),
+                _DetailListTile(
+                  icon: Icons.menu_book_outlined,
+                  title: 'SSS',
+                  subtitle: 'Sistem kullanım soruları',
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountSecurityPage extends StatelessWidget {
+  const _AccountSecurityPage({required this.session});
+
+  final SpetoSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    return _AccountDetailScaffold(
+      title: 'Güvenlik',
+      child: _DetailSectionCard(
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: <Widget>[
+            const _DetailListTile(
+              icon: Icons.lock_outline_rounded,
+              title: 'Şifre Değiştir',
+              subtitle: 'Hesap şifrenizi güncelleyin',
+            ),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: _line.withValues(alpha: 0.7),
+              indent: 60,
+              endIndent: 12,
+            ),
+            _DetailListTile(
+              icon: Icons.verified_user_outlined,
+              title: 'İki Faktörlü Doğrulama (2FA)',
+              subtitle: 'Hesabınızı ek güvenlikle koruyun',
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: (session.phone.isEmpty ? _warningSoft : _successSoft),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  session.phone.isEmpty ? 'Pasif' : 'Açık',
+                  style: TextStyle(
+                    color: session.phone.isEmpty ? _warning : _success,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: _line.withValues(alpha: 0.7),
+              indent: 60,
+              endIndent: 12,
+            ),
+            const _DetailListTile(
+              icon: Icons.history_rounded,
+              title: 'Oturum Geçmişi',
+              subtitle: 'Son cihaz girişlerini görüntüleyin',
+            ),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: _line.withValues(alpha: 0.7),
+              indent: 60,
+              endIndent: 12,
+            ),
+            const _DetailListTile(
+              icon: Icons.smartphone_outlined,
+              title: 'Cihaz Yönetimi',
+              subtitle: 'Bağlı cihazları gözden geçirin',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FinanceSummaryCard extends StatelessWidget {
+  const _FinanceSummaryCard({
+    required this.title,
+    required this.value,
+    required this.accent,
+    required this.subtitle,
+  });
+
+  final String title;
+  final String value;
+  final Color accent;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: accent.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            title,
+            style: TextStyle(
+              color: accent,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: accent,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(subtitle, style: const TextStyle(color: _muted, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotificationPreference {
+  const _NotificationPreference({
+    required this.title,
+    required this.subtitle,
+    required this.enabled,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool enabled;
+
+  _NotificationPreference copyWith({bool? enabled}) {
+    return _NotificationPreference(
+      title: title,
+      subtitle: subtitle,
+      enabled: enabled ?? this.enabled,
+    );
+  }
+}
+
+class _WorkingHourSlot {
+  const _WorkingHourSlot({
+    required this.day,
+    required this.hours,
+    this.enabled = true,
+  });
+
+  final String day;
+  final String hours;
+  final bool enabled;
+
+  _WorkingHourSlot copyWith({String? day, String? hours, bool? enabled}) {
+    return _WorkingHourSlot(
+      day: day ?? this.day,
+      hours: hours ?? this.hours,
+      enabled: enabled ?? this.enabled,
     );
   }
 }
@@ -5420,7 +8404,7 @@ class _SummaryStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 220,
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -5450,6 +8434,261 @@ class _SummaryStatCard extends StatelessWidget {
   }
 }
 
+class _OpsPageIntroCard extends StatelessWidget {
+  const _OpsPageIntroCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.compact,
+    this.trailing,
+    this.badges = const <Widget>[],
+    this.footer,
+    this.tone = _success,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool compact;
+  final Widget? trailing;
+  final List<Widget> badges;
+  final Widget? footer;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SurfaceCard(
+      padding: EdgeInsets.all(compact ? 16 : 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          if (compact)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _OpsPageIntroHeader(
+                  icon: icon,
+                  title: title,
+                  subtitle: subtitle,
+                  tone: tone,
+                  compact: compact,
+                ),
+                if (trailing != null) ...<Widget>[
+                  const SizedBox(height: 14),
+                  trailing!,
+                ],
+              ],
+            )
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(
+                  child: _OpsPageIntroHeader(
+                    icon: icon,
+                    title: title,
+                    subtitle: subtitle,
+                    tone: tone,
+                    compact: compact,
+                  ),
+                ),
+                if (trailing != null) ...<Widget>[
+                  const SizedBox(width: 16),
+                  Flexible(child: trailing!),
+                ],
+              ],
+            ),
+          if (badges.isNotEmpty) ...<Widget>[
+            SizedBox(height: compact ? 14 : 16),
+            Wrap(spacing: 10, runSpacing: 10, children: badges),
+          ],
+          if (footer != null) ...<Widget>[
+            SizedBox(height: compact ? 14 : 16),
+            footer!,
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _OpsPageIntroHeader extends StatelessWidget {
+  const _OpsPageIntroHeader({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.tone,
+    required this.compact,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color tone;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Container(
+          width: compact ? 48 : 54,
+          height: compact ? 48 : 54,
+          decoration: BoxDecoration(
+            color: tone.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, color: tone, size: compact ? 24 : 26),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  fontSize: compact ? 24 : 28,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: const TextStyle(color: _muted, height: 1.45),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _OpsInlineStat extends StatelessWidget {
+  const _OpsInlineStat({
+    required this.label,
+    required this.value,
+    required this.tone,
+  });
+
+  final String label;
+  final String value;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: tone.withValues(alpha: 0.14)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: tone, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              color: _ink,
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(color: _muted, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactMetricTile extends StatelessWidget {
+  const _CompactMetricTile({
+    required this.label,
+    required this.value,
+    required this.tone,
+  });
+
+  final String label;
+  final String value;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: tone.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            label,
+            style: TextStyle(
+              color: tone,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResponsiveCardGrid extends StatelessWidget {
+  const _ResponsiveCardGrid({required this.children, this.minItemWidth = 180});
+
+  final List<Widget> children;
+  final double minItemWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        if (children.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        final double width = constraints.maxWidth;
+        const double spacing = 12;
+        final int columns = width < (minItemWidth * 2 + spacing) ? 1 : 2;
+        final double itemWidth = (width - (spacing * (columns - 1))) / columns;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: children
+              .map((Widget child) => SizedBox(width: itemWidth, child: child))
+              .toList(growable: false),
+        );
+      },
+    );
+  }
+}
+
 class _CampaignOfferCard extends StatelessWidget {
   const _CampaignOfferCard({required this.offer});
 
@@ -5458,65 +8697,144 @@ class _CampaignOfferCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color stockTone = _stockColor(offer.stockStatus);
-    return _SurfaceCard(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          _ThumbImage(imageUrl: offer.imageUrl, label: offer.title, size: 72),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool compact = constraints.maxWidth < 520;
+        return _SurfaceCard(
+          padding: const EdgeInsets.all(16),
+          child: compact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    _StatusPill(
-                      label: '%${offer.discountPercent} indirim',
-                      color: _success,
-                      backgroundColor: _successSoft,
-                    ),
-                    _StatusPill(
-                      label: _stockLabel(offer.stockStatus),
-                      color: stockTone,
-                      backgroundColor: stockTone.withValues(alpha: 0.12),
+                    _CampaignOfferCardBody(
+                      offer: offer,
+                      stockTone: stockTone,
+                      compact: compact,
                     ),
                   ],
+                )
+              : _CampaignOfferCardBody(
+                  offer: offer,
+                  stockTone: stockTone,
+                  compact: compact,
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  offer.title,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${offer.vendorName} • ${offer.sectionLabel}',
-                  style: const TextStyle(color: _muted),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  '${offer.discountedPriceText}  yerine  ${offer.originalPriceText}',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
+        );
+      },
+    );
+  }
+}
+
+class _CampaignOfferCardBody extends StatelessWidget {
+  const _CampaignOfferCardBody({
+    required this.offer,
+    required this.stockTone,
+    required this.compact,
+  });
+
+  final SpetoHappyHourOffer offer;
+  final Color stockTone;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            _ThumbImage(imageUrl: offer.imageUrl, label: offer.title, size: 68),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: <Widget>[
+                      _StatusPill(
+                        label: '%${offer.discountPercent} indirim',
+                        color: _success,
+                        backgroundColor: _successSoft,
+                      ),
+                      _StatusPill(
+                        label: _stockLabel(offer.stockStatus),
+                        color: stockTone,
+                        backgroundColor: stockTone.withValues(alpha: 0.12),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  const SizedBox(height: 10),
+                  Text(
+                    offer.title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${offer.vendorName} • ${offer.sectionLabel}',
+                    style: const TextStyle(color: _muted, height: 1.35),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FBF8),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFDDECE4)),
+          ),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    _InfoPill(label: '${offer.claimCount} talep'),
-                    _InfoPill(label: '${offer.expiresInMinutes} dk kaldı'),
-                    if (offer.badge.isNotEmpty) _InfoPill(label: offer.badge),
+                    Text(
+                      offer.discountedPriceText,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${offer.originalPriceText} yerine',
+                      style: const TextStyle(color: _muted),
+                    ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  _InfoPill(
+                    label: '${offer.claimCount} talep',
+                    compact: compact,
+                  ),
+                  const SizedBox(height: 8),
+                  _InfoPill(
+                    label: '${offer.expiresInMinutes} dk kaldı',
+                    compact: compact,
+                  ),
+                ],
+              ),
+            ],
           ),
+        ),
+        if (offer.badge.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 10),
+          _InfoPill(label: offer.badge, compact: compact),
         ],
-      ),
+      ],
     );
   }
 }
@@ -5852,6 +9170,10 @@ class _CatalogVendorCardState extends State<_CatalogVendorCard> {
   Widget build(BuildContext context) {
     final bool compact = MediaQuery.of(context).size.width < 760;
     final SpetoCatalogVendor vendor = widget.vendor;
+    final int productCount = vendor.sections.fold<int>(
+      0,
+      (int sum, SpetoCatalogSection section) => sum + section.products.length,
+    );
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -5877,37 +9199,74 @@ class _CatalogVendorCardState extends State<_CatalogVendorCard> {
             onCreateProduct: () => widget.onCreateProduct(vendor: vendor),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
+            child: _ResponsiveCardGrid(
+              minItemWidth: compact ? 120 : 150,
               children: <Widget>[
-                _VendorTabChip(
-                  label: 'Vitrin',
-                  selected: _tabIndex == 0,
-                  onTap: () => setState(() => _tabIndex = 0),
+                _CompactMetricTile(
+                  label: 'Kategori',
+                  value: '${vendor.sections.length}',
+                  tone: _info,
                 ),
-                _VendorTabChip(
-                  label: 'Kategoriler',
-                  selected: _tabIndex == 1,
-                  onTap: () => setState(() => _tabIndex = 1),
+                _CompactMetricTile(
+                  label: 'Ürün',
+                  value: '$productCount',
+                  tone: _success,
                 ),
-                _VendorTabChip(
-                  label: 'Ürünler',
-                  selected: _tabIndex == 2,
-                  onTap: () => setState(() => _tabIndex = 2),
-                ),
-                _VendorTabChip(
-                  label: 'Operatörler',
-                  selected: _tabIndex == 3,
-                  onTap: () => setState(() => _tabIndex = 3),
-                ),
-                _VendorTabChip(
-                  label: 'Ayarlar',
-                  selected: _tabIndex == 4,
-                  onTap: () => setState(() => _tabIndex = 4),
+                _CompactMetricTile(
+                  label: 'Operatör',
+                  value: '${vendor.operatorAccounts.length}',
+                  tone: _accent,
                 ),
               ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: _line),
+              ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: <Widget>[
+                    _VendorTabChip(
+                      label: 'Vitrin',
+                      selected: _tabIndex == 0,
+                      onTap: () => setState(() => _tabIndex = 0),
+                    ),
+                    const SizedBox(width: 8),
+                    _VendorTabChip(
+                      label: 'Kategoriler',
+                      selected: _tabIndex == 1,
+                      onTap: () => setState(() => _tabIndex = 1),
+                    ),
+                    const SizedBox(width: 8),
+                    _VendorTabChip(
+                      label: 'Ürünler',
+                      selected: _tabIndex == 2,
+                      onTap: () => setState(() => _tabIndex = 2),
+                    ),
+                    const SizedBox(width: 8),
+                    _VendorTabChip(
+                      label: 'Operatörler',
+                      selected: _tabIndex == 3,
+                      onTap: () => setState(() => _tabIndex = 3),
+                    ),
+                    const SizedBox(width: 8),
+                    _VendorTabChip(
+                      label: 'Ayarlar',
+                      selected: _tabIndex == 4,
+                      onTap: () => setState(() => _tabIndex = 4),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
           Padding(
@@ -6573,48 +9932,166 @@ class _AppBackdrop extends StatelessWidget {
       child: Stack(
         children: <Widget>[
           Positioned.fill(
-            child: Opacity(
-              opacity: 0.07,
-              child: GridPaper(
-                color: _accentDeep,
-                divisions: 2,
-                interval: 48,
-                subdivisions: 1,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: <Color>[
+                    Colors.white.withValues(alpha: 0.18),
+                    Colors.white.withValues(alpha: 0.05),
+                    const Color(0x14FFF6E9),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
               ),
             ),
           ),
+          const Positioned.fill(
+            child: CustomPaint(painter: _BackdropFlowPainter()),
+          ),
           Positioned(
-            top: -120,
-            left: -40,
-            child: Container(
-              width: 320,
-              height: 320,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: <Color>[Color(0x33F6C986), Color(0x00F6C986)],
+            top: -132,
+            left: -64,
+            child: _BackdropGlow(
+              width: 340,
+              height: 340,
+              colors: <Color>[Color(0x42F6C986), Color(0x00F6C986)],
+            ),
+          ),
+          Positioned(
+            top: 92,
+            right: -112,
+            child: _BackdropGlow(
+              width: 300,
+              height: 260,
+              colors: <Color>[Color(0x2A5CA86F), Color(0x005CA86F)],
+            ),
+          ),
+          Positioned(
+            left: 24,
+            bottom: 88,
+            child: Transform.rotate(
+              angle: -0.18,
+              child: Container(
+                width: 220,
+                height: 120,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: <Color>[Color(0x1AC56B1A), Color(0x06C56B1A)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(40),
+                  border: Border.all(color: const Color(0x12C56B1A)),
                 ),
               ),
             ),
           ),
           Positioned(
-            right: -60,
-            bottom: -80,
-            child: Container(
-              width: 280,
-              height: 280,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: <Color>[Color(0x3354A36D), Color(0x0054A36D)],
-                ),
-              ),
+            right: -40,
+            bottom: -74,
+            child: _BackdropGlow(
+              width: 260,
+              height: 260,
+              colors: <Color>[Color(0x3654A36D), Color(0x0054A36D)],
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _BackdropGlow extends StatelessWidget {
+  const _BackdropGlow({
+    required this.width,
+    required this.height,
+    required this.colors,
+  });
+
+  final double width;
+  final double height;
+  final List<Color> colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(width),
+        gradient: RadialGradient(colors: colors),
+      ),
+    );
+  }
+}
+
+class _BackdropFlowPainter extends CustomPainter {
+  const _BackdropFlowPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint warmStroke = Paint()
+      ..color = const Color(0x14C56B1A)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4;
+    final Paint coolStroke = Paint()
+      ..color = const Color(0x124C7C5B)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    final Path topArc = Path()
+      ..moveTo(-size.width * 0.08, size.height * 0.18)
+      ..quadraticBezierTo(
+        size.width * 0.24,
+        size.height * 0.05,
+        size.width * 0.56,
+        size.height * 0.16,
+      )
+      ..quadraticBezierTo(
+        size.width * 0.86,
+        size.height * 0.26,
+        size.width * 1.06,
+        size.height * 0.08,
+      );
+
+    final Path lowerArc = Path()
+      ..moveTo(-size.width * 0.04, size.height * 0.72)
+      ..quadraticBezierTo(
+        size.width * 0.26,
+        size.height * 0.58,
+        size.width * 0.48,
+        size.height * 0.7,
+      )
+      ..quadraticBezierTo(
+        size.width * 0.76,
+        size.height * 0.86,
+        size.width * 1.04,
+        size.height * 0.66,
+      );
+
+    final Path sideArc = Path()
+      ..moveTo(size.width * 0.82, -size.height * 0.04)
+      ..quadraticBezierTo(
+        size.width * 0.72,
+        size.height * 0.24,
+        size.width * 0.88,
+        size.height * 0.46,
+      )
+      ..quadraticBezierTo(
+        size.width * 1.02,
+        size.height * 0.68,
+        size.width * 0.92,
+        size.height * 1.04,
+      );
+
+    canvas.drawPath(topArc, warmStroke);
+    canvas.drawPath(lowerArc, warmStroke);
+    canvas.drawPath(sideArc, coolStroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _InlineBanner extends StatelessWidget {
@@ -6949,7 +10426,7 @@ class _SidebarOverview extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'Speto Control',
+                'SepetPro İşyeri',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
@@ -7037,192 +10514,6 @@ class _SidebarMetric extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _DashboardHero extends StatelessWidget {
-  const _DashboardHero({
-    required this.compact,
-    required this.vendorLabel,
-    required this.snapshot,
-    required this.failedIntegrations,
-    required this.warningIntegrations,
-    required this.onNavigate,
-  });
-
-  final bool compact;
-  final String vendorLabel;
-  final SpetoInventorySnapshot snapshot;
-  final int failedIntegrations;
-  final int warningIntegrations;
-  final ValueChanged<_StockDestination> onNavigate;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(compact ? 18 : 24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: <Color>[Color(0xFFFFF0D7), Color(0xFFE9F3E1)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: const Color(0xFFFFE2B7)),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x141E1917),
-            blurRadius: 30,
-            offset: Offset(0, 16),
-          ),
-        ],
-      ),
-      child: Wrap(
-        spacing: compact ? 14 : 18,
-        runSpacing: compact ? 14 : 18,
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.start,
-        children: <Widget>[
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: compact ? double.infinity : 520,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                _StatusPill(
-                  label: vendorLabel,
-                  color: _accentDeep,
-                  backgroundColor: Colors.white.withValues(alpha: 0.65),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  'Bugünün operasyon temposu net: sipariş yükü, stok riski ve bağlantı sağlığı aynı yüzeyde.',
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    fontSize: compact ? 24 : 28,
-                    fontWeight: FontWeight.w800,
-                    height: 1.12,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Öncelikli aksiyonlar: kritik stoklu SKU\'ları kapat, hazır siparişleri tahsilata geçir ve hata veren entegrasyonları sync et.',
-                  style: TextStyle(color: _muted, height: 1.6),
-                ),
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: <Widget>[
-                    FilledButton.tonalIcon(
-                      onPressed: () => onNavigate(_StockDestination.products),
-                      icon: const Icon(Icons.inventory_2_outlined),
-                      label: const Text('Ürünlere git'),
-                    ),
-                    FilledButton.tonalIcon(
-                      onPressed: () => onNavigate(_StockDestination.orders),
-                      icon: const Icon(Icons.receipt_long_outlined),
-                      label: const Text('Siparişler'),
-                    ),
-                    FilledButton.tonalIcon(
-                      onPressed: () => onNavigate(_StockDestination.revenue),
-                      icon: const Icon(Icons.account_balance_wallet_outlined),
-                      label: const Text('Gelir akışı'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: compact ? double.infinity : 320,
-              minWidth: compact ? 0 : 280,
-            ),
-            child: Column(
-              children: <Widget>[
-                _HeroStatTile(
-                  label: 'Açık sipariş',
-                  value: '${snapshot.openOrdersCount}',
-                  color: _success,
-                ),
-                const SizedBox(height: 10),
-                _HeroStatTile(
-                  label: 'Kritik stok',
-                  value: '${snapshot.lowStockCount + snapshot.outOfStockCount}',
-                  color: _warning,
-                ),
-                const SizedBox(height: 10),
-                _HeroStatTile(
-                  label: 'Sync alarmı',
-                  value: '${failedIntegrations + warningIntegrations}',
-                  color: failedIntegrations > 0 ? _danger : _info,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroStatTile extends StatelessWidget {
-  const _HeroStatTile({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Row(
-        children: <Widget>[
-          Container(
-            width: 12,
-            height: 48,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(999),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: _muted,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  value,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: _ink,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -8128,80 +11419,6 @@ class _OrdersBoardColumn extends StatelessWidget {
   }
 }
 
-class _MobileOrderStageSection extends StatelessWidget {
-  const _MobileOrderStageSection({
-    required this.stage,
-    required this.orders,
-    required this.onAdvance,
-  });
-
-  final SpetoOpsOrderStage stage;
-  final List<SpetoOpsOrder> orders;
-  final Future<void> Function(SpetoOpsOrder order, SpetoOpsOrderStage stage)
-  onAdvance;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color tone = switch (stage) {
-      SpetoOpsOrderStage.completed => _success,
-      SpetoOpsOrderStage.cancelled => _danger,
-      SpetoOpsOrderStage.ready => _info,
-      SpetoOpsOrderStage.preparing => _warning,
-      SpetoOpsOrderStage.accepted => _accent,
-      SpetoOpsOrderStage.created => _ink,
-    };
-    return _SurfaceCard(
-      tint: _panel,
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: _StatusPill(
-                  label: _opsStageLabel(stage),
-                  color: tone,
-                  backgroundColor: tone.withValues(alpha: 0.12),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                '${orders.length} sipariş',
-                style: const TextStyle(
-                  color: _muted,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (orders.isEmpty)
-            const _EmptyState(
-              title: 'Kuyruk boş',
-              description: 'Bu aşamada bekleyen sipariş görünmüyor.',
-              icon: Icons.low_priority_rounded,
-            )
-          else
-            Column(
-              children: orders
-                  .map(
-                    (SpetoOpsOrder order) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _MobileOrderCard(
-                        order: order,
-                        onAdvance: onAdvance,
-                      ),
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class _MobileOrderCard extends StatelessWidget {
   const _MobileOrderCard({required this.order, required this.onAdvance});
 
@@ -8212,75 +11429,210 @@ class _MobileOrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<SpetoOpsOrderStage> actions = _nextOpsStages(order.opsStatus);
-    return _SurfaceCard(
-      padding: const EdgeInsets.all(16),
-      tint: Colors.white,
+    final Color stageTone = _ordersStageColor(order.opsStatus);
+    final String stageLabel = _ordersStageLabel(order.opsStatus);
+    final String itemSummary = _orderItemsSummary(order);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.97),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _line.withValues(alpha: 0.96)),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x101E1917),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Expanded(
-                child: Text(
-                  order.pickupCode,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: stageTone.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  order.items.length > 1
+                      ? Icons.shopping_bag_outlined
+                      : Icons.receipt_long_outlined,
+                  color: stageTone,
+                  size: 22,
                 ),
               ),
-              const SizedBox(width: 8),
-              _InfoPill(label: order.deliveryMode),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            order.vendor,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: _muted),
-          ),
-          const SizedBox(height: 12),
-          ...order.items.take(2).map((SpetoCartItem item) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      '${item.quantity}x ${item.title}',
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Sipariş #${_orderReference(order)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 22,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      itemSummary,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                      style: const TextStyle(
+                        color: _muted,
+                        fontWeight: FontWeight.w700,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      order.vendor,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _muted,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  Text(
+                    _orderTimeLabel(order),
+                    style: const TextStyle(
+                      color: _muted,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text('${item.unitPrice.toStringAsFixed(0)} TL'),
+                  const SizedBox(height: 8),
+                  Text(
+                    _formatCurrency(order.payableTotal),
+                    style: const TextStyle(
+                      color: _ink,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _StatusPill(
+                    label: stageLabel,
+                    color: stageTone,
+                    backgroundColor: stageTone.withValues(alpha: 0.12),
+                  ),
                 ],
               ),
-            );
-          }),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FBF8),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE3EEE6)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                ...order.items.take(2).map((SpetoCartItem item) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            '${item.quantity}x ${item.title}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${item.totalPrice.toStringAsFixed(0)} TL',
+                          style: const TextStyle(
+                            color: _ink,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                if (order.items.length > 2)
+                  Text(
+                    '+${order.items.length - 2} ürün daha',
+                    style: const TextStyle(
+                      color: _muted,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+              ],
+            ),
+          ),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: <Widget>[
-              _InfoPill(label: order.paymentMethod),
-              _InfoPill(label: order.placedAtLabel),
+              _InfoPill(label: order.deliveryMode, compact: true),
+              _InfoPill(label: order.paymentMethod, compact: true),
+              _InfoPill(label: _orderDateLabel(order), compact: true),
             ],
           ),
           if (actions.isNotEmpty) ...<Widget>[
             const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: actions
-                  .map(
-                    (SpetoOpsOrderStage nextStage) => FilledButton.tonal(
-                      onPressed: () => onAdvance(order, nextStage),
-                      child: Text(_opsStageLabel(nextStage)),
-                    ),
-                  )
-                  .toList(growable: false),
+            Row(
+              children: List<Widget>.generate(actions.length * 2 - 1, (
+                int index,
+              ) {
+                if (index.isOdd) {
+                  return const SizedBox(width: 8);
+                }
+                final SpetoOpsOrderStage nextStage = actions[index ~/ 2];
+                final bool destructive =
+                    nextStage == SpetoOpsOrderStage.cancelled;
+                final Widget button = destructive
+                    ? FilledButton(
+                        onPressed: () => onAdvance(order, nextStage),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _danger,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                        ),
+                        child: Text(_orderActionLabel(nextStage)),
+                      )
+                    : FilledButton(
+                        onPressed: () => onAdvance(order, nextStage),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _success,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                        ),
+                        child: Text(_orderActionLabel(nextStage)),
+                      );
+                return Expanded(child: button);
+              }),
             ),
           ],
         ],
@@ -8306,107 +11658,99 @@ class _VendorHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: vendor.storefrontType == SpetoStorefrontType.market
-            ? const LinearGradient(
-                colors: <Color>[Color(0xFFEAF7F0), Color(0xFFFFF4E6)],
-              )
-            : const LinearGradient(
-                colors: <Color>[Color(0xFFFFF0D8), Color(0xFFFFF8F0)],
-              ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Wrap(
-          spacing: 18,
-          runSpacing: 18,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: <Widget>[
-            _ThumbImage(imageUrl: vendor.image, label: vendor.title, size: 92),
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: compact ? double.infinity : 420,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: <Widget>[
-                      _StatusPill(
-                        label: _storefrontLabel(vendor.storefrontType),
-                        color: _info,
-                        backgroundColor: _infoSoft,
-                      ),
-                      _StatusPill(
-                        label: vendor.isActive ? 'Yayında' : 'Pasif',
-                        color: vendor.isActive ? _success : _danger,
-                        backgroundColor: vendor.isActive
-                            ? _successSoft
-                            : _dangerSoft,
-                      ),
-                      _StatusPill(
-                        label: _stockLabel(vendor.stockStatus),
-                        color: _stockColor(vendor.stockStatus),
-                        backgroundColor: _stockColor(
-                          vendor.stockStatus,
-                        ).withValues(alpha: 0.12),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    vendor.title,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    vendor.subtitle.isEmpty ? vendor.meta : vendor.subtitle,
-                    style: const TextStyle(color: _muted, height: 1.5),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: <Widget>[
-                      if (vendor.badge.isNotEmpty)
-                        _InfoPill(label: vendor.badge),
-                      if (vendor.promoLabel.isNotEmpty)
-                        _InfoPill(label: vendor.promoLabel),
-                      if (vendor.rewardLabel.isNotEmpty)
-                        _InfoPill(label: vendor.rewardLabel),
-                    ],
-                  ),
-                ],
-              ),
+    return Padding(
+      padding: const EdgeInsets.all(18),
+      child: Wrap(
+        spacing: 18,
+        runSpacing: 18,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: <Widget>[
+          _ThumbImage(imageUrl: vendor.image, label: vendor.title, size: 88),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: compact ? double.infinity : 420,
             ),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                FilledButton.tonalIcon(
-                  onPressed: onEditVendor,
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Vitrin'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    _StatusPill(
+                      label: _storefrontLabel(vendor.storefrontType),
+                      color: _info,
+                      backgroundColor: _infoSoft,
+                    ),
+                    _StatusPill(
+                      label: vendor.isActive ? 'Açık' : 'Pasif',
+                      color: vendor.isActive ? _success : _danger,
+                      backgroundColor: vendor.isActive
+                          ? _successSoft
+                          : _dangerSoft,
+                    ),
+                    _StatusPill(
+                      label: _stockLabel(vendor.stockStatus),
+                      color: _stockColor(vendor.stockStatus),
+                      backgroundColor: _stockColor(
+                        vendor.stockStatus,
+                      ).withValues(alpha: 0.12),
+                    ),
+                  ],
                 ),
-                OutlinedButton.icon(
-                  onPressed: onCreateSection,
-                  icon: const Icon(Icons.category_outlined),
-                  label: const Text('Kategori ekle'),
+                const SizedBox(height: 12),
+                Text(
+                  vendor.title,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-                FilledButton.icon(
-                  onPressed: onCreateProduct,
-                  icon: const Icon(Icons.add_box_outlined),
-                  label: const Text('Yeni ürün'),
+                const SizedBox(height: 6),
+                Text(
+                  vendor.subtitle.isEmpty ? vendor.meta : vendor.subtitle,
+                  style: const TextStyle(color: _muted, height: 1.5),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    if (vendor.badge.isNotEmpty) _InfoPill(label: vendor.badge),
+                    if (vendor.promoLabel.isNotEmpty)
+                      _InfoPill(label: vendor.promoLabel),
+                    if (vendor.rewardLabel.isNotEmpty)
+                      _InfoPill(label: vendor.rewardLabel),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              FilledButton.tonalIcon(
+                onPressed: onEditVendor,
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Vitrin'),
+              ),
+              OutlinedButton.icon(
+                onPressed: onCreateSection,
+                icon: const Icon(Icons.category_outlined),
+                label: const Text('Kategori ekle'),
+              ),
+              FilledButton.icon(
+                onPressed: onCreateProduct,
+                icon: const Icon(Icons.add_box_outlined),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _success,
+                  foregroundColor: Colors.white,
+                ),
+                label: const Text('Yeni ürün'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -8666,78 +12010,104 @@ class _ThumbImage extends StatelessWidget {
   }
 }
 
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({
-    required this.label,
-    required this.value,
-    required this.caption,
-    this.compact = false,
-    this.accent = _ink,
-    this.icon = Icons.auto_graph_rounded,
-    this.emphasis = false,
-    this.highlight = false,
-  });
-
-  final String label;
-  final String value;
-  final String caption;
-  final bool compact;
-  final Color accent;
-  final IconData icon;
-  final bool emphasis;
-  final bool highlight;
-
-  @override
-  Widget build(BuildContext context) {
-    return _SurfaceCard(
-      width: compact ? double.infinity : (emphasis ? 320 : 248),
-      tint: highlight ? _dangerSoft : _panelStrong,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, color: accent),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            label,
-            style: const TextStyle(color: _muted, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.displaySmall?.copyWith(
-              color: accent,
-              fontWeight: FontWeight.w900,
-              fontSize: compact ? 26 : (emphasis ? 34 : 28),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(caption, style: const TextStyle(color: _muted, height: 1.5)),
-        ],
-      ),
-    );
-  }
-}
-
 class _StatusPill extends StatelessWidget {
   const _StatusPill({
     required this.label,
     required this.color,
     this.backgroundColor,
-    this.compact = false,
   });
 
   final String label;
   final Color color;
   final Color? backgroundColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final double maxWidth = MediaQuery.sizeOf(context).width < 560
+        ? MediaQuery.sizeOf(context).width * 0.72
+        : 320;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: backgroundColor ?? color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.w800,
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderActionPill extends StatelessWidget {
+  const _HeaderActionPill({required this.label, this.onTap, this.icon});
+
+  final String label;
+  final VoidCallback? onTap;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget content = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: _successSoft,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFD7EDE2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          if (icon != null) ...<Widget>[
+            Icon(icon, size: 18, color: _success),
+            const SizedBox(width: 6),
+          ],
+          Flexible(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: _success,
+                fontWeight: FontWeight.w800,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (onTap == null) {
+      return content;
+    }
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: content,
+      ),
+    );
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  const _InfoPill({required this.label, this.compact = false});
+
+  final String label;
   final bool compact;
 
   @override
@@ -8750,41 +12120,8 @@ class _StatusPill extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.symmetric(
           horizontal: compact ? 10 : 12,
-          vertical: compact ? 6 : 8,
+          vertical: compact ? 7 : 8,
         ),
-        decoration: BoxDecoration(
-          color: backgroundColor ?? color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: color,
-            fontWeight: FontWeight.w800,
-            fontSize: compact ? 13 : 14,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoPill extends StatelessWidget {
-  const _InfoPill({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final double maxWidth = MediaQuery.sizeOf(context).width < 560
-        ? MediaQuery.sizeOf(context).width * 0.72
-        : 320;
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: maxWidth),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: _accentSoft,
           borderRadius: BorderRadius.circular(999),
@@ -8793,7 +12130,11 @@ class _InfoPill extends StatelessWidget {
           label,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: _ink, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            color: _ink,
+            fontWeight: FontWeight.w700,
+            fontSize: compact ? 13 : 14,
+          ),
         ),
       ),
     );
@@ -8826,27 +12167,20 @@ class _GlassBottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(32),
+      borderRadius: BorderRadius.circular(26),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: <Color>[
-                Colors.white.withValues(alpha: 0.74),
-                Colors.white.withValues(alpha: 0.42),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(32),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.55)),
+            color: Colors.white.withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: _line.withValues(alpha: 0.9)),
             boxShadow: const <BoxShadow>[
               BoxShadow(
-                color: Color(0x1A1E1917),
-                blurRadius: 24,
-                offset: Offset(0, 14),
+                color: Color(0x141E1917),
+                blurRadius: 22,
+                offset: Offset(0, 12),
               ),
             ],
           ),
@@ -8855,46 +12189,62 @@ class _GlassBottomNavBar extends StatelessWidget {
                 .map((_NavItem item) {
                   final bool selected = item.destination == selectedDestination;
                   return Expanded(
-                    child: GestureDetector(
-                      onTap: () => onSelected(item.destination),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        margin: const EdgeInsets.symmetric(horizontal: 2),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? Colors.white.withValues(alpha: 0.82)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(24),
-                          border: selected
-                              ? Border.all(color: const Color(0xFFF4D5A7))
-                              : null,
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            Icon(
-                              item.icon,
-                              color: selected ? _accentDeep : _ink,
-                              size: 24,
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              item.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: selected ? _ink : _muted,
-                                fontWeight: selected
-                                    ? FontWeight.w800
-                                    : FontWeight.w700,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => onSelected(item.destination),
+                        borderRadius: BorderRadius.circular(20),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 7,
+                          ),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? const Color(0xFFF3FAF6)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(22),
+                            border: selected
+                                ? Border.all(color: const Color(0xFFD7EDE2))
+                                : null,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                width: selected ? 38 : 34,
+                                height: selected ? 38 : 34,
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? _successSoft
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  item.icon,
+                                  color: selected ? _success : _ink,
+                                  size: selected ? 21 : 20,
+                                ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 5),
+                              Text(
+                                item.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  color: selected ? _ink : _muted,
+                                  fontWeight: selected
+                                      ? FontWeight.w800
+                                      : FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),

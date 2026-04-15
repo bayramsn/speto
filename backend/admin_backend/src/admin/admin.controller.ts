@@ -51,6 +51,11 @@ export class AdminController {
     return this.adminService.updateBusiness(req.adminUser!, vendorId, payload);
   }
 
+  @Delete('businesses/:vendorId')
+  deleteBusiness(@Req() req: AdminRequest, @Param('vendorId') vendorId: string) {
+    return this.adminService.deleteBusiness(req.adminUser!, vendorId);
+  }
+
   @Get('businesses/:vendorId/overview')
   businessOverview(@Param('vendorId') vendorId: string) {
     return this.adminService.getBusinessOverview(vendorId);
@@ -308,6 +313,11 @@ export class AdminController {
     @Body() payload: Record<string, unknown>,
   ) {
     return this.adminService.updateUser(req.adminUser!, userId, payload);
+  }
+
+  @Delete('users/:userId')
+  deleteUser(@Req() req: AdminRequest, @Param('userId') userId: string) {
+    return this.adminService.deleteUser(req.adminUser!, userId);
   }
 
   @Get('events')

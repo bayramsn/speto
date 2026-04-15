@@ -16,7 +16,7 @@ class SpetoRemoteDomainApi {
         body: <String, Object?>{'email': email, 'password': password},
       ),
     );
-    return _sessionFromAuthResponse(json);
+    return _apiClient.consumeAuthResponse(json);
   }
 
   Future<SpetoSession> register({
@@ -39,18 +39,91 @@ class SpetoRemoteDomainApi {
         },
       ),
     );
-    return _sessionFromAuthResponse(json);
+    return _apiClient.consumeAuthResponse(json);
+  }
+
+  Future<SpetoSession> registerOperator({
+    required SpetoStorefrontType storefrontType,
+    required String businessName,
+    required String businessCategory,
+    required String businessSubtitle,
+    required String businessImageUrl,
+    String city = '',
+    String district = '',
+    required String pickupPointLabel,
+    required String pickupPointAddress,
+    required String workingHoursLabel,
+    List<Map<String, Object?>> workingDays = const <Map<String, Object?>>[],
+    required String email,
+    required String password,
+    required String displayName,
+    required String phone,
+    required String holderName,
+    required String bankName,
+    required String iban,
+    String taxNumber = '',
+    String taxOffice = '',
+    required bool termsAccepted,
+    required bool privacyAccepted,
+    required bool marketingOptIn,
+    required bool notifyNewOrders,
+    required bool notifyCancellations,
+    required bool notifyLowStock,
+    required bool notifyCampaignTips,
+    bool notifySms = false,
+    bool notifyPush = true,
+  }) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.post(
+        'auth/operator-register',
+        body: <String, Object?>{
+          'storefrontType': _storefrontTypeApiName(storefrontType),
+          'business': <String, Object?>{
+            'name': businessName,
+            'category': businessCategory,
+            'subtitle': businessSubtitle,
+            'imageUrl': businessImageUrl,
+            'city': city,
+            'district': district,
+            'pickupPointLabel': pickupPointLabel,
+            'pickupPointAddress': pickupPointAddress,
+            'workingHoursLabel': workingHoursLabel,
+            'workingDays': workingDays,
+            'taxNumber': taxNumber,
+            'taxOffice': taxOffice,
+          },
+          'operator': <String, Object?>{
+            'email': email,
+            'password': password,
+            'displayName': displayName,
+            'phone': phone,
+          },
+          'bankAccount': <String, Object?>{
+            'holderName': holderName,
+            'bankName': bankName,
+            'iban': iban,
+          },
+          'consents': <String, Object?>{
+            'termsAccepted': termsAccepted,
+            'privacyAccepted': privacyAccepted,
+            'marketingOptIn': marketingOptIn,
+          },
+          'notifications': <String, Object?>{
+            'newOrders': notifyNewOrders,
+            'cancellations': notifyCancellations,
+            'lowStock': notifyLowStock,
+            'campaignTips': notifyCampaignTips,
+            'sms': notifySms,
+            'push': notifyPush,
+          },
+        },
+      ),
+    );
+    return _apiClient.consumeAuthResponse(json);
   }
 
   Future<bool> checkHealth() async {
-    try {
-      final Map<String, Object?> json = _asJsonMap(
-        await _apiClient.get('health'),
-      );
-      return json['status'] == 'ok';
-    } catch (_) {
-      return false;
-    }
+    return _apiClient.checkHealth();
   }
 
   Future<SpetoCatalogBootstrap> fetchCatalogBootstrap() async {
@@ -193,8 +266,43 @@ class SpetoRemoteDomainApi {
     return _mapList(response, SpetoCatalogContentBlock.fromJson);
   }
 
+  void setSession(SpetoSession? session) {
+    _apiClient.setSession(session);
+  }
+
+  SpetoSession mergeSession(SpetoSession session) {
+    return _apiClient.mergeSession(session);
+  }
+
+  bool shouldRefreshSession({
+    Duration threshold = const Duration(seconds: 30),
+  }) {
+    return _apiClient.shouldRefreshSession(threshold: threshold);
+  }
+
+  Future<SpetoSession?> refreshSession({
+    String? refreshToken,
+    bool notifyListeners = true,
+  }) {
+    return _apiClient.refreshSession(
+      refreshToken: refreshToken,
+      notifyListeners: notifyListeners,
+    );
+  }
+
+  Future<void> logout({String? refreshToken}) async {
+    final String normalizedRefreshToken = refreshToken?.trim() ?? '';
+    if (normalizedRefreshToken.isNotEmpty) {
+      await _apiClient.post(
+        'auth/logout',
+        body: <String, Object?>{'refreshToken': normalizedRefreshToken},
+      );
+    }
+    clearSession();
+  }
+
   void clearSession() {
-    _apiClient.clearAccessToken();
+    _apiClient.clearSession();
   }
 
   Future<bool> requestPasswordReset(String email) async {
@@ -345,6 +453,11 @@ class SpetoRemoteDomainApi {
       ),
     );
     return SpetoSupportTicket.fromJson(json);
+  }
+
+  Future<List<SpetoSupportTicket>> fetchSupportTickets() async {
+    final Object? response = await _apiClient.get('support/tickets');
+    return _mapList(response, SpetoSupportTicket.fromJson);
   }
 
   Future<void> updatePreference({
@@ -572,51 +685,169 @@ class SpetoRemoteDomainApi {
     return SpetoIntegrationSyncStatus.fromJson(json);
   }
 
-  SpetoSession _sessionFromAuthResponse(Map<String, Object?> json) {
-    final Map<String, Object?> user = _asJsonMap(json['user']);
-    final Map<String, Object?> tokens = _asJsonMap(json['tokens']);
-    final String accessToken = tokens['accessToken']! as String;
-    _apiClient.setAccessToken(accessToken);
-    return SpetoSession(
-      email: user['email']! as String,
-      displayName: user['displayName']! as String,
-      phone: user['phone']! as String? ?? '',
-      authToken: accessToken,
-      lastLoginIso: DateTime.now().toIso8601String(),
-      avatarUrl: user['avatarUrl'] as String? ?? '',
-      notificationsEnabled: user['notificationsEnabled'] as bool? ?? true,
-      role: _enumByApiName(
-        SpetoUserRole.values,
-        user['role'] as String?,
-        fallback: SpetoUserRole.customer,
+  Future<SpetoVendorFinanceSummary> fetchFinanceSummary({
+    String? vendorId,
+  }) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.get(
+        'ops/finance/summary',
+        queryParameters: <String, String?>{'vendorId': vendorId},
       ),
-      vendorScopes:
-          ((user['vendorScopes'] as List<Object?>?) ?? const <Object?>[])
-              .map((Object? item) => item! as String)
-              .toList(growable: false),
     );
+    return SpetoVendorFinanceSummary.fromJson(json);
   }
-}
 
-String _normalizeEnumToken(String? value) {
-  if (value == null || value.trim().isEmpty) {
-    return '';
+  Future<List<SpetoVendorBankAccount>> fetchFinanceAccounts({
+    String? vendorId,
+  }) async {
+    final Object? response = await _apiClient.get(
+      'ops/finance/accounts',
+      queryParameters: <String, String?>{'vendorId': vendorId},
+    );
+    return _mapList(response, SpetoVendorBankAccount.fromJson);
   }
-  return value.trim().replaceAll(RegExp(r'[\s_-]+'), '').toLowerCase();
-}
 
-T _enumByApiName<T extends Enum>(
-  List<T> values,
-  String? rawValue, {
-  required T fallback,
-}) {
-  final String normalizedRawValue = _normalizeEnumToken(rawValue);
-  for (final T value in values) {
-    if (_normalizeEnumToken(value.name) == normalizedRawValue) {
-      return value;
-    }
+  Future<SpetoVendorBankAccount> createFinanceAccount({
+    required String vendorId,
+    required String holderName,
+    required String bankName,
+    required String iban,
+    bool? isDefault,
+  }) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.post(
+        'ops/finance/accounts',
+        body: <String, Object?>{
+          'vendorId': vendorId,
+          'holderName': holderName,
+          'bankName': bankName,
+          'iban': iban,
+          if (isDefault != null) 'isDefault': isDefault,
+        },
+      ),
+    );
+    return SpetoVendorBankAccount.fromJson(json);
   }
-  return fallback;
+
+  Future<SpetoVendorPayout> createPayout({
+    required String vendorId,
+    required String bankAccountId,
+    required double amount,
+    String? note,
+  }) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.post(
+        'ops/finance/payouts',
+        body: <String, Object?>{
+          'vendorId': vendorId,
+          'bankAccountId': bankAccountId,
+          'amount': amount,
+          if (note != null && note.trim().isNotEmpty) 'note': note,
+        },
+      ),
+    );
+    return SpetoVendorPayout.fromJson(json);
+  }
+
+  Future<SpetoVendorCampaignSummary> fetchCampaignSummary({
+    String? vendorId,
+  }) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.get(
+        'ops/campaigns/summary',
+        queryParameters: <String, String?>{'vendorId': vendorId},
+      ),
+    );
+    return SpetoVendorCampaignSummary.fromJson(json);
+  }
+
+  Future<List<SpetoVendorCampaign>> fetchCampaigns({String? vendorId}) async {
+    final Object? response = await _apiClient.get(
+      'ops/campaigns',
+      queryParameters: <String, String?>{'vendorId': vendorId},
+    );
+    return _mapList(response, SpetoVendorCampaign.fromJson);
+  }
+
+  Future<SpetoVendorCampaign> createCampaign({
+    required String vendorId,
+    required SpetoCampaignKind kind,
+    required String title,
+    String? description,
+    SpetoCampaignStatus? status,
+    String? startsAt,
+    String? endsAt,
+    String? scheduleLabel,
+    String? badgeLabel,
+    int? discountPercent,
+    double? discountedPrice,
+    List<String>? productIds,
+  }) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.post(
+        'ops/campaigns',
+        body: <String, Object?>{
+          'vendorId': vendorId,
+          'kind': _campaignKindApiName(kind),
+          'title': title,
+          if (description != null) 'description': description,
+          if (status != null) 'status': _campaignStatusApiName(status),
+          if (startsAt != null) 'startsAt': startsAt,
+          if (endsAt != null) 'endsAt': endsAt,
+          if (scheduleLabel != null) 'scheduleLabel': scheduleLabel,
+          if (badgeLabel != null) 'badgeLabel': badgeLabel,
+          if (discountPercent != null) 'discountPercent': discountPercent,
+          if (discountedPrice != null) 'discountedPrice': discountedPrice,
+          if (productIds != null) 'productIds': productIds,
+        },
+      ),
+    );
+    return SpetoVendorCampaign.fromJson(json);
+  }
+
+  Future<SpetoVendorCampaign> updateCampaign({
+    required String campaignId,
+    SpetoCampaignKind? kind,
+    String? title,
+    String? description,
+    SpetoCampaignStatus? status,
+    String? startsAt,
+    String? endsAt,
+    String? scheduleLabel,
+    String? badgeLabel,
+    int? discountPercent,
+    double? discountedPrice,
+    List<String>? productIds,
+  }) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.patch(
+        'ops/campaigns/${Uri.encodeComponent(campaignId)}',
+        body: <String, Object?>{
+          if (kind != null) 'kind': _campaignKindApiName(kind),
+          if (title != null) 'title': title,
+          if (description != null) 'description': description,
+          if (status != null) 'status': _campaignStatusApiName(status),
+          if (startsAt != null) 'startsAt': startsAt,
+          if (endsAt != null) 'endsAt': endsAt,
+          if (scheduleLabel != null) 'scheduleLabel': scheduleLabel,
+          if (badgeLabel != null) 'badgeLabel': badgeLabel,
+          if (discountPercent != null) 'discountPercent': discountPercent,
+          if (discountedPrice != null) 'discountedPrice': discountedPrice,
+          if (productIds != null) 'productIds': productIds,
+        },
+      ),
+    );
+    return SpetoVendorCampaign.fromJson(json);
+  }
+
+  Future<SpetoVendorCampaign> toggleCampaign(String campaignId) async {
+    final Map<String, Object?> json = _asJsonMap(
+      await _apiClient.post(
+        'ops/campaigns/${Uri.encodeComponent(campaignId)}/toggle',
+      ),
+    );
+    return SpetoVendorCampaign.fromJson(json);
+  }
 }
 
 String _contentBlockTypeApiName(SpetoContentBlockType type) {
@@ -624,6 +855,31 @@ String _contentBlockTypeApiName(SpetoContentBlockType type) {
     SpetoContentBlockType.homeHero => 'HOME_HERO',
     SpetoContentBlockType.quickFilter => 'QUICK_FILTER',
     SpetoContentBlockType.discoveryFilter => 'DISCOVERY_FILTER',
+  };
+}
+
+String _storefrontTypeApiName(SpetoStorefrontType type) {
+  return switch (type) {
+    SpetoStorefrontType.restaurant => 'RESTAURANT',
+    SpetoStorefrontType.market => 'MARKET',
+  };
+}
+
+String _campaignKindApiName(SpetoCampaignKind kind) {
+  return switch (kind) {
+    SpetoCampaignKind.happyHour => 'HAPPY_HOUR',
+    SpetoCampaignKind.discount => 'DISCOUNT',
+    SpetoCampaignKind.clearance => 'CLEARANCE',
+    SpetoCampaignKind.bundle => 'BUNDLE',
+  };
+}
+
+String _campaignStatusApiName(SpetoCampaignStatus status) {
+  return switch (status) {
+    SpetoCampaignStatus.draft => 'DRAFT',
+    SpetoCampaignStatus.active => 'ACTIVE',
+    SpetoCampaignStatus.paused => 'PAUSED',
+    SpetoCampaignStatus.completed => 'COMPLETED',
   };
 }
 

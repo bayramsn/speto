@@ -6,7 +6,6 @@ import '../../core/data/default_data.dart';
 import '../../src/core/models.dart';
 import '../../shared/widgets/widgets.dart';
 import '../../features/restaurant/restaurant_detail_screen.dart';
-import 'event_data.dart';
 
 class DigitalTicketScreen extends StatefulWidget {
   const DigitalTicketScreen({super.key});
@@ -42,8 +41,39 @@ class _DigitalTicketScreenState extends State<DigitalTicketScreen>
   @override
   Widget build(BuildContext context) {
     final SpetoAppState appState = SpetoAppScope.of(context);
-    final SpetoEventTicket ticket =
-        appState.selectedTicket ?? featuredEventTicket;
+    final SpetoEventTicket? ticket = appState.selectedTicket;
+    if (ticket == null) {
+      return SpetoScreenScaffold(
+        title: 'Dijital Bilet',
+        background: Palette.aubergine,
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+          child: SpetoCard(
+            radius: 24,
+            color: Palette.cardWarm,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Görüntülenecek bilet yok',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Canlı etkinlik bileti oluşturulduğunda QR kodu burada göreceksin.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Palette.soft,
+                    height: 1.6,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return SpetoScreenScaffold(
       title: 'Dijital Bilet',
       background: Palette.aubergine,
@@ -142,8 +172,9 @@ class _DigitalTicketScreenState extends State<DigitalTicketScreen>
                       children: <Widget>[
                         Text(
                           'Etkinlik girişinde bu kodu gösterin',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: Palette.soft),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(color: Palette.soft),
                         ),
                         const SizedBox(height: 18),
                         FadeTransition(
@@ -172,8 +203,9 @@ class _DigitalTicketScreenState extends State<DigitalTicketScreen>
                         const SizedBox(height: 16),
                         Text(
                           ticket.code,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: Palette.soft),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(color: Palette.soft),
                         ),
                         const SizedBox(height: 20),
                         SpetoCard(
@@ -226,7 +258,7 @@ class _DigitalTicketScreenState extends State<DigitalTicketScreen>
 }
 
 class TicketInfo extends StatelessWidget {
-  const TicketInfo({required this.title, required this.value});
+  const TicketInfo({super.key, required this.title, required this.value});
 
   final String title;
   final String value;
@@ -257,4 +289,3 @@ class TicketInfo extends StatelessWidget {
     );
   }
 }
-

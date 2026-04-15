@@ -28,6 +28,12 @@ enum SpetoSyncRunStatus { idle, running, success, failed }
 
 enum SpetoStorefrontType { restaurant, market }
 
+enum SpetoPayoutStatus { pending, paid, failed }
+
+enum SpetoCampaignKind { happyHour, discount, clearance, bundle }
+
+enum SpetoCampaignStatus { draft, active, paused, completed }
+
 enum SpetoContentBlockType { homeHero, quickFilter, discoveryFilter }
 
 String _normalizeEnumToken(String? value) {
@@ -1209,6 +1215,221 @@ class SpetoSupportTicket {
   }
 }
 
+class SpetoVendorBankAccount {
+  const SpetoVendorBankAccount({
+    required this.id,
+    required this.vendorId,
+    required this.holderName,
+    required this.bankName,
+    required this.iban,
+    required this.maskedIban,
+    required this.isDefault,
+  });
+
+  final String id;
+  final String vendorId;
+  final String holderName;
+  final String bankName;
+  final String iban;
+  final String maskedIban;
+  final bool isDefault;
+
+  factory SpetoVendorBankAccount.fromJson(Map<String, Object?> json) {
+    return SpetoVendorBankAccount(
+      id: json['id'] as String? ?? '',
+      vendorId: json['vendorId'] as String? ?? '',
+      holderName: json['holderName'] as String? ?? '',
+      bankName: json['bankName'] as String? ?? '',
+      iban: json['iban'] as String? ?? '',
+      maskedIban: json['maskedIban'] as String? ?? '',
+      isDefault: json['isDefault'] as bool? ?? false,
+    );
+  }
+}
+
+class SpetoVendorPayout {
+  const SpetoVendorPayout({
+    required this.id,
+    required this.vendorId,
+    required this.bankAccountId,
+    required this.amount,
+    required this.status,
+    required this.note,
+    required this.requestedAtLabel,
+    required this.completedAtLabel,
+  });
+
+  final String id;
+  final String vendorId;
+  final String bankAccountId;
+  final double amount;
+  final SpetoPayoutStatus status;
+  final String note;
+  final String requestedAtLabel;
+  final String completedAtLabel;
+
+  factory SpetoVendorPayout.fromJson(Map<String, Object?> json) {
+    return SpetoVendorPayout(
+      id: json['id'] as String? ?? '',
+      vendorId: json['vendorId'] as String? ?? '',
+      bankAccountId: json['bankAccountId'] as String? ?? '',
+      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      status: _enumByApiName(
+        SpetoPayoutStatus.values,
+        json['status'] as String?,
+        fallback: SpetoPayoutStatus.pending,
+      ),
+      note: json['note'] as String? ?? '',
+      requestedAtLabel: json['requestedAtLabel'] as String? ?? '',
+      completedAtLabel: json['completedAtLabel'] as String? ?? '',
+    );
+  }
+}
+
+class SpetoVendorFinanceSummary {
+  const SpetoVendorFinanceSummary({
+    required this.vendorId,
+    required this.availableBalance,
+    required this.pendingBalance,
+    required this.lastPayoutAt,
+    required this.lastPayoutAmount,
+    required this.bankAccounts,
+  });
+
+  final String vendorId;
+  final double availableBalance;
+  final double pendingBalance;
+  final String lastPayoutAt;
+  final double lastPayoutAmount;
+  final List<SpetoVendorBankAccount> bankAccounts;
+
+  factory SpetoVendorFinanceSummary.fromJson(Map<String, Object?> json) {
+    return SpetoVendorFinanceSummary(
+      vendorId: json['vendorId'] as String? ?? '',
+      availableBalance: (json['availableBalance'] as num?)?.toDouble() ?? 0,
+      pendingBalance: (json['pendingBalance'] as num?)?.toDouble() ?? 0,
+      lastPayoutAt: json['lastPayoutAt'] as String? ?? '',
+      lastPayoutAmount: (json['lastPayoutAmount'] as num?)?.toDouble() ?? 0,
+      bankAccounts:
+          ((json['bankAccounts'] as List<Object?>?) ?? const <Object?>[])
+              .map(
+                (Object? item) => SpetoVendorBankAccount.fromJson(
+                  item! as Map<String, Object?>,
+                ),
+              )
+              .toList(growable: false),
+    );
+  }
+}
+
+class SpetoVendorCampaign {
+  const SpetoVendorCampaign({
+    required this.id,
+    required this.vendorId,
+    required this.title,
+    required this.description,
+    required this.kind,
+    required this.status,
+    required this.scheduleLabel,
+    required this.badgeLabel,
+    required this.discountPercent,
+    required this.discountedPrice,
+    required this.startsAt,
+    required this.endsAt,
+    required this.productIds,
+    required this.productTitles,
+    required this.storefrontType,
+  });
+
+  final String id;
+  final String vendorId;
+  final String title;
+  final String description;
+  final SpetoCampaignKind kind;
+  final SpetoCampaignStatus status;
+  final String scheduleLabel;
+  final String badgeLabel;
+  final int discountPercent;
+  final double discountedPrice;
+  final String startsAt;
+  final String endsAt;
+  final List<String> productIds;
+  final List<String> productTitles;
+  final SpetoStorefrontType storefrontType;
+
+  factory SpetoVendorCampaign.fromJson(Map<String, Object?> json) {
+    return SpetoVendorCampaign(
+      id: json['id'] as String? ?? '',
+      vendorId: json['vendorId'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      kind: _enumByApiName(
+        SpetoCampaignKind.values,
+        json['kind'] as String?,
+        fallback: SpetoCampaignKind.happyHour,
+      ),
+      status: _enumByApiName(
+        SpetoCampaignStatus.values,
+        json['status'] as String?,
+        fallback: SpetoCampaignStatus.draft,
+      ),
+      scheduleLabel: json['scheduleLabel'] as String? ?? '',
+      badgeLabel: json['badgeLabel'] as String? ?? '',
+      discountPercent: (json['discountPercent'] as num?)?.toInt() ?? 0,
+      discountedPrice: (json['discountedPrice'] as num?)?.toDouble() ?? 0,
+      startsAt: json['startsAt'] as String? ?? '',
+      endsAt: json['endsAt'] as String? ?? '',
+      productIds: ((json['productIds'] as List<Object?>?) ?? const <Object?>[])
+          .map((Object? item) => item as String)
+          .toList(growable: false),
+      productTitles:
+          ((json['productTitles'] as List<Object?>?) ?? const <Object?>[])
+              .map((Object? item) => item as String)
+              .toList(growable: false),
+      storefrontType: _enumByApiName(
+        SpetoStorefrontType.values,
+        json['storefrontType'] as String?,
+        fallback: SpetoStorefrontType.restaurant,
+      ),
+    );
+  }
+}
+
+class SpetoVendorCampaignSummary {
+  const SpetoVendorCampaignSummary({
+    required this.vendorId,
+    required this.activeCount,
+    required this.draftCount,
+    required this.pausedCount,
+    required this.criticalProductCount,
+    required this.campaigns,
+  });
+
+  final String vendorId;
+  final int activeCount;
+  final int draftCount;
+  final int pausedCount;
+  final int criticalProductCount;
+  final List<SpetoVendorCampaign> campaigns;
+
+  factory SpetoVendorCampaignSummary.fromJson(Map<String, Object?> json) {
+    return SpetoVendorCampaignSummary(
+      vendorId: json['vendorId'] as String? ?? '',
+      activeCount: (json['activeCount'] as num?)?.toInt() ?? 0,
+      draftCount: (json['draftCount'] as num?)?.toInt() ?? 0,
+      pausedCount: (json['pausedCount'] as num?)?.toInt() ?? 0,
+      criticalProductCount:
+          (json['criticalProductCount'] as num?)?.toInt() ?? 0,
+      campaigns: ((json['campaigns'] as List<Object?>?) ?? const <Object?>[])
+          .map(
+            (Object? item) =>
+                SpetoVendorCampaign.fromJson(item! as Map<String, Object?>),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
 class SpetoSession {
   const SpetoSession({
     required this.email,
@@ -1216,6 +1437,9 @@ class SpetoSession {
     required this.phone,
     required this.authToken,
     required this.lastLoginIso,
+    this.refreshToken = '',
+    this.accessTokenExpiresAt = '',
+    this.refreshTokenExpiresAt = '',
     this.avatarUrl = '',
     this.notificationsEnabled = true,
     this.role = SpetoUserRole.customer,
@@ -1227,6 +1451,9 @@ class SpetoSession {
   final String phone;
   final String authToken;
   final String lastLoginIso;
+  final String refreshToken;
+  final String accessTokenExpiresAt;
+  final String refreshTokenExpiresAt;
   final String avatarUrl;
   final bool notificationsEnabled;
   final SpetoUserRole role;
@@ -1238,6 +1465,9 @@ class SpetoSession {
     String? phone,
     String? authToken,
     String? lastLoginIso,
+    String? refreshToken,
+    String? accessTokenExpiresAt,
+    String? refreshTokenExpiresAt,
     String? avatarUrl,
     bool? notificationsEnabled,
     SpetoUserRole? role,
@@ -1249,6 +1479,10 @@ class SpetoSession {
       phone: phone ?? this.phone,
       authToken: authToken ?? this.authToken,
       lastLoginIso: lastLoginIso ?? this.lastLoginIso,
+      refreshToken: refreshToken ?? this.refreshToken,
+      accessTokenExpiresAt: accessTokenExpiresAt ?? this.accessTokenExpiresAt,
+      refreshTokenExpiresAt:
+          refreshTokenExpiresAt ?? this.refreshTokenExpiresAt,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       role: role ?? this.role,
@@ -1263,6 +1497,9 @@ class SpetoSession {
       'phone': phone,
       'authToken': authToken,
       'lastLoginIso': lastLoginIso,
+      'refreshToken': refreshToken,
+      'accessTokenExpiresAt': accessTokenExpiresAt,
+      'refreshTokenExpiresAt': refreshTokenExpiresAt,
       'avatarUrl': avatarUrl,
       'notificationsEnabled': notificationsEnabled,
       'role': role.name,
@@ -1277,6 +1514,9 @@ class SpetoSession {
       phone: json['phone']! as String,
       authToken: json['authToken']! as String,
       lastLoginIso: json['lastLoginIso']! as String,
+      refreshToken: json['refreshToken'] as String? ?? '',
+      accessTokenExpiresAt: json['accessTokenExpiresAt'] as String? ?? '',
+      refreshTokenExpiresAt: json['refreshTokenExpiresAt'] as String? ?? '',
       avatarUrl: json['avatarUrl'] as String? ?? '',
       notificationsEnabled: json['notificationsEnabled'] as bool? ?? true,
       role: _enumByApiName(

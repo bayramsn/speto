@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAdminAuth } from '../auth/adminAuth';
 import { BulkBar, EmptyState, LoadingState, Modal, PageHeader, Pagination, Panel, StatusBadge, TextInput, Toast } from '../components/ui';
+import { useLiveReload } from '../hooks/useLiveReload';
 import { approvalLabel, approvalTone, formatDate } from '../lib/formatters';
 import type { BusinessListItem, PagedResponse, StorefrontType, VendorApprovalStatus } from '../lib/types';
 
@@ -50,6 +51,7 @@ export function Businesses() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState('');
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -99,6 +101,7 @@ export function Businesses() {
   useEffect(() => {
     void load();
   }, [load]);
+  useLiveReload(load);
 
   function updateParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams);
@@ -166,6 +169,28 @@ export function Businesses() {
       setError(bulkError instanceof Error ? bulkError.message : 'Toplu işlem başarısız oldu.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function deleteBusiness(business: BusinessListItem) {
+    const confirmed = window.confirm(
+      `${business.name} kaydini silmek istiyor musunuz? Siparis veya odeme gecmisi olan isletmeler silinmez.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+    setDeletingId(business.id);
+    setError('');
+    try {
+      await request(`/admin/businesses/${business.id}`, {
+        method: 'DELETE',
+      });
+      await load();
+      setToast('Isletme silindi.');
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Isletme silinemedi.');
+    } finally {
+      setDeletingId('');
     }
   }
 
@@ -372,6 +397,14 @@ export function Businesses() {
                           type="button"
                         >
                           Askıya Al
+                        </button>
+                        <button
+                          className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                          disabled={deletingId === business.id}
+                          onClick={() => void deleteBusiness(business)}
+                          type="button"
+                        >
+                          {deletingId === business.id ? 'Siliniyor...' : 'Sil'}
                         </button>
                       </div>
                     </td>
