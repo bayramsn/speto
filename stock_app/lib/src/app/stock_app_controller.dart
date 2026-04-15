@@ -264,52 +264,63 @@ class StockAppController extends ChangeNotifier {
 
   Future<void> bootstrap() async {
     _bootstrapping = true;
+    _authError = null;
+    _dashboardError = null;
     notifyListeners();
 
-    final SharedPreferences prefs = await _sharedPreferencesLoader();
-    SpetoSession? restoredSession = _readStoredSession(prefs);
-    final StockApiBundle bundle = await _apiResolver(restoredSession);
-    final SpetoRemoteDomainApi api = bundle.api;
-    final SpetoRemoteApiClient? client = bundle.client;
+    SharedPreferences? prefs;
+    try {
+      prefs = await _sharedPreferencesLoader();
+      SpetoSession? restoredSession = _readStoredSession(prefs);
+      final StockApiBundle bundle = await _apiResolver(restoredSession);
+      final SpetoRemoteDomainApi api = bundle.api;
+      final SpetoRemoteApiClient? client = bundle.client;
 
-    client?.setSessionChangedCallback((SpetoSession? nextSession) async {
-      _session = nextSession;
-      if (nextSession == null) {
-        _resetDashboardState();
-      }
-      await _persistStoredSession(nextSession);
-      notifyListeners();
-    });
+      client?.setSessionChangedCallback((SpetoSession? nextSession) async {
+        _session = nextSession;
+        if (nextSession == null) {
+          _resetDashboardState();
+        }
+        await _persistStoredSession(nextSession);
+        notifyListeners();
+      });
 
-    _prefs = prefs;
-    _api = api;
-    if (restoredSession != null) {
-      try {
-        if (restoredSession.authToken.trim().isEmpty ||
-            restoredSession.refreshToken.trim().isEmpty) {
+      _prefs = prefs;
+      _api = api;
+      if (restoredSession != null) {
+        try {
+          if (restoredSession.authToken.trim().isEmpty ||
+              restoredSession.refreshToken.trim().isEmpty) {
+            restoredSession = null;
+            await _persistStoredSession(null);
+          } else if (api.shouldRefreshSession()) {
+            restoredSession = await api.refreshSession(
+              refreshToken: restoredSession.refreshToken,
+              notifyListeners: false,
+            );
+            await _persistStoredSession(restoredSession);
+          }
+        } catch (_) {
           restoredSession = null;
           await _persistStoredSession(null);
-        } else if (api.shouldRefreshSession()) {
-          restoredSession = await api.refreshSession(
-            refreshToken: restoredSession.refreshToken,
-            notifyListeners: false,
-          );
-          await _persistStoredSession(restoredSession);
+          api.clearSession();
         }
-      } catch (_) {
-        restoredSession = null;
-        await _persistStoredSession(null);
-        api.clearSession();
       }
-    }
 
-    _session = restoredSession;
-    _bootstrapping = false;
-    notifyListeners();
-
-    unawaited(probeBackend());
-    if (_session != null) {
-      await refreshData();
+      _session = restoredSession;
+      unawaited(probeBackend());
+      if (_session != null) {
+        await refreshData();
+      }
+    } catch (error) {
+      _session = null;
+      _authError = 'Oturum yüklenemedi. Tekrar giriş yapın.';
+      _dashboardError = explainError(error);
+      _resetDashboardState();
+      await prefs?.remove(_sessionStorageKey);
+    } finally {
+      _bootstrapping = false;
+      notifyListeners();
     }
   }
 
@@ -1012,11 +1023,15 @@ class StockAppController extends ChangeNotifier {
     if (raw == null || raw.isEmpty) {
       return null;
     }
-    final Object? decoded = jsonDecode(raw);
-    if (decoded is! Map) {
+    try {
+      final Object? decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return null;
+      }
+      return SpetoSession.fromJson(decoded.cast<String, Object?>());
+    } catch (_) {
       return null;
     }
-    return SpetoSession.fromJson(decoded.cast<String, Object?>());
   }
 
   Future<void> _persistStoredSession(SpetoSession? session) async {

@@ -609,7 +609,7 @@ bool _isHealthyBackendResponse(http.Response response) {
   try {
     final Object? decoded = jsonDecode(body);
     final Map<String, Object?> json = _asJsonMap(decoded);
-    return json['status'] == 'ok';
+    return json['status'] == 'ok' || json['ok'] == true;
   } catch (_) {
     return false;
   }

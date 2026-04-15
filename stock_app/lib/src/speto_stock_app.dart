@@ -261,48 +261,59 @@ class _SpetoStockAppState extends State<SpetoStockApp> {
   }
 
   Future<void> _bootstrapApi() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    SpetoSession? session = _readStoredSession(prefs);
-    final SpetoRemoteApiClient client =
-        await SpetoRemoteApiClient.resolveDefault(session: session);
-    final SpetoRemoteDomainApi api = SpetoRemoteDomainApi(client);
-    client.setSessionChangedCallback((SpetoSession? nextSession) async {
-      await _persistStoredSession(prefs, nextSession);
+    SharedPreferences? prefs;
+    try {
+      prefs = await SharedPreferences.getInstance();
+      SpetoSession? session = _readStoredSession(prefs);
+      final SpetoRemoteApiClient client =
+          await SpetoRemoteApiClient.resolveDefault(session: session);
+      final SpetoRemoteDomainApi api = SpetoRemoteDomainApi(client);
+      client.setSessionChangedCallback((SpetoSession? nextSession) async {
+        await _persistStoredSession(prefs!, nextSession);
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _session = nextSession;
+        });
+      });
+      if (session != null) {
+        try {
+          if (session.authToken.trim().isEmpty ||
+              session.refreshToken.trim().isEmpty) {
+            session = null;
+            await _persistStoredSession(prefs, null);
+          } else if (api.shouldRefreshSession() ||
+              session.authToken.trim().isEmpty) {
+            session = await api.refreshSession(
+              refreshToken: session.refreshToken,
+              notifyListeners: false,
+            );
+            await _persistStoredSession(prefs, session);
+          }
+        } catch (_) {
+          session = null;
+          await _persistStoredSession(prefs, null);
+          api.clearSession();
+        }
+      }
       if (!mounted) {
         return;
       }
       setState(() {
-        _session = nextSession;
+        _prefs = prefs;
+        _api = api;
+        _session = session;
       });
-    });
-    if (session != null) {
-      try {
-        if (session.authToken.trim().isEmpty ||
-            session.refreshToken.trim().isEmpty) {
-          session = null;
-          await _persistStoredSession(prefs, null);
-        } else if (api.shouldRefreshSession() ||
-            session.authToken.trim().isEmpty) {
-          session = await api.refreshSession(
-            refreshToken: session.refreshToken,
-            notifyListeners: false,
-          );
-          await _persistStoredSession(prefs, session);
-        }
-      } catch (_) {
-        session = null;
-        await _persistStoredSession(prefs, null);
-        api.clearSession();
+    } catch (_) {
+      await prefs?.remove(_sessionStorageKey);
+      if (!mounted) {
+        return;
       }
+      setState(() {
+        _session = null;
+      });
     }
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _prefs = prefs;
-      _api = api;
-      _session = session;
-    });
   }
 
   SpetoSession? _readStoredSession(SharedPreferences prefs) {
@@ -310,11 +321,15 @@ class _SpetoStockAppState extends State<SpetoStockApp> {
     if (raw == null || raw.isEmpty) {
       return null;
     }
-    final Object? decoded = jsonDecode(raw);
-    if (decoded is! Map<String, Object?>) {
+    try {
+      final Object? decoded = jsonDecode(raw);
+      if (decoded is! Map<String, Object?>) {
+        return null;
+      }
+      return SpetoSession.fromJson(decoded);
+    } catch (_) {
       return null;
     }
-    return SpetoSession.fromJson(decoded);
   }
 
   Future<void> _persistStoredSession(
