@@ -2717,10 +2717,36 @@ export class AppDataService {
       throw new NotFoundException(`Vendor ${vendorId} not found`);
     }
 
+    const nextName =
+      typeof payload['name'] === 'string' ? payload['name'].trim() : undefined;
+    const nextSubtitle =
+      typeof payload['subtitle'] === 'string' ? payload['subtitle'].trim() : undefined;
+    const normalizedExistingHeroTitle = (existing.heroTitle ?? '').trim();
+    const normalizedExistingHeroSubtitle = (existing.heroSubtitle ?? '').trim();
+    const normalizedExistingSubtitle = (existing.subtitle ?? '').trim();
+
     await this.prisma.$transaction(async (tx) => {
+      const vendorUpdateData: Prisma.VendorUpdateInput =
+        this.toCatalogVendorUpdateData(payload);
+      if (
+        nextName &&
+        payload['heroTitle'] === undefined &&
+        (!normalizedExistingHeroTitle || normalizedExistingHeroTitle === existing.name)
+      ) {
+        vendorUpdateData.heroTitle = nextName;
+      }
+      if (
+        nextSubtitle !== undefined &&
+        payload['heroSubtitle'] === undefined &&
+        (!normalizedExistingHeroSubtitle ||
+          normalizedExistingHeroSubtitle === normalizedExistingSubtitle)
+      ) {
+        vendorUpdateData.heroSubtitle = nextSubtitle || null;
+      }
+
       await tx.vendor.update({
         where: { id: vendorId },
-        data: this.toCatalogVendorUpdateData(payload),
+        data: vendorUpdateData,
       });
 
       const pickupLabel =

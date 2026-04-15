@@ -297,11 +297,30 @@ export class AdminService {
       throw new NotFoundException(`Vendor ${vendorId} not found`);
     }
 
+    const nextName =
+      payload.name !== undefined
+        ? this.requireString(payload.name, 'İşletme adı zorunludur')
+        : undefined;
+    const nextSubtitle =
+      payload.subtitle !== undefined ? this.optionalString(payload.subtitle) || null : undefined;
+    const normalizedExistingHeroTitle = (existing.heroTitle ?? '').trim();
+    const normalizedExistingHeroSubtitle = (existing.heroSubtitle ?? '').trim();
+    const normalizedExistingSubtitle = (existing.subtitle ?? '').trim();
+    const shouldSyncHeroTitle =
+      nextName !== undefined &&
+      payload.heroTitle === undefined &&
+      (!normalizedExistingHeroTitle || normalizedExistingHeroTitle === existing.name);
+    const shouldSyncHeroSubtitle =
+      nextSubtitle !== undefined &&
+      payload.heroSubtitle === undefined &&
+      (!normalizedExistingHeroSubtitle ||
+        normalizedExistingHeroSubtitle === normalizedExistingSubtitle);
+
     await this.prisma.$transaction(async (tx) => {
       await tx.vendor.update({
         where: { id: vendorId },
         data: {
-          ...(payload.name !== undefined ? { name: this.requireString(payload.name, 'İşletme adı zorunludur') } : {}),
+          ...(nextName !== undefined ? { name: nextName } : {}),
           ...(payload.category !== undefined
             ? { category: this.requireString(payload.category, 'Kategori zorunludur') }
             : {}),
@@ -313,8 +332,10 @@ export class AdminService {
             ? { district: this.optionalString(payload.district) || null }
             : {}),
           ...(payload.subtitle !== undefined
-            ? { subtitle: this.optionalString(payload.subtitle) || null }
+            ? { subtitle: nextSubtitle }
             : {}),
+          ...(shouldSyncHeroTitle ? { heroTitle: nextName } : {}),
+          ...(shouldSyncHeroSubtitle ? { heroSubtitle: nextSubtitle } : {}),
           ...(payload.imageUrl !== undefined
             ? { imageUrl: this.optionalString(payload.imageUrl) || null }
             : {}),
