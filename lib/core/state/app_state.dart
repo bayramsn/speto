@@ -13,12 +13,32 @@ const String _spetoOtpTestCodeOverride = String.fromEnvironment(
   'SPETO_TEST_OTP_CODE',
 );
 const String _defaultRegistrationTestOtpCode = '12345';
+const Set<String> _legacyHappyHourProductIds = <String>{
+  'mega-burger-menu',
+  'pepperoni-pizza-slice',
+};
 
 enum SpetoRegistrationOtpVerificationResult {
   verified,
   invalidCode,
   emailAlreadyRegistered,
   unavailable,
+}
+
+String _normalizeCheckoutLookupText(String value) {
+  return value
+      .split('•')
+      .first
+      .trim()
+      .toLowerCase()
+      .replaceAll('ç', 'c')
+      .replaceAll('ğ', 'g')
+      .replaceAll('ı', 'i')
+      .replaceAll('ö', 'o')
+      .replaceAll('ş', 's')
+      .replaceAll('ü', 'u')
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
 }
 
 class SpetoAppState extends ChangeNotifier {
@@ -875,6 +895,7 @@ class SpetoAppState extends ChangeNotifier {
   }) async {
     final SpetoRemoteDomainApi? domainApi = _domainApi;
     if (domainApi != null) {
+      await _refreshHappyHourOffersFromBackend();
       final SpetoOrder order = await domainApi.checkout(
         cartItems: _cartItems,
         pickupPointLabel: deliveryAddress,
@@ -1223,8 +1244,14 @@ class SpetoAppState extends ChangeNotifier {
       _inventoryByProductId.clear();
       return;
     }
-    final List<SpetoInventoryItem> items = await domainApi
-        .fetchInventoryItems();
+    final List<SpetoInventoryItem> items;
+    try {
+      items = await domainApi.fetchInventoryItems();
+    } catch (error) {
+      debugPrint('Skipping customer inventory sync: $error');
+      _inventoryByProductId.clear();
+      return;
+    }
     _inventoryByProductId
       ..clear()
       ..addEntries(
@@ -1245,6 +1272,7 @@ class SpetoAppState extends ChangeNotifier {
     _happyHourOffers
       ..clear()
       ..addAll(offers);
+    _replaceLegacyHappyHourCartItems();
     if (_happyHourOffers.isEmpty) {
       _selectedHappyHourOfferId = null;
       return;
@@ -1256,6 +1284,69 @@ class SpetoAppState extends ChangeNotifier {
       _selectedHappyHourOfferId = _happyHourOffers.first.id;
     }
     _selectedHappyHourOfferId ??= _happyHourOffers.first.id;
+  }
+
+  void _replaceLegacyHappyHourCartItems() {
+    if (_cartItems.isEmpty || _happyHourOffers.isEmpty) {
+      return;
+    }
+    bool changed = false;
+    final List<SpetoCartItem> nextCartItems = <SpetoCartItem>[];
+    for (final SpetoCartItem item in _cartItems) {
+      final SpetoHappyHourOffer? offer = _happyHourOfferForCartItem(item);
+      if (offer == null) {
+        nextCartItems.add(item);
+        continue;
+      }
+      final SpetoCartItem nextItem = SpetoCartItem(
+        id: offer.productId,
+        vendor: offer.vendorName,
+        title: offer.title,
+        image: offer.imageUrl,
+        unitPrice: offer.discountedPrice,
+        quantity: item.quantity,
+      );
+      changed =
+          changed ||
+          item.id != nextItem.id ||
+          item.vendor != nextItem.vendor ||
+          item.title != nextItem.title ||
+          item.image != nextItem.image ||
+          item.unitPrice != nextItem.unitPrice;
+      nextCartItems.add(nextItem);
+    }
+    if (changed) {
+      _cartItems = nextCartItems;
+    }
+  }
+
+  SpetoHappyHourOffer? _happyHourOfferForCartItem(SpetoCartItem item) {
+    final String itemId = item.id.trim();
+    for (final SpetoHappyHourOffer offer in _happyHourOffers) {
+      if (offer.productId == itemId || offer.id == itemId) {
+        return offer;
+      }
+    }
+
+    final String normalizedTitle = _normalizeCheckoutLookupText(item.title);
+    final String normalizedVendor = _normalizeCheckoutLookupText(item.vendor);
+    for (final SpetoHappyHourOffer offer in _happyHourOffers) {
+      if (_normalizeCheckoutLookupText(offer.title) == normalizedTitle &&
+          (normalizedVendor.isEmpty ||
+              _normalizeCheckoutLookupText(offer.vendorName) ==
+                  normalizedVendor)) {
+        return offer;
+      }
+    }
+
+    if (!_legacyHappyHourProductIds.contains(itemId)) {
+      return null;
+    }
+    final int fallbackIndex = itemId == 'pepperoni-pizza-slice' ? 1 : 0;
+    if (fallbackIndex < _happyHourOffers.length) {
+      return _happyHourOffers[fallbackIndex];
+    }
+    return _happyHourOffers.first;
   }
 
   Future<void> _syncPreferenceChange({

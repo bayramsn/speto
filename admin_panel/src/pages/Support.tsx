@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAdminAuth } from '../auth/adminAuth';
 import { EmptyState, LoadingState, Modal, PageHeader, Pagination, Panel, StatusBadge, TextArea, TextInput, Toast } from '../components/ui';
 import { useLiveReload } from '../hooks/useLiveReload';
-import { formatDate, supportStatusLabel } from '../lib/formatters';
+import { formatDate, supportPriorityLabel, supportStatusLabel } from '../lib/formatters';
 import type { AdminSupportTicket, AdminSupportTicketDetail, PagedResponse, SupportPriority, SupportStatus } from '../lib/types';
 
 const SUPPORT_STATUSES: SupportStatus[] = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
@@ -196,7 +196,7 @@ export function Support() {
               <option value="">Tümü</option>
               {SUPPORT_PRIORITIES.map((priority) => (
                 <option key={priority} value={priority}>
-                  {priority}
+                  {supportPriorityLabel(priority)}
                 </option>
               ))}
             </select>
@@ -231,7 +231,7 @@ export function Support() {
                               : 'warning'
                         }
                       />
-                      <StatusBadge label={ticket.priority} tone={ticket.priority === 'URGENT' || ticket.priority === 'HIGH' ? 'danger' : 'info'} />
+                      <StatusBadge label={supportPriorityLabel(ticket.priority)} tone={ticket.priority === 'URGENT' || ticket.priority === 'HIGH' ? 'danger' : 'info'} />
                     </div>
                     <p className="mt-2 text-sm text-slate-500">
                       {ticket.userName} · {ticket.userEmail} · {ticket.channel}
@@ -261,7 +261,7 @@ export function Support() {
                     >
                       {SUPPORT_PRIORITIES.map((priority) => (
                         <option key={priority} value={priority}>
-                          {priority}
+                          {supportPriorityLabel(priority)}
                         </option>
                       ))}
                     </select>
@@ -316,7 +316,7 @@ export function Support() {
               <p className="text-sm text-slate-500">{detail.userName} · {detail.userEmail}</p>
               <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{detail.message}</p>
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <StatusBadge label={detail.priority} tone={detail.priority === 'URGENT' || detail.priority === 'HIGH' ? 'danger' : 'info'} />
+                <StatusBadge label={supportPriorityLabel(detail.priority)} tone={detail.priority === 'URGENT' || detail.priority === 'HIGH' ? 'danger' : 'info'} />
                 <StatusBadge
                   label={supportStatusLabel(detail.status)}
                   tone={
@@ -358,7 +358,7 @@ export function Support() {
                 >
                   {SUPPORT_PRIORITIES.map((priority) => (
                     <option key={priority} value={priority}>
-                      {priority}
+                      {supportPriorityLabel(priority)}
                     </option>
                   ))}
                 </select>

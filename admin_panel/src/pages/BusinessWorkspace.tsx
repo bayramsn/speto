@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 
 import { useAdminAuth } from '../auth/adminAuth';
 import {
@@ -11,6 +11,7 @@ import {
   StatusBadge,
   TextArea,
   TextInput,
+  Toast,
 } from '../components/ui';
 import { useLiveReload } from '../hooks/useLiveReload';
 import {
@@ -27,6 +28,7 @@ import type {
   AdminOrder,
   AdminProduct,
   BusinessOverview,
+  BusinessListItem,
   BusinessProductsResponse,
   BusinessProfileResponse,
   CampaignKind,
@@ -107,6 +109,7 @@ const TABS = [
 ] as const;
 
 export function BusinessWorkspace() {
+  const navigate = useNavigate();
   const { businessId = '', tab = 'overview' } = useParams();
   const isValidTab = TABS.some((item) => item.id === tab);
   const { request } = useAdminAuth();
@@ -117,7 +120,10 @@ export function BusinessWorkspace() {
   const [profile, setProfile] = useState<BusinessProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [deletingBusiness, setDeletingBusiness] = useState(false);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState('');
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [campaignModalOpen, setCampaignModalOpen] = useState(false);
   const [sectionLabel, setSectionLabel] = useState('');
@@ -495,6 +501,49 @@ export function BusinessWorkspace() {
     }
   }
 
+  async function updateBusinessStatus(
+    payload: Partial<Pick<BusinessListItem, 'approvalStatus' | 'isActive'>> & {
+      suspendedReason?: string;
+    },
+  ) {
+    setStatusSaving(true);
+    setError('');
+    try {
+      await request(`/admin/businesses/${businessId}`, {
+        method: 'PATCH',
+        body: payload,
+      });
+      await loadCurrentTab();
+      setToast('İşletme başvurusu güncellendi.');
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : 'İşletme güncellenemedi.');
+    } finally {
+      setStatusSaving(false);
+    }
+  }
+
+  async function deleteBusiness() {
+    const businessName = (overview?.business || profile?.business)?.name ?? title;
+    const confirmed = window.confirm(
+      `${businessName} kaydını silmek istiyor musunuz? Sipariş veya ödeme geçmişi olan işletmeler silinmez.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+    setDeletingBusiness(true);
+    setError('');
+    try {
+      await request(`/admin/businesses/${businessId}`, {
+        method: 'DELETE',
+      });
+      navigate('/businesses');
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'İşletme silinemedi.');
+    } finally {
+      setDeletingBusiness(false);
+    }
+  }
+
   if (!isValidTab) {
     return <Navigate replace to={`/businesses/${businessId}/overview`} />;
   }
@@ -511,6 +560,7 @@ export function BusinessWorkspace() {
 
   return (
     <div className="space-y-8">
+      <Toast message={toast} onClose={() => setToast('')} />
       <div className="flex items-center gap-3 text-sm text-slate-500">
         <Link className="hover:text-primary" to="/businesses">
           İşletmeler
@@ -525,15 +575,54 @@ export function BusinessWorkspace() {
       />
 
       {overview?.business || profile?.business ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <StatusBadge
-            label={approvalLabel((overview?.business || profile?.business)!.approvalStatus)}
-            tone={approvalTone((overview?.business || profile?.business)!.approvalStatus)}
-          />
-          <StatusBadge
-            label={(overview?.business || profile?.business)!.isActive ? 'Yayında' : 'Pasif'}
-            tone={(overview?.business || profile?.business)!.isActive ? 'success' : 'default'}
-          />
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              className="rounded-2xl border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+              disabled={statusSaving || deletingBusiness}
+              onClick={() =>
+                void updateBusinessStatus({
+                  approvalStatus: 'APPROVED',
+                  isActive: true,
+                })
+              }
+              type="button"
+            >
+              Onayla
+            </button>
+            <button
+              className="rounded-2xl border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+              disabled={statusSaving || deletingBusiness}
+              onClick={() =>
+                void updateBusinessStatus({
+                  approvalStatus: 'SUSPENDED',
+                  isActive: false,
+                  suspendedReason: 'Admin askıya alma',
+                })
+              }
+              type="button"
+            >
+              Askıya Al
+            </button>
+            <button
+              className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+              disabled={statusSaving || deletingBusiness}
+              onClick={() => void deleteBusiness()}
+              type="button"
+            >
+              {deletingBusiness ? 'Siliniyor...' : 'Sil'}
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <StatusBadge
+              label={approvalLabel((overview?.business || profile?.business)!.approvalStatus)}
+              tone={approvalTone((overview?.business || profile?.business)!.approvalStatus)}
+            />
+            <StatusBadge
+              label={(overview?.business || profile?.business)!.isActive ? 'Yayında' : 'Pasif'}
+              tone={(overview?.business || profile?.business)!.isActive ? 'success' : 'default'}
+            />
+          </div>
         </div>
       ) : null}
 

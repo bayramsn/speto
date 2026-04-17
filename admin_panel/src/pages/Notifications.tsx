@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAdminAuth } from '../auth/adminAuth';
 import { EmptyState, LoadingState, Modal, PageHeader, Pagination, Panel, StatusBadge, TextArea, TextInput, Toast } from '../components/ui';
 import { useLiveReload } from '../hooks/useLiveReload';
-import { formatDate, notificationStatusLabel } from '../lib/formatters';
+import { formatDate, notificationAudienceLabel, notificationStatusLabel } from '../lib/formatters';
 import type {
   AdminNotification,
   NotificationAudience,
@@ -241,7 +241,7 @@ export function Notifications() {
               <option value="">Tümü</option>
               {AUDIENCE_OPTIONS.map((audience) => (
                 <option key={audience} value={audience}>
-                  {audience}
+                  {notificationAudienceLabel(audience)}
                 </option>
               ))}
             </select>
@@ -278,7 +278,7 @@ export function Notifications() {
                       />
                     </div>
                     <p className="mt-2 text-sm text-slate-500">
-                      {notification.audience} · {notification.createdByName}
+                      {notificationAudienceLabel(notification.audience)} · {notification.createdByName}
                     </p>
                     <p className="mt-3 text-sm text-slate-700 whitespace-pre-wrap">{notification.body}</p>
                     {notification.deliveryLogs.length > 0 ? (
@@ -363,7 +363,7 @@ export function Notifications() {
                       : 'default'
                 }
               />
-              <StatusBadge label={preview.audience} tone="info" />
+              <StatusBadge label={notificationAudienceLabel(preview.audience)} tone="info" />
             </div>
             <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -441,7 +441,7 @@ export function Notifications() {
             >
               {AUDIENCE_OPTIONS.map((audience) => (
                 <option key={audience} value={audience}>
-                  {audience}
+                  {notificationAudienceLabel(audience)}
                 </option>
               ))}
             </select>

@@ -1,7 +1,9 @@
 import type {
   CampaignStatus,
+  NotificationAudience,
   NotificationStatus,
   OrderStatus,
+  SupportPriority,
   SupportStatus,
   VendorApprovalStatus,
 } from './types';
@@ -108,6 +110,19 @@ export function supportStatusLabel(status: SupportStatus) {
   }
 }
 
+export function supportPriorityLabel(priority: SupportPriority) {
+  switch (priority) {
+    case 'LOW':
+      return 'Düşük';
+    case 'NORMAL':
+      return 'Normal';
+    case 'HIGH':
+      return 'Yüksek';
+    case 'URGENT':
+      return 'Acil';
+  }
+}
+
 export function notificationStatusLabel(status: NotificationStatus) {
   switch (status) {
     case 'DRAFT':
@@ -116,5 +131,18 @@ export function notificationStatusLabel(status: NotificationStatus) {
       return 'Planlandı';
     case 'SENT':
       return 'Gönderildi';
+  }
+}
+
+export function notificationAudienceLabel(audience: NotificationAudience) {
+  switch (audience) {
+    case 'ALL_USERS':
+      return 'Müşteriler';
+    case 'ALL_BUSINESSES':
+      return 'Marketler';
+    case 'ALL_VENDORS':
+      return 'Restoranlar';
+    case 'CUSTOM':
+      return 'Diğer İşletme';
   }
 }

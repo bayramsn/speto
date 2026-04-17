@@ -7,9 +7,11 @@ import { useLiveReload } from '../hooks/useLiveReload';
 import { approvalLabel, approvalTone, formatDate } from '../lib/formatters';
 import type { BusinessListItem, PagedResponse, StorefrontType, VendorApprovalStatus } from '../lib/types';
 
+type BusinessStorefrontType = StorefrontType | 'OTHER_HAPPY_HOUR';
+
 type BusinessDraft = {
   name: string;
-  storefrontType: StorefrontType;
+  storefrontType: BusinessStorefrontType;
   category: string;
   city: string;
   district: string;
@@ -24,6 +26,16 @@ type BusinessDraft = {
   approvalStatus: VendorApprovalStatus;
   isActive: boolean;
 };
+
+function defaultCategoryForBusinessType(type: BusinessStorefrontType) {
+  if (type === 'RESTAURANT') {
+    return 'Restoran';
+  }
+  if (type === 'OTHER_HAPPY_HOUR') {
+    return 'Happy Hour';
+  }
+  return 'Market';
+}
 
 const EMPTY_BUSINESS_DRAFT: BusinessDraft = {
   name: '',
@@ -51,7 +63,6 @@ export function Businesses() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState('');
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -60,25 +71,33 @@ export function Businesses() {
 
   const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
   const pageSize = 25;
+  const storefrontTypeFilter = searchParams.get('storefrontType') ?? '';
+  const searchFilter = searchParams.get('q') ?? '';
+  const backendStorefrontTypeFilter =
+    storefrontTypeFilter === 'OTHER_HAPPY_HOUR' ? 'MARKET' : storefrontTypeFilter;
+  const backendSearchFilter =
+    storefrontTypeFilter === 'OTHER_HAPPY_HOUR' && !searchFilter.trim()
+      ? 'Happy Hour'
+      : searchFilter;
   const query = useMemo(
     () => ({
-      q: searchParams.get('q') ?? '',
+      q: backendSearchFilter,
       approvalStatus: searchParams.get('approvalStatus') ?? '',
-      storefrontType: searchParams.get('storefrontType') ?? '',
+      storefrontType: backendStorefrontTypeFilter,
       isActive: searchParams.get('isActive') ?? '',
       page,
       pageSize,
     }),
-    [page, searchParams],
+    [backendSearchFilter, backendStorefrontTypeFilter, page, searchParams],
   );
   const exportQuery = useMemo(
     () => ({
-      q: searchParams.get('q') ?? '',
+      q: backendSearchFilter,
       approvalStatus: searchParams.get('approvalStatus') ?? '',
-      storefrontType: searchParams.get('storefrontType') ?? '',
+      storefrontType: backendStorefrontTypeFilter,
       isActive: searchParams.get('isActive') ?? '',
     }),
-    [searchParams],
+    [backendSearchFilter, backendStorefrontTypeFilter, searchParams],
   );
 
   const load = useCallback(async () => {
@@ -118,9 +137,14 @@ export function Businesses() {
     setSaving(true);
     setError('');
     try {
+      const isOtherBusiness = draft.storefrontType === 'OTHER_HAPPY_HOUR';
       await request('/admin/businesses', {
         method: 'POST',
-        body: draft,
+        body: {
+          ...draft,
+          storefrontType: isOtherBusiness ? 'MARKET' : draft.storefrontType,
+          category: draft.category.trim() || defaultCategoryForBusinessType(draft.storefrontType),
+        },
       });
       setModalOpen(false);
       setDraft(EMPTY_BUSINESS_DRAFT);
@@ -130,22 +154,6 @@ export function Businesses() {
       setError(saveError instanceof Error ? saveError.message : 'İşletme oluşturulamadı.');
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function quickUpdateBusiness(
-    businessId: string,
-    payload: Partial<Pick<BusinessListItem, 'approvalStatus' | 'isActive'>>,
-  ) {
-    try {
-      await request(`/admin/businesses/${businessId}`, {
-        method: 'PATCH',
-        body: payload,
-      });
-      await load();
-      setToast('İşletme güncellendi.');
-    } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : 'İşletme güncellenemedi.');
     }
   }
 
@@ -169,28 +177,6 @@ export function Businesses() {
       setError(bulkError instanceof Error ? bulkError.message : 'Toplu işlem başarısız oldu.');
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function deleteBusiness(business: BusinessListItem) {
-    const confirmed = window.confirm(
-      `${business.name} kaydini silmek istiyor musunuz? Siparis veya odeme gecmisi olan isletmeler silinmez.`,
-    );
-    if (!confirmed) {
-      return;
-    }
-    setDeletingId(business.id);
-    setError('');
-    try {
-      await request(`/admin/businesses/${business.id}`, {
-        method: 'DELETE',
-      });
-      await load();
-      setToast('Isletme silindi.');
-    } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : 'Isletme silinemedi.');
-    } finally {
-      setDeletingId('');
     }
   }
 
@@ -243,14 +229,14 @@ export function Businesses() {
               value={searchParams.get('approvalStatus') ?? ''}
             >
               <option value="">Tümü</option>
-              <option value="PENDING">Bekliyor</option>
               <option value="APPROVED">Onaylı</option>
+              <option value="PENDING">Beklemede</option>
               <option value="REJECTED">Reddedildi</option>
-              <option value="SUSPENDED">Askıda</option>
+              <option value="SUSPENDED">Askıya Alınmış</option>
             </select>
           </label>
           <label className="block">
-            <span className="text-sm font-semibold text-slate-600">Tür</span>
+            <span className="text-sm font-semibold text-slate-600">İşletme Türü</span>
             <select
               className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none"
               onChange={(event) => updateParam('storefrontType', event.target.value)}
@@ -259,6 +245,7 @@ export function Businesses() {
               <option value="">Tümü</option>
               <option value="MARKET">Market</option>
               <option value="RESTAURANT">Restoran</option>
+              <option value="OTHER_HAPPY_HOUR">Diğer İşletme (Happy Hour)</option>
             </select>
           </label>
           <label className="block">
@@ -372,39 +359,9 @@ export function Businesses() {
                           onClick={() => navigate(`/businesses/${business.id}/overview`)}
                           type="button"
                         >
-                          İşletmeye Gir
-                        </button>
-                        <button
-                          className="rounded-2xl border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
-                          onClick={() =>
-                            void quickUpdateBusiness(business.id, {
-                              approvalStatus: 'APPROVED',
-                              isActive: true,
-                            })
-                          }
-                          type="button"
-                        >
-                          Onayla
-                        </button>
-                        <button
-                          className="rounded-2xl border border-amber-200 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50"
-                          onClick={() =>
-                            void quickUpdateBusiness(business.id, {
-                              approvalStatus: 'SUSPENDED',
-                              isActive: false,
-                            })
-                          }
-                          type="button"
-                        >
-                          Askıya Al
-                        </button>
-                        <button
-                          className="rounded-2xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
-                          disabled={deletingId === business.id}
-                          onClick={() => void deleteBusiness(business)}
-                          type="button"
-                        >
-                          {deletingId === business.id ? 'Siliniyor...' : 'Sil'}
+                          {business.approvalStatus === 'APPROVED'
+                            ? 'İşletmeyi Görüntüle'
+                            : 'İşletme Başvurusunu İncele'}
                         </button>
                       </div>
                     </td>
@@ -434,19 +391,22 @@ export function Businesses() {
             value={draft.name}
           />
           <label className="block">
-            <span className="text-sm font-semibold text-slate-600">Storefront Type</span>
+            <span className="text-sm font-semibold text-slate-600">İşletme Türü</span>
             <select
               className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-primary focus:bg-white"
-              onChange={(event) =>
+              onChange={(event) => {
+                const storefrontType = event.target.value as BusinessStorefrontType;
                 setDraft((current) => ({
                   ...current,
-                  storefrontType: event.target.value as StorefrontType,
-                }))
-              }
+                  storefrontType,
+                  category: defaultCategoryForBusinessType(storefrontType),
+                }));
+              }}
               value={draft.storefrontType}
             >
-              <option value="MARKET">MARKET</option>
-              <option value="RESTAURANT">RESTAURANT</option>
+              <option value="MARKET">Market</option>
+              <option value="RESTAURANT">Restoran</option>
+              <option value="OTHER_HAPPY_HOUR">Diğer İşletme (Happy Hour)</option>
             </select>
           </label>
           <TextInput
@@ -470,42 +430,37 @@ export function Businesses() {
             value={draft.district}
           />
           <TextInput
-            label="Görsel URL"
+            label="İşletme Profil Resmi URL"
             onChange={(value) => setDraft((current) => ({ ...current, imageUrl: value }))}
             value={draft.imageUrl}
           />
           <TextInput
-            label="Pickup Etiketi"
-            onChange={(value) => setDraft((current) => ({ ...current, pickupPointLabel: value }))}
-            value={draft.pickupPointLabel}
-          />
-          <TextInput
-            label="Pickup Adresi"
+            label="İşletme Adresi"
             onChange={(value) =>
               setDraft((current) => ({ ...current, pickupPointAddress: value }))
             }
             value={draft.pickupPointAddress}
           />
           <TextInput
-            label="Operatör E-posta"
+            label="İşletme E-Posta"
             onChange={(value) => setDraft((current) => ({ ...current, operatorEmail: value }))}
             value={draft.operatorEmail}
           />
           <TextInput
-            label="Operatör Şifre"
+            label="İşletme Şifre"
             onChange={(value) => setDraft((current) => ({ ...current, operatorPassword: value }))}
             type="password"
             value={draft.operatorPassword}
           />
           <TextInput
-            label="Operatör Adı"
+            label="İşletme Sahibinin Adı"
             onChange={(value) =>
               setDraft((current) => ({ ...current, operatorDisplayName: value }))
             }
             value={draft.operatorDisplayName}
           />
           <TextInput
-            label="Operatör Telefon"
+            label="İşletme Telefon Numarası"
             onChange={(value) => setDraft((current) => ({ ...current, operatorPhone: value }))}
             value={draft.operatorPhone}
           />
@@ -521,10 +476,10 @@ export function Businesses() {
               }
               value={draft.approvalStatus}
             >
-              <option value="APPROVED">APPROVED</option>
-              <option value="PENDING">PENDING</option>
-              <option value="REJECTED">REJECTED</option>
-              <option value="SUSPENDED">SUSPENDED</option>
+              <option value="APPROVED">Onaylı</option>
+              <option value="PENDING">Beklemede</option>
+              <option value="REJECTED">Reddedildi</option>
+              <option value="SUSPENDED">Askıya Alınmış</option>
             </select>
           </label>
           <label className="flex items-center gap-3 mt-8">

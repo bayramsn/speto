@@ -25,8 +25,11 @@ type EventDraft = {
   isActive: boolean;
 };
 
+const EVENT_CENTER_VENDOR_ID = 'vendor-events-hub';
+const EVENT_CENTER_VENDOR_NAME = 'SepetPro Etkinlik Merkezi';
+
 const EMPTY_EVENT_DRAFT: EventDraft = {
-  vendorId: '',
+  vendorId: EVENT_CENTER_VENDOR_ID,
   title: '',
   venue: '',
   district: '',
@@ -66,6 +69,13 @@ export function Events() {
     }),
     [page, searchParams],
   );
+  const eventCenterBusiness = useMemo(
+    () =>
+      businesses.find((business) => business.name === EVENT_CENTER_VENDOR_NAME) ??
+      businesses.find((business) => business.id === EVENT_CENTER_VENDOR_ID),
+    [businesses],
+  );
+  const eventCenterVendorId = eventCenterBusiness?.id ?? EVENT_CENTER_VENDOR_ID;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -93,7 +103,7 @@ export function Events() {
   function openCreateModal() {
     setDraft({
       ...EMPTY_EVENT_DRAFT,
-      vendorId: businesses[0]?.id ?? '',
+      vendorId: eventCenterVendorId,
     });
     setModalOpen(true);
   }
@@ -101,7 +111,7 @@ export function Events() {
   function openEditModal(event: AdminEvent) {
     setDraft({
       id: event.id,
-      vendorId: event.vendorId,
+      vendorId: eventCenterVendorId,
       title: event.title,
       venue: event.venue,
       district: event.district,
@@ -294,11 +304,7 @@ export function Events() {
               onChange={(event) => setDraft((current) => ({ ...current, vendorId: event.target.value }))}
               value={draft.vendorId}
             >
-              {businesses.map((business) => (
-                <option key={business.id} value={business.id}>
-                  {business.name}
-                </option>
-              ))}
+              <option value={eventCenterVendorId}>{EVENT_CENTER_VENDOR_NAME}</option>
             </select>
           </label>
           <TextInput
@@ -317,12 +323,12 @@ export function Events() {
             value={draft.district}
           />
           <TextInput
-            label="Görsel URL"
+            label="Etkinlik Görseli URL"
             onChange={(value) => setDraft((current) => ({ ...current, imageUrl: value }))}
             value={draft.imageUrl}
           />
           <TextInput
-            label="Başlangıç"
+            label="Etkinlik Tarihi"
             onChange={(value) => setDraft((current) => ({ ...current, startsAt: value }))}
             type="datetime-local"
             value={draft.startsAt}
@@ -346,12 +352,12 @@ export function Events() {
             value={draft.remainingCount}
           />
           <TextInput
-            label="Birincil Etiket"
+            label="Ana Kategori"
             onChange={(value) => setDraft((current) => ({ ...current, primaryTag: value }))}
             value={draft.primaryTag}
           />
           <TextInput
-            label="İkincil Etiket"
+            label="Alt Kategori"
             onChange={(value) => setDraft((current) => ({ ...current, secondaryTag: value }))}
             value={draft.secondaryTag}
           />

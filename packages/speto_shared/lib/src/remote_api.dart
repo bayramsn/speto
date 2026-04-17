@@ -12,6 +12,7 @@ const String _spetoApiBaseUrlOverride = String.fromEnvironment(
 const String _spetoLanApiBaseUrlOverride = String.fromEnvironment(
   'SPETO_LAN_API_BASE_URL',
 );
+const String _productionApiBaseUrl = 'https://speto-backend.onrender.com/api';
 const String _defaultLocalNetworkApiBaseUrl = 'http://192.168.1.2:4000/api';
 const Duration _localBackendProbeTimeout = Duration(milliseconds: 1500);
 const Duration _localBackendProbeRetryDelay = Duration(milliseconds: 250);
@@ -278,8 +279,8 @@ class SpetoRemoteApiClient {
         ? _spetoLanApiBaseUrlOverride
         : _defaultLocalNetworkApiBaseUrl;
     if (kReleaseMode) {
-      _assertConfiguredBaseUrl(localNetworkBaseUrl, isRelease: true);
-      return <String>[localNetworkBaseUrl];
+      _assertConfiguredBaseUrl(_productionApiBaseUrl, isRelease: true);
+      return <String>[_productionApiBaseUrl];
     }
     if (kIsWeb) {
       return _uniqueBaseUrls(<String>[

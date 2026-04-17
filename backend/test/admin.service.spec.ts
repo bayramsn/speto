@@ -27,6 +27,7 @@ describe('AdminService', () => {
         findUniqueOrThrow: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
+        delete: jest.fn(),
       },
       pickupPoint: {
         create: jest.fn(),
@@ -37,6 +38,7 @@ describe('AdminService', () => {
         findMany: jest.fn(),
         findUnique: jest.fn(),
         updateMany: jest.fn(),
+        delete: jest.fn(),
       },
       order: {
         findMany: jest.fn(),
@@ -164,6 +166,80 @@ describe('AdminService', () => {
         action: 'business.update',
         entityType: 'vendor',
         entityId: 'vendor-1',
+      }),
+    });
+  });
+
+  it('syncs hero copy when the admin renames a business without custom hero overrides', async () => {
+    const tx = {
+      vendor: { update: jest.fn() },
+      pickupPoint: { update: jest.fn() },
+    };
+    prisma.vendor.findUnique.mockResolvedValue({
+      id: 'vendor-1',
+      name: 'Eski Market',
+      subtitle: 'Eski alt metin',
+      heroTitle: 'Eski Market',
+      heroSubtitle: 'Eski alt metin',
+      category: 'Market',
+      city: 'Istanbul',
+      district: 'Kadikoy',
+      storefrontType: StorefrontType.MARKET,
+      imageUrl: null,
+      isActive: true,
+      approvalStatus: VendorApprovalStatus.APPROVED,
+      suspendedReason: null,
+      createdAt: new Date('2026-04-01T09:00:00.000Z'),
+      pickupPoints: [],
+      operators: [],
+      _count: { products: 0, orders: 0, campaigns: 0, events: 0 },
+    });
+    prisma.$transaction.mockImplementation(async (callback: (client: typeof tx) => Promise<unknown>) =>
+      callback(tx),
+    );
+    jest.spyOn(service, 'getBusinessProfile').mockResolvedValue({
+      business: {
+        id: 'vendor-1',
+        name: 'Yeni Market',
+        category: 'Market',
+        storefrontType: 'MARKET',
+        city: 'Istanbul',
+        district: 'Kadikoy',
+        imageUrl: '',
+        isActive: true,
+        approvalStatus: 'APPROVED',
+        suspendedReason: '',
+        createdAt: '2026-04-01T09:00:00.000Z',
+        operatorsCount: 0,
+        productsCount: 0,
+        ordersCount: 0,
+        activeCampaigns: 0,
+        eventsCount: 0,
+        pendingOrders: 0,
+      },
+      subtitle: 'Yeni alt metin',
+      city: 'Istanbul',
+      district: 'Kadikoy',
+      imageUrl: '',
+      announcement: '',
+      workingHoursLabel: '',
+      pickupPoints: [],
+      operators: [],
+      bankAccounts: [],
+    });
+
+    await service.updateBusiness(adminUser, 'vendor-1', {
+      name: 'Yeni Market',
+      subtitle: 'Yeni alt metin',
+    });
+
+    expect(tx.vendor.update).toHaveBeenCalledWith({
+      where: { id: 'vendor-1' },
+      data: expect.objectContaining({
+        name: 'Yeni Market',
+        subtitle: 'Yeni alt metin',
+        heroTitle: 'Yeni Market',
+        heroSubtitle: 'Yeni alt metin',
       }),
     });
   });
@@ -385,6 +461,67 @@ describe('AdminService', () => {
     });
   });
 
+  it('deletes businesses without history and detaches linked operators', async () => {
+    const tx = {
+      user: { updateMany: jest.fn() },
+      vendor: { delete: jest.fn() },
+    };
+    prisma.vendor.findUnique.mockResolvedValue({
+      id: 'vendor-1',
+      name: 'Kampus Kafe',
+      slug: 'kampus-kafe',
+      _count: {
+        orders: 0,
+        payouts: 0,
+        operators: 2,
+      },
+    });
+    prisma.$transaction.mockImplementation(async (callback: (client: typeof tx) => Promise<unknown>) =>
+      callback(tx),
+    );
+
+    await expect(service.deleteBusiness(adminUser, 'vendor-1')).resolves.toEqual({
+      deleted: true,
+    });
+
+    expect(tx.user.updateMany).toHaveBeenCalledWith({
+      where: { vendorId: 'vendor-1' },
+      data: {
+        vendorId: null,
+        isSuspended: true,
+        suspendedReason: 'Bagli isletme silindi',
+      },
+    });
+    expect(tx.vendor.delete).toHaveBeenCalledWith({
+      where: { id: 'vendor-1' },
+    });
+    expect(prisma.adminAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'business.delete',
+        entityType: 'vendor',
+        entityId: 'vendor-1',
+      }),
+    });
+  });
+
+  it('blocks business deletion when financial history exists', async () => {
+    prisma.vendor.findUnique.mockResolvedValue({
+      id: 'vendor-1',
+      name: 'Kampus Kafe',
+      slug: 'kampus-kafe',
+      _count: {
+        orders: 3,
+        payouts: 0,
+        operators: 1,
+      },
+    });
+
+    await expect(service.deleteBusiness(adminUser, 'vendor-1')).rejects.toThrow(
+      'Gecmis siparis veya odeme kaydi olan isletme silinemez. Isletmeyi askiya alin.',
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it('lists audit logs with admin metadata', async () => {
     prisma.adminAuditLog.findMany.mockResolvedValue([
       {
@@ -572,6 +709,72 @@ describe('AdminService', () => {
         entityId: 'payout-1',
       }),
     });
+  });
+
+  it('deletes users without operational history', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user-1',
+      email: 'user@example.com',
+      displayName: 'Ali Veli',
+      role: PrismaRole.CUSTOMER,
+      _count: {
+        orders: 0,
+        tickets: 0,
+        supportTickets: 0,
+        walletEntries: 0,
+      },
+    });
+
+    await expect(service.deleteUser(adminUser, 'user-1')).resolves.toEqual({
+      deleted: true,
+    });
+
+    expect(prisma.user.delete).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+    });
+    expect(prisma.adminAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'user.delete',
+        entityType: 'user',
+        entityId: 'user-1',
+      }),
+    });
+  });
+
+  it('blocks deleting super admin or users with history', async () => {
+    prisma.user.findUnique
+      .mockResolvedValueOnce({
+        id: 'admin-2',
+        email: 'admin2@speto.app',
+        displayName: 'Admin',
+        role: PrismaRole.ADMIN,
+        _count: {
+          orders: 0,
+          tickets: 0,
+          supportTickets: 0,
+          walletEntries: 0,
+        },
+      })
+      .mockResolvedValueOnce({
+        id: 'user-2',
+        email: 'customer@example.com',
+        displayName: 'Customer',
+        role: PrismaRole.CUSTOMER,
+        _count: {
+          orders: 1,
+          tickets: 0,
+          supportTickets: 0,
+          walletEntries: 0,
+        },
+      });
+
+    await expect(service.deleteUser(adminUser, 'admin-2')).rejects.toThrow(
+      'Super admin hesabi silinemez.',
+    );
+    await expect(service.deleteUser(adminUser, 'user-2')).rejects.toThrow(
+      'Siparis, bilet, destek veya cuzdan gecmisi olan kullanici silinemez. Hesabi askiya alin veya banlayin.',
+    );
+    expect(prisma.user.delete).not.toHaveBeenCalled();
   });
 
   it('includes delivery logs when listing notifications', async () => {
