@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/stock_app_controller.dart';
 import '../../app/stock_app_scope.dart';
 import '../../theme/app_colors.dart';
+import 'forgot_password_screen.dart';
 import 'register_business_type_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -247,7 +248,17 @@ class _LoginScreenState extends State<LoginScreen> {
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
-                        onPressed: controller.isAuthenticating ? null : () {},
+                        onPressed: controller.isAuthenticating
+                            ? null
+                            : () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute<void>(
+                                    builder: (_) =>
+                                        const ForgotPasswordScreen(),
+                                  ),
+                                );
+                              },
                         style: TextButton.styleFrom(
                           padding: EdgeInsets.zero,
                           minimumSize: Size.zero,

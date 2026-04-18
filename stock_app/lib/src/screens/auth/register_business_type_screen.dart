@@ -52,7 +52,7 @@ class RegisterBusinessTypeScreen extends StatelessWidget {
                           ),
                           child: FractionallySizedBox(
                             alignment: Alignment.centerLeft,
-                            widthFactor: 1 / 9,
+                            widthFactor: 1 / 8,
                             child: Container(
                               decoration: BoxDecoration(
                                 color: AppColors.primary,
@@ -64,7 +64,7 @@ class RegisterBusinessTypeScreen extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
                       const Text(
-                        'Adım 1/9',
+                        'Adım 1/8',
                         style: TextStyle(
                           fontFamily: 'Plus Jakarta Sans',
                           fontSize: 14,
@@ -358,6 +358,7 @@ class RegisterBusinessTypeScreen extends StatelessWidget {
     final controller = StockAppScope.of(context);
     controller.registrationDraft.storefrontType = type;
     controller.registrationDraft.businessCategory = category;
+    controller.registrationDraft.businessSubtitle = '$category operasyonu';
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const RegisterBasicInfoScreen()),

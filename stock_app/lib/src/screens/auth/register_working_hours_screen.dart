@@ -41,7 +41,7 @@ class _RegisterWorkingHoursScreenState
             padding: EdgeInsets.only(right: 16),
             child: Center(
               child: Text(
-                'Adım 5 / 9',
+                'Adım 4 / 8',
                 style: TextStyle(
                   fontFamily: 'Plus Jakarta Sans',
                   color: AppColors.primary,

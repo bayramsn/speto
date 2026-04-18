@@ -59,7 +59,7 @@ class _RegisterNotificationsScreenState
             padding: EdgeInsets.only(right: 16),
             child: Center(
               child: Text(
-                'Adım 7 / 9',
+                'Adım 6 / 8',
                 style: TextStyle(
                   color: AppColors.slate400,
                   fontWeight: FontWeight.bold,

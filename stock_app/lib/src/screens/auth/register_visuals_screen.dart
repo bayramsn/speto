@@ -31,7 +31,7 @@ class RegisterVisualsScreen extends StatelessWidget {
             padding: EdgeInsets.only(right: 16),
             child: Center(
               child: Text(
-                'ADIM 8 / 9',
+                'ADIM 7 / 8',
                 style: TextStyle(
                   color: AppColors.slate400,
                   fontWeight: FontWeight.bold,

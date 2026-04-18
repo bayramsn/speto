@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../app/stock_app_scope.dart';
 import '../../theme/app_colors.dart';
+import 'register_pending_approval_screen.dart';
 
 class RegisterContractScreen extends StatefulWidget {
   const RegisterContractScreen({super.key});
@@ -41,7 +42,7 @@ class _RegisterContractScreenState extends State<RegisterContractScreen> {
             padding: EdgeInsets.only(right: 16),
             child: Center(
               child: Text(
-                'Adım 9/9',
+                'Adım 8/8',
                 style: TextStyle(
                   fontFamily: 'Plus Jakarta Sans',
                   color: AppColors.primary,
@@ -397,7 +398,16 @@ class _RegisterContractScreenState extends State<RegisterContractScreen> {
     }
     setState(() => _submitting = false);
     if (success) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      await controller.logout();
+      if (!context.mounted) {
+        return;
+      }
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(
+          builder: (_) => const RegisterPendingApprovalScreen(),
+        ),
+        (Route<dynamic> route) => route.isFirst,
+      );
       return;
     }
     final String message =

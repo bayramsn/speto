@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../app/stock_app_scope.dart';
 import '../../theme/app_colors.dart';
-import 'register_business_details_screen.dart';
+import 'register_working_hours_screen.dart';
 
 class RegisterLocationScreen extends StatefulWidget {
   const RegisterLocationScreen({super.key});
@@ -84,7 +84,7 @@ class _RegisterLocationScreenState extends State<RegisterLocationScreen> {
                           ),
                           child: FractionallySizedBox(
                             alignment: Alignment.centerLeft,
-                            widthFactor: 3 / 9,
+                            widthFactor: 3 / 8,
                             child: Container(
                               decoration: BoxDecoration(
                                 color: AppColors.primary,
@@ -96,7 +96,7 @@ class _RegisterLocationScreenState extends State<RegisterLocationScreen> {
                       ),
                       const SizedBox(width: 12),
                       const Text(
-                        'Adım 3/9',
+                        'Adım 3/8',
                         style: TextStyle(
                           fontFamily: 'Plus Jakarta Sans',
                           fontSize: 14,
@@ -333,7 +333,7 @@ class _RegisterLocationScreenState extends State<RegisterLocationScreen> {
     draft.pickupPointAddress = _addressController.text.trim();
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const RegisterBusinessDetailsScreen()),
+      MaterialPageRoute(builder: (_) => const RegisterWorkingHoursScreen()),
     );
   }
 }

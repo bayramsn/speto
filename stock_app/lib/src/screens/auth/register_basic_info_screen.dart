@@ -90,7 +90,7 @@ class _RegisterBasicInfoScreenState extends State<RegisterBasicInfoScreen> {
                           ),
                           child: FractionallySizedBox(
                             alignment: Alignment.centerLeft,
-                            widthFactor: 2 / 9,
+                            widthFactor: 2 / 8,
                             child: Container(
                               decoration: BoxDecoration(
                                 color: AppColors.primary,
@@ -102,7 +102,7 @@ class _RegisterBasicInfoScreenState extends State<RegisterBasicInfoScreen> {
                       ),
                       const SizedBox(width: 12),
                       const Text(
-                        'Adım 2/9',
+                        'Adım 2/8',
                         style: TextStyle(
                           fontFamily: 'Plus Jakarta Sans',
                           fontSize: 14,

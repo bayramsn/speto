@@ -67,7 +67,7 @@ class _RegisterPaymentBankScreenState extends State<RegisterPaymentBankScreen> {
             padding: EdgeInsets.only(right: 16),
             child: Center(
               child: Text(
-                'Adım 6 / 9',
+                'Adım 5 / 8',
                 style: TextStyle(
                   color: AppColors.slate400,
                   fontWeight: FontWeight.bold,
