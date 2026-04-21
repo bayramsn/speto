@@ -17,6 +17,7 @@ enum Role {
 enum StorefrontType {
   RESTAURANT
   MARKET
+  OTHER_BUSINESS
 }
 
 enum FulfillmentMode {
@@ -260,8 +261,11 @@ model Product {
   title            String
   description      String?
   unitPrice        Decimal             @db.Decimal(10, 2)
+  discountedPrice  Decimal?            @db.Decimal(10, 2)
   imageUrl         String?
   kind             String
+  unitType         String              @default("adet")
+  expiryDate       DateTime?
   sku              String              @unique
   barcode          String?
   externalCode     String?
@@ -663,6 +667,10 @@ model VendorCampaign {
   badgeLabel      String?
   discountPercent Int?
   discountedPrice Decimal?       @db.Decimal(10, 2)
+  stockLimit      Int?
+  imageUrl        String?
+  buyQuantity     Int?
+  payQuantity     Int?
   productIds      Json?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt

@@ -68,6 +68,29 @@ export class CreateVendorCampaignDto {
   @IsNumber()
   discountedPrice?: number;
 
+  @ApiPropertyOptional({ example: 100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  stockLimit?: number;
+
+  @ApiPropertyOptional({ example: 'https://cdn.example.com/campaigns/fit-menu.jpg' })
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @ApiPropertyOptional({ example: 3 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  buyQuantity?: number;
+
+  @ApiPropertyOptional({ example: 2 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  payQuantity?: number;
+
   @ApiPropertyOptional({ type: [String], example: ['product-1', 'product-2'] })
   @IsOptional()
   @IsArray()

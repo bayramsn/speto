@@ -199,7 +199,7 @@ export interface VendorCampaign {
   endsAt: string;
   productIds: string[];
   productTitles: string[];
-  storefrontType: 'RESTAURANT' | 'MARKET';
+  storefrontType: 'RESTAURANT' | 'MARKET' | 'OTHER_BUSINESS';
 }
 
 export interface VendorCampaignSummary {
@@ -229,6 +229,10 @@ interface ProductRecord {
   imageUrl: string;
   category: string;
   unitPrice: number;
+  discountedPrice: number;
+  discountedPriceText: string;
+  unitType: string;
+  expiryDate: string;
   sku: string;
   barcode: string;
   externalCode: string;
@@ -1853,10 +1857,7 @@ export class AppDataService {
       throw new BadRequestException('Zorunlu sozlesme onaylari verilmelidir');
     }
 
-    const storefrontType =
-      payload.storefrontType === 'MARKET'
-        ? PrismaStorefrontType.MARKET
-        : PrismaStorefrontType.RESTAURANT;
+    const storefrontType = this.resolveStorefrontType(payload.storefrontType);
     const name = payload.business.name.trim();
     const slug = this.slugify(name);
     const vendorId = `vendor-${slug}`;
@@ -1923,8 +1924,8 @@ export class AppDataService {
       await tx.catalogSection.create({
         data: {
           vendorId,
-          key: storefrontType === PrismaStorefrontType.MARKET ? 'genel-market' : 'genel-menu',
-          label: storefrontType === PrismaStorefrontType.MARKET ? 'Genel Raf' : 'Genel Menu',
+          key: this.defaultCatalogSectionKey(storefrontType),
+          label: this.defaultCatalogSectionLabel(storefrontType),
           displayOrder: 0,
           isActive: true,
         },
@@ -2569,7 +2570,13 @@ export class AppDataService {
     const vendors = await this.prisma.vendor.findMany({
       where: {
         id: { in: allowedVendorIds },
-        storefrontType: { in: [PrismaStorefrontType.RESTAURANT, PrismaStorefrontType.MARKET] },
+        storefrontType: {
+          in: [
+            PrismaStorefrontType.RESTAURANT,
+            PrismaStorefrontType.MARKET,
+            PrismaStorefrontType.OTHER_BUSINESS,
+          ],
+        },
       },
       include: catalogVendorInclude,
       orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
@@ -2595,16 +2602,11 @@ export class AppDataService {
       typeof payload['vendorId'] === 'string' && payload['vendorId'].trim().length > 0
         ? payload['vendorId'].trim()
         : `vendor-${slug}`;
-    const storefrontType =
-      payload['storefrontType'] === 'MARKET'
-        ? PrismaStorefrontType.MARKET
-        : PrismaStorefrontType.RESTAURANT;
+    const storefrontType = this.resolveStorefrontType(payload['storefrontType']);
     const category =
       typeof payload['category'] === 'string' && payload['category'].trim().length > 0
         ? payload['category'].trim()
-        : storefrontType === PrismaStorefrontType.MARKET
-          ? 'Market'
-          : 'Restoran';
+        : this.defaultStorefrontCategory(storefrontType);
     const pickupPointLabel =
       typeof payload['pickupPointLabel'] === 'string' && payload['pickupPointLabel'].trim().length > 0
         ? payload['pickupPointLabel'].trim()
@@ -2950,7 +2952,12 @@ export class AppDataService {
       description: product.description ?? '',
       imageUrl: product.imageUrl ?? '',
       unitPrice: Number(product.unitPrice),
+      discountedPrice: product.discountedPrice == null ? 0 : Number(product.discountedPrice),
+      discountedPriceText:
+        product.discountedPrice == null ? '' : `${Number(product.discountedPrice).toFixed(0)} TL`,
       category: product.kind,
+      unitType: product.unitType ?? 'adet',
+      expiryDate: product.expiryDate?.toISOString() ?? '',
       sku: product.sku,
       barcode: product.barcode ?? '',
       externalCode: product.externalCode ?? '',
@@ -3041,11 +3048,14 @@ export class AppDataService {
             typeof payload['description'] === 'string' ? payload['description'].trim() : '',
           unitPrice:
             typeof payload['unitPrice'] === 'number' ? Number(payload['unitPrice']) : 0,
+          discountedPrice: this.toOptionalProductPrice(payload['discountedPrice']),
           imageUrl: typeof payload['imageUrl'] === 'string' ? payload['imageUrl'].trim() : '',
           kind:
             typeof payload['category'] === 'string' && payload['category'].trim().length > 0
               ? payload['category'].trim()
               : vendor.category,
+          unitType: this.toProductUnitType(payload['unitType']),
+          expiryDate: this.toOptionalProductDate(payload['expiryDate']),
           sku: skuBase,
           barcode: typeof payload['barcode'] === 'string' ? payload['barcode'].trim() : '',
           externalCode:
@@ -3116,7 +3126,9 @@ export class AppDataService {
 
     const catalogSectionId =
       typeof payload['catalogSectionId'] === 'string' ? payload['catalogSectionId'].trim() : '';
-    const resolvedCatalogSectionId = catalogSectionId
+    const hasSectionLabel =
+      typeof payload['sectionLabel'] === 'string' && payload['sectionLabel'].trim().length > 0;
+    const resolvedCatalogSectionId = catalogSectionId || hasSectionLabel
       ? await this.resolveCatalogSectionId(existing.vendorId, catalogSectionId, payload)
       : '';
 
@@ -3137,7 +3149,16 @@ export class AppDataService {
         ...(typeof payload['unitPrice'] === 'number'
           ? { unitPrice: payload['unitPrice'] }
           : {}),
+        ...(payload['discountedPrice'] !== undefined
+          ? { discountedPrice: this.toOptionalProductPrice(payload['discountedPrice']) }
+          : {}),
         ...(typeof payload['category'] === 'string' ? { kind: payload['category'] } : {}),
+        ...(payload['unitType'] !== undefined
+          ? { unitType: this.toProductUnitType(payload['unitType']) }
+          : {}),
+        ...(payload['expiryDate'] !== undefined
+          ? { expiryDate: this.toOptionalProductDate(payload['expiryDate']) }
+          : {}),
         ...(typeof payload['sku'] === 'string' ? { sku: payload['sku'] } : {}),
         ...(typeof payload['barcode'] === 'string' ? { barcode: payload['barcode'] } : {}),
         ...(typeof payload['externalCode'] === 'string'
@@ -4423,6 +4444,10 @@ export class AppDataService {
         badgeLabel: payload.badgeLabel?.trim() || null,
         discountPercent: payload.discountPercent ?? null,
         discountedPrice: payload.discountedPrice ?? null,
+        stockLimit: payload.stockLimit ?? null,
+        imageUrl: payload.imageUrl?.trim() || null,
+        buyQuantity: payload.buyQuantity ?? null,
+        payQuantity: payload.payQuantity ?? null,
         productIds,
       },
       include: {
@@ -4486,6 +4511,18 @@ export class AppDataService {
           : {}),
         ...(payload.discountedPrice !== undefined
           ? { discountedPrice: payload.discountedPrice }
+          : {}),
+        ...(payload.stockLimit !== undefined
+          ? { stockLimit: payload.stockLimit }
+          : {}),
+        ...(payload.imageUrl != null
+          ? { imageUrl: payload.imageUrl.trim() || null }
+          : {}),
+        ...(payload.buyQuantity !== undefined
+          ? { buyQuantity: payload.buyQuantity }
+          : {}),
+        ...(payload.payQuantity !== undefined
+          ? { payQuantity: payload.payQuantity }
           : {}),
         ...(nextProductIds !== undefined ? { productIds: nextProductIds } : {}),
       },
@@ -6253,7 +6290,14 @@ export class AppDataService {
     }
 
     const targetStatus = this.toPrismaOrderStatus(status);
-    if (this.isTerminal(existing.status) && existing.status !== targetStatus) {
+    const isCancellingCompletedOrder =
+      existing.status === PrismaOrderStatus.COMPLETED &&
+      targetStatus === PrismaOrderStatus.CANCELLED;
+    if (
+      this.isTerminal(existing.status) &&
+      existing.status !== targetStatus &&
+      !isCancellingCompletedOrder
+    ) {
       throw new BadRequestException('Order is already finalized');
     }
 
@@ -6327,6 +6371,41 @@ export class AppDataService {
               nextReserved,
               orderId: order.id,
               note: `Release for cancelled order ${order.id}`,
+            },
+          });
+        }
+      }
+
+      if (
+        targetStatus === PrismaOrderStatus.CANCELLED &&
+        order.status === PrismaOrderStatus.COMPLETED
+      ) {
+        for (const line of order.items) {
+          const stock = await tx.inventoryStock.findFirst({
+            where: { productId: line.productId },
+          });
+          if (!stock) {
+            continue;
+          }
+          const nextOnHand = stock.onHand + line.quantity;
+          await tx.inventoryStock.update({
+            where: { id: stock.id },
+            data: {
+              onHand: nextOnHand,
+            },
+          });
+          await tx.inventoryMovement.create({
+            data: {
+              productId: line.productId,
+              vendorId: order.vendorId,
+              type: PrismaInventoryMovementType.RELEASE,
+              quantityDelta: line.quantity,
+              previousOnHand: stock.onHand,
+              nextOnHand,
+              previousReserved: stock.reserved,
+              nextReserved: stock.reserved,
+              orderId: order.id,
+              note: `Return for cancelled completed order ${order.id}`,
             },
           });
         }
@@ -6497,8 +6576,7 @@ export class AppDataService {
     return {
       id: vendor.storefrontId ?? vendor.id,
       vendorId: vendor.id,
-      storefrontType:
-        vendor.storefrontType === PrismaStorefrontType.MARKET ? 'MARKET' : 'RESTAURANT',
+      storefrontType: this.toStorefrontTypePayload(vendor.storefrontType),
       title: vendor.name,
       subtitle: vendor.subtitle ?? '',
       meta: vendor.metaLabel ?? '',
@@ -6595,8 +6673,13 @@ export class AppDataService {
       image: product.imageUrl ?? '',
       imageUrl: product.imageUrl ?? '',
       unitPrice: Number(product.unitPrice),
+      discountedPrice: product.discountedPrice == null ? 0 : Number(product.discountedPrice),
+      discountedPriceText:
+        product.discountedPrice == null ? '' : `${Number(product.discountedPrice).toFixed(0)} TL`,
       priceText: `${Number(product.unitPrice).toFixed(0)} TL`,
       category: product.kind,
+      unitType: product.unitType ?? 'adet',
+      expiryDate: product.expiryDate?.toISOString() ?? '',
       sku: product.sku,
       barcode: product.barcode ?? '',
       externalCode: product.externalCode ?? '',
@@ -6775,7 +6858,13 @@ export class AppDataService {
   private async ensureVendorOperatorAccounts(tx: Prisma.TransactionClient) {
     const vendors = await tx.vendor.findMany({
       where: {
-        storefrontType: { in: [PrismaStorefrontType.RESTAURANT, PrismaStorefrontType.MARKET] },
+        storefrontType: {
+          in: [
+            PrismaStorefrontType.RESTAURANT,
+            PrismaStorefrontType.MARKET,
+            PrismaStorefrontType.OTHER_BUSINESS,
+          ],
+        },
       },
       include: {
         operators: {
@@ -6978,6 +7067,51 @@ export class AppDataService {
     };
   }
 
+  private toOptionalProductPrice(value: unknown) {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? Math.max(0, value) : null;
+    }
+    if (typeof value === 'string') {
+      const normalized = value.trim().replace(',', '.');
+      if (normalized.length === 0) {
+        return null;
+      }
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
+    }
+    return null;
+  }
+
+  private toProductUnitType(value: unknown) {
+    const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    return ['adet', 'kg', 'litre'].includes(normalized) ? normalized : 'adet';
+  }
+
+  private toOptionalProductDate(value: unknown) {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : value;
+    }
+    if (typeof value !== 'string') {
+      return null;
+    }
+    const normalized = value.trim();
+    if (normalized.length === 0) {
+      return null;
+    }
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
+    if (match == null) {
+      return null;
+    }
+    const parsed = new Date(`${normalized}T00:00:00.000+03:00`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
   private toPayloadStringArray(value: unknown) {
     if (Array.isArray(value)) {
       return value
@@ -7126,6 +7260,10 @@ export class AppDataService {
         discountedPrice: campaign.discountedPrice ? Number(campaign.discountedPrice) : 0,
         startsAt: campaign.startsAt?.toISOString() ?? '',
         endsAt: campaign.endsAt?.toISOString() ?? '',
+        stockLimit: campaign.stockLimit ?? 0,
+        imageUrl: campaign.imageUrl ?? '',
+        buyQuantity: campaign.buyQuantity ?? 0,
+        payQuantity: campaign.payQuantity ?? 0,
         productIds: selectedProductIds,
         productTitles: selectedProductIds.map(
           (productId) => titleByProductId.get(productId) ?? productId,
@@ -7426,6 +7564,53 @@ export class AppDataService {
     }
   }
 
+  private resolveStorefrontType(value: unknown) {
+    const normalized = String(value ?? '').trim().toUpperCase();
+    if (normalized === 'OTHER_BUSINESS') {
+      return PrismaStorefrontType.OTHER_BUSINESS;
+    }
+    if (normalized === 'MARKET') {
+      return PrismaStorefrontType.MARKET;
+    }
+    return PrismaStorefrontType.RESTAURANT;
+  }
+
+  private defaultStorefrontCategory(storefrontType: PrismaStorefrontType) {
+    return storefrontType === PrismaStorefrontType.MARKET
+      ? 'Market'
+      : storefrontType === PrismaStorefrontType.OTHER_BUSINESS
+        ? 'Diğer İşletme'
+        : 'Restoran';
+  }
+
+  private defaultCatalogSectionKey(storefrontType: PrismaStorefrontType) {
+    return storefrontType === PrismaStorefrontType.MARKET
+      ? 'genel-market'
+      : storefrontType === PrismaStorefrontType.OTHER_BUSINESS
+        ? 'genel-isletme'
+        : 'genel-menu';
+  }
+
+  private defaultCatalogSectionLabel(storefrontType: PrismaStorefrontType) {
+    return storefrontType === PrismaStorefrontType.MARKET
+      ? 'Genel Raf'
+      : storefrontType === PrismaStorefrontType.OTHER_BUSINESS
+        ? 'Genel Kategori'
+        : 'Genel Menu';
+  }
+
+  private toStorefrontTypePayload(
+    storefrontType: PrismaStorefrontType | null | undefined,
+  ) {
+    if (storefrontType === PrismaStorefrontType.OTHER_BUSINESS) {
+      return 'OTHER_BUSINESS';
+    }
+    if (storefrontType === PrismaStorefrontType.MARKET) {
+      return 'MARKET';
+    }
+    return 'RESTAURANT';
+  }
+
   private hashOtpCode(code: string) {
     return createHash('sha256').update(code).digest('hex');
   }
@@ -7594,6 +7779,13 @@ export class AppDataService {
       imageUrl: stock.product.imageUrl ?? '',
       category: stock.product.kind,
       unitPrice: Number(stock.product.unitPrice),
+      discountedPrice: stock.product.discountedPrice == null ? 0 : Number(stock.product.discountedPrice),
+      discountedPriceText:
+        stock.product.discountedPrice == null
+          ? ''
+          : `${Number(stock.product.discountedPrice).toFixed(0)} TL`,
+      unitType: stock.product.unitType ?? 'adet',
+      expiryDate: stock.product.expiryDate?.toISOString() ?? '',
       sku: stock.product.sku,
       barcode: stock.product.barcode ?? '',
       externalCode: stock.product.externalCode ?? '',
@@ -7615,6 +7807,10 @@ export class AppDataService {
       imageUrl: item.imageUrl,
       category: item.category,
       unitPrice: item.unitPrice,
+      discountedPrice: item.discountedPrice,
+      discountedPriceText: item.discountedPriceText,
+      unitType: item.unitType,
+      expiryDate: item.expiryDate,
       sku: item.sku,
       barcode: item.barcode,
       locationId: item.locationId,

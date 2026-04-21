@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsIn, IsInt, IsNumber, IsOptional, IsString } from 'class-validator';
 
 const campaignKinds = ['HAPPY_HOUR', 'DISCOUNT', 'CLEARANCE', 'BUNDLE'] as const;
 const campaignStatuses = ['DRAFT', 'ACTIVE', 'PAUSED', 'COMPLETED'] as const;
@@ -54,6 +55,29 @@ export class UpdateVendorCampaignDto {
   @IsOptional()
   @IsNumber()
   discountedPrice?: number;
+
+  @ApiPropertyOptional({ example: 100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  stockLimit?: number;
+
+  @ApiPropertyOptional({ example: 'https://cdn.example.com/campaigns/fit-menu.jpg' })
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @ApiPropertyOptional({ example: 3 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  buyQuantity?: number;
+
+  @ApiPropertyOptional({ example: 2 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  payQuantity?: number;
 
   @ApiPropertyOptional({ type: [String], example: ['product-1', 'product-2'] })
   @IsOptional()
