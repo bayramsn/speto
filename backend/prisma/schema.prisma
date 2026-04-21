@@ -17,6 +17,7 @@ enum Role {
 enum StorefrontType {
   RESTAURANT
   MARKET
+  OTHER_BUSINESS
 }
 
 enum FulfillmentMode {

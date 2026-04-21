@@ -1,4 +1,4 @@
-export type StorefrontType = 'RESTAURANT' | 'MARKET';
+export type StorefrontType = 'RESTAURANT' | 'MARKET' | 'OTHER_BUSINESS';
 export type VendorApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
 export type OrderStatus =
   | 'CREATED'

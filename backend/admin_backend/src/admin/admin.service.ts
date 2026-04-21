@@ -196,14 +196,12 @@ export class AdminService {
 
   async createBusiness(adminUser: PrismaUser, payload: JsonRecord) {
     const name = this.requireString(payload.name, 'İşletme adı zorunludur');
-    const requestedOtherBusiness =
-      this.optionalString(payload.storefrontType).toUpperCase() === 'OTHER_BUSINESS';
     const storefrontType = this.parseStorefrontType(payload.storefrontType);
     const slug = await this.ensureUniqueVendorSlug(
       this.slugify(this.optionalString(payload.slug) || name),
     );
     const approvalStatus = this.parseVendorApprovalStatus(payload.approvalStatus, true);
-    const category = requestedOtherBusiness
+    const category = storefrontType === StorefrontType.OTHER_BUSINESS
       ? 'Diğer İşletme'
       : this.optionalString(payload.category) ||
         (storefrontType === StorefrontType.MARKET ? 'Market' : 'Restoran');
@@ -324,7 +322,7 @@ export class AdminService {
         where: { id: vendorId },
         data: {
           ...(nextName !== undefined ? { name: nextName } : {}),
-          ...(this.optionalString(payload.storefrontType).toUpperCase() === 'OTHER_BUSINESS'
+          ...(this.parseStorefrontType(payload.storefrontType) === StorefrontType.OTHER_BUSINESS
             ? { category: 'Diğer İşletme' }
             : payload.category !== undefined
               ? { category: this.requireString(payload.category, 'Kategori zorunludur') }
@@ -2919,9 +2917,11 @@ export class AdminService {
       id: business.id,
       name: business.name,
       category: business.category,
-      storefrontType: this.isOtherBusinessCategory(business.category)
-        ? 'OTHER_BUSINESS'
-        : business.storefrontType ?? StorefrontType.MARKET,
+      storefrontType:
+        business.storefrontType === StorefrontType.OTHER_BUSINESS ||
+        this.isOtherBusinessCategory(business.category)
+          ? StorefrontType.OTHER_BUSINESS
+          : business.storefrontType ?? StorefrontType.MARKET,
       city: business.city ?? '',
       district: business.district ?? '',
       imageUrl: business.imageUrl ?? '',
@@ -3348,7 +3348,7 @@ export class AdminService {
   private parseStorefrontType(value: unknown) {
     const normalized = this.optionalString(value).toUpperCase();
     if (normalized === 'OTHER_BUSINESS') {
-      return StorefrontType.MARKET;
+      return StorefrontType.OTHER_BUSINESS;
     }
     return normalized === StorefrontType.RESTAURANT
       ? StorefrontType.RESTAURANT

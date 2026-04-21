@@ -199,7 +199,7 @@ export interface VendorCampaign {
   endsAt: string;
   productIds: string[];
   productTitles: string[];
-  storefrontType: 'RESTAURANT' | 'MARKET';
+  storefrontType: 'RESTAURANT' | 'MARKET' | 'OTHER_BUSINESS';
 }
 
 export interface VendorCampaignSummary {
@@ -1855,7 +1855,9 @@ export class AppDataService {
 
     const requestedOtherBusiness = payload.storefrontType === 'OTHER_BUSINESS';
     const storefrontType =
-      payload.storefrontType === 'MARKET' || requestedOtherBusiness
+      requestedOtherBusiness
+        ? PrismaStorefrontType.OTHER_BUSINESS
+        : payload.storefrontType === 'MARKET'
         ? PrismaStorefrontType.MARKET
         : PrismaStorefrontType.RESTAURANT;
     const businessCategory = requestedOtherBusiness
@@ -2581,7 +2583,13 @@ export class AppDataService {
     const vendors = await this.prisma.vendor.findMany({
       where: {
         id: { in: allowedVendorIds },
-        storefrontType: { in: [PrismaStorefrontType.RESTAURANT, PrismaStorefrontType.MARKET] },
+        storefrontType: {
+          in: [
+            PrismaStorefrontType.RESTAURANT,
+            PrismaStorefrontType.MARKET,
+            PrismaStorefrontType.OTHER_BUSINESS,
+          ],
+        },
       },
       include: catalogVendorInclude,
       orderBy: [{ displayOrder: 'asc' }, { name: 'asc' }],
@@ -2613,7 +2621,9 @@ export class AppDataService {
         : '';
     const requestedOtherBusiness = rawStorefrontType === 'OTHER_BUSINESS';
     const storefrontType =
-      rawStorefrontType === 'MARKET' || requestedOtherBusiness
+      requestedOtherBusiness
+        ? PrismaStorefrontType.OTHER_BUSINESS
+        : rawStorefrontType === 'MARKET'
         ? PrismaStorefrontType.MARKET
         : PrismaStorefrontType.RESTAURANT;
     const category = requestedOtherBusiness
@@ -6515,7 +6525,8 @@ export class AppDataService {
     return {
       id: vendor.storefrontId ?? vendor.id,
       vendorId: vendor.id,
-      storefrontType: this.isOtherBusinessCategory(vendor.category)
+      storefrontType: vendor.storefrontType === PrismaStorefrontType.OTHER_BUSINESS ||
+        this.isOtherBusinessCategory(vendor.category)
         ? 'OTHER_BUSINESS'
         : vendor.storefrontType === PrismaStorefrontType.MARKET
           ? 'MARKET'
@@ -6796,7 +6807,13 @@ export class AppDataService {
   private async ensureVendorOperatorAccounts(tx: Prisma.TransactionClient) {
     const vendors = await tx.vendor.findMany({
       where: {
-        storefrontType: { in: [PrismaStorefrontType.RESTAURANT, PrismaStorefrontType.MARKET] },
+        storefrontType: {
+          in: [
+            PrismaStorefrontType.RESTAURANT,
+            PrismaStorefrontType.MARKET,
+            PrismaStorefrontType.OTHER_BUSINESS,
+          ],
+        },
       },
       include: {
         operators: {

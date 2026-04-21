@@ -7,11 +7,9 @@ import { useLiveReload } from '../hooks/useLiveReload';
 import { approvalLabel, approvalTone, formatDate } from '../lib/formatters';
 import type { BusinessListItem, PagedResponse, StorefrontType, VendorApprovalStatus } from '../lib/types';
 
-type BusinessStorefrontType = StorefrontType | 'OTHER_HAPPY_HOUR';
-
 type BusinessDraft = {
   name: string;
-  storefrontType: BusinessStorefrontType;
+  storefrontType: StorefrontType;
   category: string;
   city: string;
   district: string;
@@ -27,12 +25,22 @@ type BusinessDraft = {
   isActive: boolean;
 };
 
-function defaultCategoryForBusinessType(type: BusinessStorefrontType) {
+function defaultCategoryForBusinessType(type: StorefrontType) {
   if (type === 'RESTAURANT') {
     return 'Restoran';
   }
-  if (type === 'OTHER_HAPPY_HOUR') {
-    return 'Happy Hour';
+  if (type === 'OTHER_BUSINESS') {
+    return 'Diğer İşletme';
+  }
+  return 'Market';
+}
+
+function businessTypeLabel(type: StorefrontType) {
+  if (type === 'RESTAURANT') {
+    return 'Restoran';
+  }
+  if (type === 'OTHER_BUSINESS') {
+    return 'Diğer İşletme';
   }
   return 'Market';
 }
@@ -73,31 +81,25 @@ export function Businesses() {
   const pageSize = 25;
   const storefrontTypeFilter = searchParams.get('storefrontType') ?? '';
   const searchFilter = searchParams.get('q') ?? '';
-  const backendStorefrontTypeFilter =
-    storefrontTypeFilter === 'OTHER_HAPPY_HOUR' ? 'MARKET' : storefrontTypeFilter;
-  const backendSearchFilter =
-    storefrontTypeFilter === 'OTHER_HAPPY_HOUR' && !searchFilter.trim()
-      ? 'Happy Hour'
-      : searchFilter;
   const query = useMemo(
     () => ({
-      q: backendSearchFilter,
+      q: searchFilter,
       approvalStatus: searchParams.get('approvalStatus') ?? '',
-      storefrontType: backendStorefrontTypeFilter,
+      storefrontType: storefrontTypeFilter,
       isActive: searchParams.get('isActive') ?? '',
       page,
       pageSize,
     }),
-    [backendSearchFilter, backendStorefrontTypeFilter, page, searchParams],
+    [page, searchFilter, searchParams, storefrontTypeFilter],
   );
   const exportQuery = useMemo(
     () => ({
-      q: backendSearchFilter,
+      q: searchFilter,
       approvalStatus: searchParams.get('approvalStatus') ?? '',
-      storefrontType: backendStorefrontTypeFilter,
+      storefrontType: storefrontTypeFilter,
       isActive: searchParams.get('isActive') ?? '',
     }),
-    [backendSearchFilter, backendStorefrontTypeFilter, searchParams],
+    [searchFilter, searchParams, storefrontTypeFilter],
   );
 
   const load = useCallback(async () => {
@@ -137,12 +139,10 @@ export function Businesses() {
     setSaving(true);
     setError('');
     try {
-      const isOtherBusiness = draft.storefrontType === 'OTHER_HAPPY_HOUR';
       await request('/admin/businesses', {
         method: 'POST',
         body: {
           ...draft,
-          storefrontType: isOtherBusiness ? 'MARKET' : draft.storefrontType,
           category: draft.category.trim() || defaultCategoryForBusinessType(draft.storefrontType),
         },
       });
@@ -195,7 +195,7 @@ export function Businesses() {
       <Toast message={toast} onClose={() => setToast('')} />
       <PageHeader
         title="İşletmeler"
-        description="Tüm restoran, market ve kafe operasyonlarını buradan denetleyin veya doğrudan işletme moduna geçin."
+        description="Tüm restoran, market ve diğer işletme operasyonlarını buradan denetleyin veya doğrudan işletme moduna geçin."
         action={
           <div className="flex flex-wrap gap-2">
             <button
@@ -245,7 +245,7 @@ export function Businesses() {
               <option value="">Tümü</option>
               <option value="MARKET">Market</option>
               <option value="RESTAURANT">Restoran</option>
-              <option value="OTHER_HAPPY_HOUR">Diğer İşletme (Happy Hour)</option>
+              <option value="OTHER_BUSINESS">Diğer İşletme</option>
             </select>
           </label>
           <label className="block">
@@ -336,7 +336,7 @@ export function Businesses() {
                         </p>
                       </div>
                     </td>
-                    <td className="py-4">{business.storefrontType}</td>
+                    <td className="py-4">{businessTypeLabel(business.storefrontType)}</td>
                     <td className="py-4 text-slate-600">
                       {[business.district, business.city].filter(Boolean).join(', ') || '-'}
                     </td>
@@ -395,7 +395,7 @@ export function Businesses() {
             <select
               className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-primary focus:bg-white"
               onChange={(event) => {
-                const storefrontType = event.target.value as BusinessStorefrontType;
+                const storefrontType = event.target.value as StorefrontType;
                 setDraft((current) => ({
                   ...current,
                   storefrontType,
@@ -406,7 +406,7 @@ export function Businesses() {
             >
               <option value="MARKET">Market</option>
               <option value="RESTAURANT">Restoran</option>
-              <option value="OTHER_HAPPY_HOUR">Diğer İşletme (Happy Hour)</option>
+              <option value="OTHER_BUSINESS">Diğer İşletme</option>
             </select>
           </label>
           <TextInput
