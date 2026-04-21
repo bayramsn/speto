@@ -196,14 +196,17 @@ export class AdminService {
 
   async createBusiness(adminUser: PrismaUser, payload: JsonRecord) {
     const name = this.requireString(payload.name, 'İşletme adı zorunludur');
+    const requestedOtherBusiness =
+      this.optionalString(payload.storefrontType).toUpperCase() === 'OTHER_BUSINESS';
     const storefrontType = this.parseStorefrontType(payload.storefrontType);
     const slug = await this.ensureUniqueVendorSlug(
       this.slugify(this.optionalString(payload.slug) || name),
     );
     const approvalStatus = this.parseVendorApprovalStatus(payload.approvalStatus, true);
-    const category =
-      this.optionalString(payload.category) ||
-      (storefrontType === StorefrontType.MARKET ? 'Market' : 'Restoran');
+    const category = requestedOtherBusiness
+      ? 'Diğer İşletme'
+      : this.optionalString(payload.category) ||
+        (storefrontType === StorefrontType.MARKET ? 'Market' : 'Restoran');
 
     const created = await this.prisma.$transaction(async (tx) => {
       const vendor = await tx.vendor.create({
@@ -321,9 +324,11 @@ export class AdminService {
         where: { id: vendorId },
         data: {
           ...(nextName !== undefined ? { name: nextName } : {}),
-          ...(payload.category !== undefined
-            ? { category: this.requireString(payload.category, 'Kategori zorunludur') }
-            : {}),
+          ...(this.optionalString(payload.storefrontType).toUpperCase() === 'OTHER_BUSINESS'
+            ? { category: 'Diğer İşletme' }
+            : payload.category !== undefined
+              ? { category: this.requireString(payload.category, 'Kategori zorunludur') }
+              : {}),
           ...(payload.storefrontType !== undefined
             ? { storefrontType: this.parseStorefrontType(payload.storefrontType) }
             : {}),
@@ -2914,7 +2919,9 @@ export class AdminService {
       id: business.id,
       name: business.name,
       category: business.category,
-      storefrontType: business.storefrontType ?? StorefrontType.MARKET,
+      storefrontType: this.isOtherBusinessCategory(business.category)
+        ? 'OTHER_BUSINESS'
+        : business.storefrontType ?? StorefrontType.MARKET,
       city: business.city ?? '',
       district: business.district ?? '',
       imageUrl: business.imageUrl ?? '',
@@ -3256,6 +3263,18 @@ export class AdminService {
     return typeof value === 'string' ? value.trim() : '';
   }
 
+  private isOtherBusinessCategory(category: string | null | undefined) {
+    const normalized = (category ?? '')
+      .trim()
+      .toLocaleLowerCase('tr-TR')
+      .replaceAll(/[\s_-]+/g, ' ');
+    return (
+      normalized === 'diğer işletme' ||
+      normalized === 'diger isletme' ||
+      normalized === 'other business'
+    );
+  }
+
   private optionalImageUrl(value: unknown) {
     const imageUrl = this.optionalString(value);
     if (imageUrl.toLowerCase().startsWith('data:')) {
@@ -3328,6 +3347,9 @@ export class AdminService {
 
   private parseStorefrontType(value: unknown) {
     const normalized = this.optionalString(value).toUpperCase();
+    if (normalized === 'OTHER_BUSINESS') {
+      return StorefrontType.MARKET;
+    }
     return normalized === StorefrontType.RESTAURANT
       ? StorefrontType.RESTAURANT
       : StorefrontType.MARKET;

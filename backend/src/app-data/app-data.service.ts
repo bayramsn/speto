@@ -1853,10 +1853,14 @@ export class AppDataService {
       throw new BadRequestException('Zorunlu sozlesme onaylari verilmelidir');
     }
 
+    const requestedOtherBusiness = payload.storefrontType === 'OTHER_BUSINESS';
     const storefrontType =
-      payload.storefrontType === 'MARKET'
+      payload.storefrontType === 'MARKET' || requestedOtherBusiness
         ? PrismaStorefrontType.MARKET
         : PrismaStorefrontType.RESTAURANT;
+    const businessCategory = requestedOtherBusiness
+      ? 'Diğer İşletme'
+      : payload.business.category.trim();
     const name = payload.business.name.trim();
     const slug = this.slugify(name);
     const vendorId = `vendor-${slug}`;
@@ -1887,7 +1891,7 @@ export class AppDataService {
           id: vendorId,
           name,
           slug,
-          category: payload.business.category.trim(),
+          category: businessCategory,
           city: payload.business.city?.trim() || null,
           district: payload.business.district?.trim() || null,
           taxNumber: payload.business.taxNumber?.trim() || null,
@@ -1902,12 +1906,12 @@ export class AppDataService {
             subtitle: payload.business.subtitle,
             imageUrl: payload.business.imageUrl,
             workingHoursLabel: payload.business.workingHoursLabel,
-            meta: `${payload.business.category.trim()} • Gel-Al`,
+            meta: `${businessCategory} • Gel-Al`,
             heroTitle: name,
             heroSubtitle:
               (payload.business.subtitle?.trim().length ?? 0) > 0
                 ? payload.business.subtitle!.trim()
-                : `${payload.business.category.trim()} operasyonu`,
+                : `${businessCategory} operasyonu`,
           }),
         },
       });
@@ -1923,8 +1927,16 @@ export class AppDataService {
       await tx.catalogSection.create({
         data: {
           vendorId,
-          key: storefrontType === PrismaStorefrontType.MARKET ? 'genel-market' : 'genel-menu',
-          label: storefrontType === PrismaStorefrontType.MARKET ? 'Genel Raf' : 'Genel Menu',
+          key: requestedOtherBusiness
+            ? 'genel-isletme'
+            : storefrontType === PrismaStorefrontType.MARKET
+              ? 'genel-market'
+              : 'genel-menu',
+          label: requestedOtherBusiness
+            ? 'Genel Kategori'
+            : storefrontType === PrismaStorefrontType.MARKET
+              ? 'Genel Raf'
+              : 'Genel Menu',
           displayOrder: 0,
           isActive: true,
         },
@@ -2595,12 +2607,18 @@ export class AppDataService {
       typeof payload['vendorId'] === 'string' && payload['vendorId'].trim().length > 0
         ? payload['vendorId'].trim()
         : `vendor-${slug}`;
+    const rawStorefrontType =
+      typeof payload['storefrontType'] === 'string'
+        ? payload['storefrontType'].trim().toUpperCase()
+        : '';
+    const requestedOtherBusiness = rawStorefrontType === 'OTHER_BUSINESS';
     const storefrontType =
-      payload['storefrontType'] === 'MARKET'
+      rawStorefrontType === 'MARKET' || requestedOtherBusiness
         ? PrismaStorefrontType.MARKET
         : PrismaStorefrontType.RESTAURANT;
-    const category =
-      typeof payload['category'] === 'string' && payload['category'].trim().length > 0
+    const category = requestedOtherBusiness
+      ? 'Diğer İşletme'
+      : typeof payload['category'] === 'string' && payload['category'].trim().length > 0
         ? payload['category'].trim()
         : storefrontType === PrismaStorefrontType.MARKET
           ? 'Market'
@@ -6497,8 +6515,11 @@ export class AppDataService {
     return {
       id: vendor.storefrontId ?? vendor.id,
       vendorId: vendor.id,
-      storefrontType:
-        vendor.storefrontType === PrismaStorefrontType.MARKET ? 'MARKET' : 'RESTAURANT',
+      storefrontType: this.isOtherBusinessCategory(vendor.category)
+        ? 'OTHER_BUSINESS'
+        : vendor.storefrontType === PrismaStorefrontType.MARKET
+          ? 'MARKET'
+          : 'RESTAURANT',
       title: vendor.name,
       subtitle: vendor.subtitle ?? '',
       meta: vendor.metaLabel ?? '',
@@ -7424,6 +7445,18 @@ export class AppDataService {
     ) {
       throw new BadRequestException(`Vendor ${entityId} is not a restaurant`);
     }
+  }
+
+  private isOtherBusinessCategory(category: string | null | undefined) {
+    const normalized = (category ?? '')
+      .trim()
+      .toLocaleLowerCase('tr-TR')
+      .replaceAll(/[\s_-]+/g, ' ');
+    return (
+      normalized === 'diğer işletme' ||
+      normalized === 'diger isletme' ||
+      normalized === 'other business'
+    );
   }
 
   private hashOtpCode(code: string) {
