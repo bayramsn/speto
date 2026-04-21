@@ -12,7 +12,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-const storefrontTypes = ['RESTAURANT', 'MARKET', 'OTHER_BUSINESS'] as const;
+const storefrontTypes = ['RESTAURANT', 'MARKET'] as const;
 
 class OperatorRegisterBusinessDto {
   @ApiProperty({ example: 'Lezzet Duragi' })

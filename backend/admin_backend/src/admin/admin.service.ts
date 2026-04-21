@@ -203,11 +203,7 @@ export class AdminService {
     const approvalStatus = this.parseVendorApprovalStatus(payload.approvalStatus, true);
     const category =
       this.optionalString(payload.category) ||
-      (storefrontType === StorefrontType.MARKET
-        ? 'Market'
-        : storefrontType === StorefrontType.OTHER_BUSINESS
-          ? 'Diğer İşletme'
-          : 'Restoran');
+      (storefrontType === StorefrontType.MARKET ? 'Market' : 'Restoran');
 
     const created = await this.prisma.$transaction(async (tx) => {
       const vendor = await tx.vendor.create({
@@ -3332,13 +3328,9 @@ export class AdminService {
 
   private parseStorefrontType(value: unknown) {
     const normalized = this.optionalString(value).toUpperCase();
-    if (normalized === StorefrontType.OTHER_BUSINESS) {
-      return StorefrontType.OTHER_BUSINESS;
-    }
-    if (normalized === StorefrontType.RESTAURANT) {
-      return StorefrontType.RESTAURANT;
-    }
-    return StorefrontType.MARKET;
+    return normalized === StorefrontType.RESTAURANT
+      ? StorefrontType.RESTAURANT
+      : StorefrontType.MARKET;
   }
 
   private parseVendorApprovalStatus(value: unknown, allowDefault = false) {
