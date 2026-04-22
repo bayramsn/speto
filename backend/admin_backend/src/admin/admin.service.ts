@@ -1173,9 +1173,34 @@ export class AdminService {
     if (!password) {
       throw new BadRequestException('Operatör şifresi zorunludur');
     }
+    const email = this.requireString(payload.email, 'Operatör e-postası zorunludur').toLowerCase();
+    const existing = await this.prisma.user.findUnique({
+      where: { email },
+    });
+    if (existing && (existing.vendorId !== vendorId || existing.role !== PrismaRole.VENDOR)) {
+      throw new BadRequestException('Bu e-posta başka bir kullanıcıda kayıtlı');
+    }
+    if (existing) {
+      const operator = await this.prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          passwordHash: await bcrypt.hash(password, 10),
+          displayName: this.requireString(payload.displayName, 'Operatör adı zorunludur'),
+          phone: this.optionalString(payload.phone) || null,
+          notificationsEnabled: this.parseBoolean(payload.notificationsEnabled, existing.notificationsEnabled),
+          isSuspended: false,
+        },
+      });
+      await this.revokeUserRefreshSessions(operator.id);
+      await this.logAction(adminUser.id, 'operator.password-reset', 'user', operator.id, {
+        vendorId,
+        email: operator.email,
+      });
+      return this.getBusinessProfile(vendorId);
+    }
     const operator = await this.prisma.user.create({
       data: {
-        email: this.requireString(payload.email, 'Operatör e-postası zorunludur').toLowerCase(),
+        email,
         passwordHash: await bcrypt.hash(password, 10),
         displayName: this.requireString(payload.displayName, 'Operatör adı zorunludur'),
         phone: this.optionalString(payload.phone) || null,
@@ -1203,6 +1228,7 @@ export class AdminService {
     if (!existing || existing.vendorId !== vendorId || existing.role !== PrismaRole.VENDOR) {
       throw new NotFoundException(`Operator ${operatorId} not found`);
     }
+    const password = this.optionalString(payload.password);
     await this.prisma.user.update({
       where: { id: operatorId },
       data: {
@@ -1221,7 +1247,7 @@ export class AdminService {
               ),
             }
           : {}),
-        ...(payload.password !== undefined && this.optionalString(payload.password)
+        ...(payload.password !== undefined && password
           ? { passwordHash: await bcrypt.hash(this.requireString(payload.password, 'Şifre zorunludur'), 10) }
           : {}),
         ...(payload.isSuspended !== undefined
@@ -1229,6 +1255,9 @@ export class AdminService {
           : {}),
       },
     });
+    if (payload.password !== undefined && password) {
+      await this.revokeUserRefreshSessions(operatorId);
+    }
     await this.logAction(adminUser.id, 'operator.update', 'user', operatorId, {
       vendorId,
       payload,
@@ -1476,6 +1505,7 @@ export class AdminService {
     if (!existing) {
       throw new NotFoundException(`User ${userId} not found`);
     }
+    const password = this.optionalString(payload.password);
     await this.prisma.user.update({
       where: { id: userId },
       data: {
@@ -1513,11 +1543,14 @@ export class AdminService {
         ...(payload.marketingOptIn !== undefined
           ? { marketingOptIn: this.parseBoolean(payload.marketingOptIn, existing.marketingOptIn) }
           : {}),
-        ...(payload.password !== undefined && this.optionalString(payload.password)
+        ...(payload.password !== undefined && password
           ? { passwordHash: await bcrypt.hash(this.requireString(payload.password, 'Şifre zorunludur'), 10) }
           : {}),
       },
     });
+    if (payload.password !== undefined && password) {
+      await this.revokeUserRefreshSessions(userId);
+    }
     await this.logAction(adminUser.id, 'user.update', 'user', userId, payload);
     const users = await this.listUsers();
     return Array.isArray(users) ? users.find((user) => user.id === userId) : undefined;
@@ -3487,6 +3520,13 @@ export class AdminService {
       return Prisma.JsonNull;
     }
     return value as Prisma.InputJsonValue;
+  }
+
+  private async revokeUserRefreshSessions(userId: string) {
+    await this.prisma.refreshSession.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
   }
 
   private slugify(value: string) {

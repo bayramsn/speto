@@ -148,6 +148,7 @@ export function BusinessWorkspace() {
     phone: '',
     password: '',
   });
+  const [operatorPasswordDrafts, setOperatorPasswordDrafts] = useState<Record<string, string>>({});
   const [bankDraft, setBankDraft] = useState({
     holderName: '',
     bankName: '',
@@ -479,6 +480,28 @@ export function BusinessWorkspace() {
       await loadProfile();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Operatör kaydedilemedi.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateOperatorPassword(operatorId: string) {
+    const password = operatorPasswordDrafts[operatorId]?.trim() ?? '';
+    if (!password) {
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await request(`/admin/businesses/${businessId}/operators/${operatorId}`, {
+        method: 'PATCH',
+        body: { password },
+      });
+      setOperatorPasswordDrafts((current) => ({ ...current, [operatorId]: '' }));
+      await loadProfile();
+      setToast('Operatör şifresi yenilendi.');
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Operatör şifresi kaydedilemedi.');
     } finally {
       setSaving(false);
     }
@@ -1101,6 +1124,27 @@ export function BusinessWorkspace() {
                       <div className="rounded-2xl border border-slate-100 p-4" key={operator.id}>
                         <p className="font-bold">{operator.displayName}</p>
                         <p className="text-sm text-slate-500">{operator.email}</p>
+                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
+                          <TextInput
+                            label="Yeni Şifre"
+                            onChange={(value) =>
+                              setOperatorPasswordDrafts((current) => ({
+                                ...current,
+                                [operator.id]: value,
+                              }))
+                            }
+                            type="password"
+                            value={operatorPasswordDrafts[operator.id] ?? ''}
+                          />
+                          <button
+                            className="mt-8 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+                            disabled={saving || !(operatorPasswordDrafts[operator.id]?.trim())}
+                            onClick={() => void updateOperatorPassword(operator.id)}
+                            type="button"
+                          >
+                            Şifreyi Kaydet
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
