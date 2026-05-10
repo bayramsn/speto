@@ -84,7 +84,7 @@ class _RegisterPaymentBankScreenState extends State<RegisterPaymentBankScreen> {
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
+                  horizontal: 20,
                   vertical: 24,
                 ),
                 children: [
@@ -110,14 +110,14 @@ class _RegisterPaymentBankScreenState extends State<RegisterPaymentBankScreen> {
                   ),
                   const SizedBox(height: 32),
 
-                  // Form Container
                   Container(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _buildInputField(
                           'Hesap Sahibi Adı Soyadı',
@@ -136,81 +136,27 @@ class _RegisterPaymentBankScreenState extends State<RegisterPaymentBankScreen> {
                               'TR ile başlayan 26 haneli numaranızı giriniz.',
                         ),
                         const SizedBox(height: 16),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: _buildInputField(
-                                'Vergi Numarası / TCKN',
-                                '10 veya 11 haneli',
-                                Icons.fingerprint,
-                                controller: _taxNumberController,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: _buildInputField(
-                                'Vergi Dairesi',
-                                'Örn: Kadıköy',
-                                Icons.domain,
-                                controller: _taxOfficeController,
-                              ),
-                            ),
-                          ],
+                        _buildInputField(
+                          'Vergi Numarası / TCKN',
+                          '10 veya 11 haneli',
+                          Icons.fingerprint,
+                          controller: _taxNumberController,
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Trust Indicator
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.verified_user,
-                          color: AppColors.primary,
+                        const SizedBox(height: 16),
+                        _buildInputField(
+                          'Vergi Dairesi',
+                          'Örn: Kadıköy',
+                          Icons.domain,
+                          controller: _taxOfficeController,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Güvenli Veri Depolama',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Bilgileriniz 256-bit SSL sertifikası ile korunmaktadır ve yalnızca ödeme işlemleri için kullanılır.',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.onSurfaceVariant.withValues(
-                                    alpha: 0.8,
-                                  ),
-                                  height: 1.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        const SizedBox(height: 20),
+                        _buildTrustIndicator(),
                       ],
                     ),
                   ),
                 ],
               ),
             ),
-            // Bottom Action Area
             Container(
               padding: const EdgeInsets.all(24),
               decoration: const BoxDecoration(color: Color(0xFFF8F9FA)),
@@ -334,6 +280,47 @@ class _RegisterPaymentBankScreenState extends State<RegisterPaymentBankScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildTrustIndicator() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.verified_user, color: AppColors.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Güvenli Veri Depolama',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Bilgileriniz 256-bit SSL sertifikası ile korunmaktadır ve yalnızca ödeme işlemleri için kullanılır.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.onSurfaceVariant.withValues(alpha: 0.8),
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

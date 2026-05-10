@@ -781,6 +781,10 @@ class SpetoRemoteDomainApi {
     String? badgeLabel,
     int? discountPercent,
     double? discountedPrice,
+    int? stockLimit,
+    String? imageUrl,
+    int? buyQuantity,
+    int? payQuantity,
     List<String>? productIds,
   }) async {
     final Map<String, Object?> json = _asJsonMap(
@@ -798,6 +802,10 @@ class SpetoRemoteDomainApi {
           if (badgeLabel != null) 'badgeLabel': badgeLabel,
           if (discountPercent != null) 'discountPercent': discountPercent,
           if (discountedPrice != null) 'discountedPrice': discountedPrice,
+          if (stockLimit != null) 'stockLimit': stockLimit,
+          if (imageUrl != null) 'imageUrl': imageUrl,
+          if (buyQuantity != null) 'buyQuantity': buyQuantity,
+          if (payQuantity != null) 'payQuantity': payQuantity,
           if (productIds != null) 'productIds': productIds,
         },
       ),
@@ -817,6 +825,10 @@ class SpetoRemoteDomainApi {
     String? badgeLabel,
     int? discountPercent,
     double? discountedPrice,
+    int? stockLimit,
+    String? imageUrl,
+    int? buyQuantity,
+    int? payQuantity,
     List<String>? productIds,
   }) async {
     final Map<String, Object?> json = _asJsonMap(
@@ -833,6 +845,10 @@ class SpetoRemoteDomainApi {
           if (badgeLabel != null) 'badgeLabel': badgeLabel,
           if (discountPercent != null) 'discountPercent': discountPercent,
           if (discountedPrice != null) 'discountedPrice': discountedPrice,
+          if (stockLimit != null) 'stockLimit': stockLimit,
+          if (imageUrl != null) 'imageUrl': imageUrl,
+          if (buyQuantity != null) 'buyQuantity': buyQuantity,
+          if (payQuantity != null) 'payQuantity': payQuantity,
           if (productIds != null) 'productIds': productIds,
         },
       ),
@@ -862,6 +878,7 @@ String _storefrontTypeApiName(SpetoStorefrontType type) {
   return switch (type) {
     SpetoStorefrontType.restaurant => 'RESTAURANT',
     SpetoStorefrontType.market => 'MARKET',
+    SpetoStorefrontType.otherBusiness => 'OTHER_BUSINESS',
   };
 }
 

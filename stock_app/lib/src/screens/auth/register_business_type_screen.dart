@@ -138,7 +138,7 @@ class RegisterBusinessTypeScreen extends StatelessWidget {
                     onTap: () {
                       _selectType(
                         context,
-                        SpetoStorefrontType.market,
+                        SpetoStorefrontType.otherBusiness,
                         'Diğer İşletme',
                       );
                     },

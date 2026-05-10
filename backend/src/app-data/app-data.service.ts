@@ -6550,6 +6550,8 @@ export class AppDataService {
             : '12 dk',
       promoLabel: vendor.promoLabel ?? '',
       workingHoursLabel: vendor.workingHoursLabel ?? '09:00-23:00',
+      taxNumber: vendor.taxNumber ?? '',
+      taxOffice: vendor.taxOffice ?? '',
       minOrderLabel: 'Yok',
       deliveryWindowLabel: 'Hazır olduğunda',
       reviewCountLabel: vendor.reviewCountLabel ?? '',
@@ -6567,6 +6569,7 @@ export class AppDataService {
       studentFriendly: vendor.studentFriendly,
       isFeatured: vendor.isFeatured,
       isActive: vendor.isActive,
+      workingDays: this.toCatalogWorkingDays(vendor.workingDays),
       pickupPoints: vendor.pickupPoints.map((pickupPoint) => ({
         id: pickupPoint.id,
         label: pickupPoint.label,
@@ -6975,6 +6978,19 @@ export class AppDataService {
       ...(typeof payload['workingHoursLabel'] === 'string'
         ? { workingHoursLabel: payload['workingHoursLabel'] }
         : {}),
+      ...(typeof payload['taxNumber'] === 'string'
+        ? { taxNumber: payload['taxNumber'].trim() || null }
+        : {}),
+      ...(typeof payload['taxOffice'] === 'string'
+        ? { taxOffice: payload['taxOffice'].trim() || null }
+        : {}),
+      ...(Array.isArray(payload['workingDays'])
+        ? {
+            workingDays: this.toOperatorWorkingDays(
+              payload['workingDays'] as Record<string, unknown>[],
+            ) as unknown as Prisma.InputJsonValue,
+          }
+        : {}),
       ...(typeof payload['reviewCountLabel'] === 'string'
         ? { reviewCountLabel: payload['reviewCountLabel'] }
         : {}),
@@ -7051,6 +7067,37 @@ export class AppDataService {
           label,
           shortLabel,
           isOpen: entry['isOpen'] === true,
+          openTime,
+          closeTime,
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry != null);
+  }
+
+  private toCatalogWorkingDays(value: Prisma.JsonValue | null | undefined) {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value
+      .map((entry) => {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+          return null;
+        }
+        const record = entry as Record<string, unknown>;
+        const label = typeof record['label'] === 'string' ? record['label'].trim() : '';
+        const shortLabel =
+          typeof record['shortLabel'] === 'string' ? record['shortLabel'].trim() : '';
+        const openTime =
+          typeof record['openTime'] === 'string' ? record['openTime'].trim() : '';
+        const closeTime =
+          typeof record['closeTime'] === 'string' ? record['closeTime'].trim() : '';
+        if (!label || !openTime || !closeTime) {
+          return null;
+        }
+        return {
+          label,
+          shortLabel,
+          isOpen: record['isOpen'] === true,
           openTime,
           closeTime,
         };

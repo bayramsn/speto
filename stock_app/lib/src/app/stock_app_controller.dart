@@ -39,6 +39,91 @@ class StockWorkingDay {
   }
 }
 
+class StockNotificationSettings {
+  const StockNotificationSettings({
+    required this.newOrders,
+    required this.cancelledOrders,
+    required this.readyOrders,
+    required this.campaigns,
+    required this.expiryAlerts,
+    required this.happyHour,
+  });
+
+  static const StockNotificationSettings defaults = StockNotificationSettings(
+    newOrders: true,
+    cancelledOrders: true,
+    readyOrders: false,
+    campaigns: true,
+    expiryAlerts: true,
+    happyHour: false,
+  );
+
+  static const StockNotificationSettings disabled = StockNotificationSettings(
+    newOrders: false,
+    cancelledOrders: false,
+    readyOrders: false,
+    campaigns: false,
+    expiryAlerts: false,
+    happyHour: false,
+  );
+
+  final bool newOrders;
+  final bool cancelledOrders;
+  final bool readyOrders;
+  final bool campaigns;
+  final bool expiryAlerts;
+  final bool happyHour;
+
+  bool get notificationsEnabled =>
+      newOrders ||
+      cancelledOrders ||
+      readyOrders ||
+      campaigns ||
+      expiryAlerts ||
+      happyHour;
+
+  StockNotificationSettings copyWith({
+    bool? newOrders,
+    bool? cancelledOrders,
+    bool? readyOrders,
+    bool? campaigns,
+    bool? expiryAlerts,
+    bool? happyHour,
+  }) {
+    return StockNotificationSettings(
+      newOrders: newOrders ?? this.newOrders,
+      cancelledOrders: cancelledOrders ?? this.cancelledOrders,
+      readyOrders: readyOrders ?? this.readyOrders,
+      campaigns: campaigns ?? this.campaigns,
+      expiryAlerts: expiryAlerts ?? this.expiryAlerts,
+      happyHour: happyHour ?? this.happyHour,
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'newOrders': newOrders,
+      'cancelledOrders': cancelledOrders,
+      'readyOrders': readyOrders,
+      'campaigns': campaigns,
+      'expiryAlerts': expiryAlerts,
+      'happyHour': happyHour,
+    };
+  }
+
+  factory StockNotificationSettings.fromJson(Map<String, Object?> json) {
+    return StockNotificationSettings(
+      newOrders: json['newOrders'] as bool? ?? defaults.newOrders,
+      cancelledOrders:
+          json['cancelledOrders'] as bool? ?? defaults.cancelledOrders,
+      readyOrders: json['readyOrders'] as bool? ?? defaults.readyOrders,
+      campaigns: json['campaigns'] as bool? ?? defaults.campaigns,
+      expiryAlerts: json['expiryAlerts'] as bool? ?? defaults.expiryAlerts,
+      happyHour: json['happyHour'] as bool? ?? defaults.happyHour,
+    );
+  }
+}
+
 class StockRegistrationDraft {
   StockRegistrationDraft();
 
@@ -196,6 +281,8 @@ class StockAppController extends ChangeNotifier {
   }
 
   static const String _sessionStorageKey = 'stock_app.session';
+  static const String _notificationSettingsStorageKeyPrefix =
+      'stock_app.notification_settings.';
   static Future<StockApiBundle> _defaultApiResolver(
     SpetoSession? session,
   ) async {
@@ -219,6 +306,8 @@ class StockAppController extends ChangeNotifier {
   String? _authError;
   String? _dashboardError;
   final Map<String, bool> _busyByKey = <String, bool>{};
+  StockNotificationSettings _notificationSettings =
+      StockNotificationSettings.defaults;
 
   final StockRegistrationDraft registrationDraft = StockRegistrationDraft();
 
@@ -258,7 +347,11 @@ class StockAppController extends ChangeNotifier {
   SpetoStorefrontType get storefrontType =>
       selectedVendor?.storefrontType ?? SpetoStorefrontType.market;
 
+  bool get isMarketMode => storefrontType == SpetoStorefrontType.market;
   bool get isRestaurantMode => storefrontType == SpetoStorefrontType.restaurant;
+  bool get isOtherBusinessMode =>
+      storefrontType == SpetoStorefrontType.otherBusiness;
+  StockNotificationSettings get notificationSettings => _notificationSettings;
 
   bool isBusy(String key) => _busyByKey[key] == true;
 
@@ -287,6 +380,7 @@ class StockAppController extends ChangeNotifier {
 
       _prefs = prefs;
       _api = api;
+      _restoreNotificationSettings();
       if (restoredSession != null) {
         try {
           if (restoredSession.authToken.trim().isEmpty ||
@@ -472,6 +566,7 @@ class StockAppController extends ChangeNotifier {
       api?.clearSession();
     }
     _session = null;
+    _notificationSettings = StockNotificationSettings.defaults;
     _resetDashboardState();
     await _persistStoredSession(null);
     notifyListeners();
@@ -531,6 +626,7 @@ class StockAppController extends ChangeNotifier {
       financeSummary = results[6]! as SpetoVendorFinanceSummary;
       supportTickets = results[7]! as List<SpetoSupportTicket>;
       userProfile = (results[8]! as SpetoRemoteSnapshot).profile;
+      _restoreNotificationSettings();
     } catch (error) {
       _dashboardError = explainError(error);
     } finally {
@@ -620,6 +716,12 @@ class StockAppController extends ChangeNotifier {
     String imageUrl = '',
     String displaySubtitle = '',
     String displayBadge = '',
+    double? discountedPrice,
+    String unitType = 'adet',
+    String expiryDate = '',
+    List<String>? legacyAliases,
+    int? stockQuantity,
+    int? currentStockQuantity,
   }) async {
     final SpetoRemoteDomainApi? api = _api;
     final String? vendorId = selectedVendorId;
@@ -636,6 +738,13 @@ class StockAppController extends ChangeNotifier {
       'imageUrl': imageUrl.trim(),
       'displaySubtitle': displaySubtitle.trim(),
       'displayBadge': displayBadge.trim(),
+      'discountedPrice': discountedPrice,
+      'unitType': unitType.trim().isEmpty ? 'adet' : unitType.trim(),
+      'expiryDate': expiryDate.trim().isEmpty ? null : expiryDate.trim(),
+      if (legacyAliases case final List<String> aliases)
+        'legacyAliases': aliases,
+      if (productId == null || productId.trim().isEmpty)
+        'onHand': stockQuantity ?? 0,
     };
     await _runBusy('products:save', () async {
       await _ensureFreshSession();
@@ -643,6 +752,16 @@ class StockAppController extends ChangeNotifier {
         await api.createCatalogProduct(payload);
       } else {
         await api.updateCatalogProduct(productId, payload);
+        if (stockQuantity != null && currentStockQuantity != null) {
+          final int quantityDelta = stockQuantity - currentStockQuantity;
+          if (quantityDelta != 0) {
+            await api.adjustInventoryItem(
+              id: productId,
+              quantityDelta: quantityDelta,
+              reason: 'SepetPro İşyeri ürün düzenleme',
+            );
+          }
+        }
       }
       await refreshData();
     });
@@ -664,10 +783,15 @@ class StockAppController extends ChangeNotifier {
     required SpetoCampaignKind kind,
     required String title,
     required String description,
-    String? scheduleLabel,
+    required String startsAt,
+    required String endsAt,
+    int? stockLimit,
+    required String imageUrl,
     String? badgeLabel,
     int? discountPercent,
     double? discountedPrice,
+    int? buyQuantity,
+    int? payQuantity,
     List<String>? productIds,
   }) async {
     final SpetoRemoteDomainApi? api = _api;
@@ -675,18 +799,89 @@ class StockAppController extends ChangeNotifier {
     if (api == null || vendorId == null) {
       return;
     }
+    final String scheduleLabel = _buildCampaignScheduleLabel(startsAt, endsAt);
+    final String resolvedBadgeLabel = badgeLabel?.trim().isNotEmpty == true
+        ? badgeLabel!.trim()
+        : _buildCampaignBadgeLabel(
+            kind: kind,
+            discountPercent: discountPercent,
+            discountedPrice: discountedPrice,
+            buyQuantity: buyQuantity,
+            payQuantity: payQuantity,
+          );
     await _runBusy('campaigns:create', () async {
       await _ensureFreshSession();
       await api.createCampaign(
         vendorId: vendorId,
         kind: kind,
         title: title.trim(),
-        description: description.trim().isEmpty ? null : description.trim(),
+        description: description.trim(),
         status: SpetoCampaignStatus.active,
+        startsAt: startsAt,
+        endsAt: endsAt,
         scheduleLabel: scheduleLabel,
-        badgeLabel: badgeLabel,
+        badgeLabel: resolvedBadgeLabel,
         discountPercent: discountPercent,
         discountedPrice: discountedPrice,
+        stockLimit: stockLimit,
+        imageUrl: imageUrl.trim(),
+        buyQuantity: buyQuantity,
+        payQuantity: payQuantity,
+        productIds: productIds,
+      );
+      await refreshData();
+    });
+  }
+
+  Future<void> updateCampaign({
+    required String campaignId,
+    required SpetoCampaignKind kind,
+    required String title,
+    required String description,
+    required String startsAt,
+    required String endsAt,
+    SpetoCampaignStatus? status,
+    int? stockLimit,
+    required String imageUrl,
+    String? badgeLabel,
+    int? discountPercent,
+    double? discountedPrice,
+    int? buyQuantity,
+    int? payQuantity,
+    List<String>? productIds,
+  }) async {
+    final SpetoRemoteDomainApi? api = _api;
+    if (api == null) {
+      return;
+    }
+    final String scheduleLabel = _buildCampaignScheduleLabel(startsAt, endsAt);
+    final String resolvedBadgeLabel = badgeLabel?.trim().isNotEmpty == true
+        ? badgeLabel!.trim()
+        : _buildCampaignBadgeLabel(
+            kind: kind,
+            discountPercent: discountPercent,
+            discountedPrice: discountedPrice,
+            buyQuantity: buyQuantity,
+            payQuantity: payQuantity,
+          );
+    await _runBusy('campaign:$campaignId', () async {
+      await _ensureFreshSession();
+      await api.updateCampaign(
+        campaignId: campaignId,
+        kind: kind,
+        title: title.trim(),
+        description: description.trim(),
+        status: status,
+        startsAt: startsAt,
+        endsAt: endsAt,
+        scheduleLabel: scheduleLabel,
+        badgeLabel: resolvedBadgeLabel,
+        discountPercent: discountPercent,
+        discountedPrice: discountedPrice,
+        stockLimit: stockLimit,
+        imageUrl: imageUrl.trim(),
+        buyQuantity: buyQuantity,
+        payQuantity: payQuantity,
         productIds: productIds,
       );
       await refreshData();
@@ -804,6 +999,9 @@ class StockAppController extends ChangeNotifier {
     required String pickupPointAddress,
     required String workingHoursLabel,
     required String imageUrl,
+    String taxNumber = '',
+    String taxOffice = '',
+    String announcement = '',
   }) async {
     final SpetoRemoteDomainApi? api = _api;
     final SpetoCatalogVendor? vendor = selectedVendor;
@@ -821,6 +1019,9 @@ class StockAppController extends ChangeNotifier {
         'pickupPointAddress': pickupPointAddress.trim(),
         'workingHoursLabel': workingHoursLabel.trim(),
         'imageUrl': imageUrl.trim(),
+        'taxNumber': taxNumber.trim(),
+        'taxOffice': taxOffice.trim(),
+        'announcement': announcement.trim(),
       });
       await api.updateProfile(
         displayName: profile.displayName,
@@ -831,6 +1032,50 @@ class StockAppController extends ChangeNotifier {
             : imageUrl.trim(),
         notificationsEnabled: profile.notificationsEnabled,
       );
+      await refreshData();
+    });
+  }
+
+  Future<void> updateWorkingHours({
+    required List<StockWorkingDay> workingDays,
+    required bool isActive,
+  }) async {
+    final SpetoRemoteDomainApi? api = _api;
+    final SpetoCatalogVendor? vendor = selectedVendor;
+    if (api == null || vendor == null) {
+      return;
+    }
+    await _runBusy('profile:working-hours', () async {
+      await _ensureFreshSession();
+      final List<StockWorkingDay> normalizedDays = workingDays
+          .map(
+            (StockWorkingDay day) => StockWorkingDay(
+              label: day.label,
+              shortLabel: day.shortLabel,
+              isOpen: day.isOpen,
+              openTime: day.openTime,
+              closeTime: day.closeTime,
+            ),
+          )
+          .toList(growable: false);
+      registrationDraft.workingDays = normalizedDays
+          .map((StockWorkingDay day) => day.copy())
+          .toList(growable: false);
+      await api.updateCatalogVendor(vendor.vendorId, <String, Object?>{
+        'workingHoursLabel': _buildWorkingHoursLabel(normalizedDays),
+        'workingDays': normalizedDays
+            .map(
+              (StockWorkingDay day) => <String, Object?>{
+                'label': day.label,
+                'shortLabel': day.shortLabel,
+                'isOpen': day.isOpen,
+                'openTime': day.openTime,
+                'closeTime': day.closeTime,
+              },
+            )
+            .toList(growable: false),
+        'isActive': isActive,
+      });
       await refreshData();
     });
   }
@@ -857,6 +1102,26 @@ class StockAppController extends ChangeNotifier {
       );
       await refreshData();
     });
+  }
+
+  Future<void> updateNotificationSettings(
+    StockNotificationSettings settings,
+  ) async {
+    _notificationSettings = settings;
+    _applyNotificationSettingsToDraft(settings);
+    notifyListeners();
+    await _persistNotificationSettings(settings);
+    final SpetoRemoteUserProfile? profile = userProfile;
+    if (profile == null) {
+      return;
+    }
+    await updateOperatorProfile(
+      displayName: profile.displayName,
+      email: profile.email,
+      phone: profile.phone,
+      notificationsEnabled: settings.notificationsEnabled,
+      avatarUrl: profile.avatarUrl,
+    );
   }
 
   String explainError(Object error) {
@@ -893,6 +1158,30 @@ class StockAppController extends ChangeNotifier {
       return 'Sunucu zamanında yanıt vermedi.';
     }
     return 'Beklenmeyen bir hata oluştu.';
+  }
+
+  String _buildWorkingHoursLabel(List<StockWorkingDay> workingDays) {
+    final List<StockWorkingDay> openDays = workingDays
+        .where((StockWorkingDay day) => day.isOpen)
+        .toList(growable: false);
+    if (openDays.isEmpty) {
+      return 'Kapalı';
+    }
+    final bool sameHours = openDays.every(
+      (StockWorkingDay day) =>
+          day.openTime == openDays.first.openTime &&
+          day.closeTime == openDays.first.closeTime,
+    );
+    if (sameHours) {
+      return '${openDays.first.shortLabel}-${openDays.last.shortLabel} '
+          '${openDays.first.openTime}-${openDays.first.closeTime}';
+    }
+    return openDays
+        .map(
+          (StockWorkingDay day) =>
+              '${day.shortLabel} ${day.openTime}-${day.closeTime}',
+        )
+        .join(', ');
   }
 
   void _resetDashboardState() {
@@ -1045,6 +1334,127 @@ class StockAppController extends ChangeNotifier {
     }
     await prefs.setString(_sessionStorageKey, jsonEncode(session.toJson()));
   }
+
+  void _restoreNotificationSettings() {
+    final SharedPreferences? prefs = _prefs;
+    if (prefs == null) {
+      return;
+    }
+    _notificationSettings =
+        _readStoredNotificationSettings(prefs) ??
+        (userProfile?.notificationsEnabled == false
+            ? StockNotificationSettings.disabled
+            : StockNotificationSettings.defaults);
+    _applyNotificationSettingsToDraft(_notificationSettings);
+  }
+
+  void _applyNotificationSettingsToDraft(StockNotificationSettings settings) {
+    registrationDraft.notifyNewOrders = settings.newOrders;
+    registrationDraft.notifyCancellations = settings.cancelledOrders;
+    registrationDraft.notifyLowStock = settings.expiryAlerts;
+    registrationDraft.notifyCampaignTips =
+        settings.campaigns || settings.happyHour;
+    registrationDraft.notifyPush = settings.notificationsEnabled;
+  }
+
+  String get _notificationSettingsStorageKey {
+    final String owner = _session?.email.trim().toLowerCase() ?? 'guest';
+    final String vendorId = _sessionVendorId ?? selectedVendorId ?? 'default';
+    return '$_notificationSettingsStorageKeyPrefix$owner.$vendorId';
+  }
+
+  StockNotificationSettings? _readStoredNotificationSettings(
+    SharedPreferences prefs,
+  ) {
+    final String? raw = prefs.getString(_notificationSettingsStorageKey);
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    try {
+      final Object? decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return null;
+      }
+      return StockNotificationSettings.fromJson(
+        decoded.cast<String, Object?>(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _persistNotificationSettings(
+    StockNotificationSettings settings,
+  ) async {
+    final SharedPreferences? prefs = _prefs;
+    if (prefs == null) {
+      return;
+    }
+    await prefs.setString(
+      _notificationSettingsStorageKey,
+      jsonEncode(settings.toJson()),
+    );
+  }
+}
+
+String _buildCampaignScheduleLabel(String startsAt, String endsAt) {
+  final String start = _formatCampaignTime(startsAt);
+  final String end = _formatCampaignTime(endsAt);
+  if (start.isEmpty) {
+    return end;
+  }
+  if (end.isEmpty) {
+    return start;
+  }
+  return '$start - $end';
+}
+
+String _buildCampaignBadgeLabel({
+  required SpetoCampaignKind kind,
+  int? discountPercent,
+  double? discountedPrice,
+  int? buyQuantity,
+  int? payQuantity,
+}) {
+  return switch (kind) {
+    SpetoCampaignKind.discount =>
+      discountPercent == null || discountPercent <= 0
+          ? ''
+          : '%$discountPercent İndirim',
+    SpetoCampaignKind.clearance =>
+      discountedPrice == null || discountedPrice <= 0
+          ? ''
+          : 'Sabit ₺${_formatCampaignPrice(discountedPrice)}',
+    SpetoCampaignKind.bundle =>
+      buyQuantity == null ||
+              buyQuantity <= 0 ||
+              payQuantity == null ||
+              payQuantity <= 0
+          ? ''
+          : '$buyQuantity Al $payQuantity Öde',
+    SpetoCampaignKind.happyHour => 'Happy Hour',
+  };
+}
+
+String _formatCampaignTime(String value) {
+  if (value.trim().isEmpty) {
+    return '';
+  }
+  final DateTime? parsed = DateTime.tryParse(value);
+  if (parsed == null) {
+    return '';
+  }
+  final DateTime local = parsed.toLocal();
+  final String hour = local.hour.toString().padLeft(2, '0');
+  final String minute = local.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
+}
+
+String _formatCampaignPrice(double value) {
+  if (value == value.roundToDouble()) {
+    return value.toStringAsFixed(0);
+  }
+  return value.toStringAsFixed(2).replaceAll('.', ',');
 }
 
 class _ControllerMessage implements Exception {

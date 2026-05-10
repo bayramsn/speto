@@ -38,7 +38,15 @@ enum _StockDestination {
 
 enum _OrderQueueFilter { all, fresh, preparing, ready, delivered, cancelled }
 
-enum _OrderDateFilter { all, today }
+enum _OrderDateFilter {
+  all,
+  today,
+  yesterday,
+  last7Days,
+  last30Days,
+  last3Months,
+  last1Year,
+}
 
 LinearGradient get _heroGradient => const LinearGradient(
   colors: <Color>[Color(0xFFF8F8F4), Color(0xFFF4F6EF), Color(0xFFF8F5F0)],
@@ -50,6 +58,7 @@ String _storefrontLabel(SpetoStorefrontType type) {
   return switch (type) {
     SpetoStorefrontType.market => 'Market',
     SpetoStorefrontType.restaurant => 'Restoran',
+    SpetoStorefrontType.otherBusiness => 'Diğer İşletme',
   };
 }
 
@@ -197,6 +206,80 @@ DateTime? _parseOrderPlacedAt(SpetoOpsOrder order) {
 
 bool _isSameCalendarDay(DateTime a, DateTime b) {
   return a.year == b.year && a.month == b.month && a.day == b.day;
+}
+
+DateTime _startOfDay(DateTime value) {
+  return DateTime(value.year, value.month, value.day);
+}
+
+DateTime _calendarMonthsAgo(DateTime value, int months) {
+  final DateTime monthStart = DateTime(value.year, value.month - months, 1);
+  final int daysInMonth = DateTime(
+    monthStart.year,
+    monthStart.month + 1,
+    0,
+  ).day;
+  final int day = value.day > daysInMonth ? daysInMonth : value.day;
+  return DateTime(monthStart.year, monthStart.month, day);
+}
+
+bool _isWithinDateRange(
+  DateTime value, {
+  required DateTime startInclusive,
+  required DateTime endExclusive,
+}) {
+  return !value.isBefore(startInclusive) && value.isBefore(endExclusive);
+}
+
+bool _matchesOrderDateFilter(
+  SpetoOpsOrder order,
+  _OrderDateFilter filter,
+  DateTime now,
+) {
+  if (filter == _OrderDateFilter.all) {
+    return true;
+  }
+  final DateTime? placedAt = _parseOrderPlacedAt(order);
+  if (placedAt == null) {
+    return false;
+  }
+
+  final DateTime today = _startOfDay(now);
+  final DateTime tomorrow = today.add(const Duration(days: 1));
+
+  return switch (filter) {
+    _OrderDateFilter.today => _isWithinDateRange(
+      placedAt,
+      startInclusive: today,
+      endExclusive: tomorrow,
+    ),
+    _OrderDateFilter.yesterday => _isWithinDateRange(
+      placedAt,
+      startInclusive: today.subtract(const Duration(days: 1)),
+      endExclusive: today,
+    ),
+    _OrderDateFilter.last7Days => _isWithinDateRange(
+      placedAt,
+      startInclusive: today.subtract(const Duration(days: 6)),
+      endExclusive: tomorrow,
+    ),
+    _OrderDateFilter.last30Days => _isWithinDateRange(
+      placedAt,
+      startInclusive: today.subtract(const Duration(days: 29)),
+      endExclusive: tomorrow,
+    ),
+    _OrderDateFilter.last3Months => _isWithinDateRange(
+      placedAt,
+      startInclusive: _calendarMonthsAgo(today, 3),
+      endExclusive: tomorrow,
+    ),
+    _OrderDateFilter.last1Year => _isWithinDateRange(
+      placedAt,
+      startInclusive: _calendarMonthsAgo(today, 12),
+      endExclusive: tomorrow,
+    ),
+    _OrderDateFilter.all => true,
+  };
 }
 
 String _orderTimeLabel(SpetoOpsOrder order) {
@@ -1802,6 +1885,13 @@ class _StockShellState extends State<_StockShell> {
   }) async {
     final bool isCreate = product == null;
     final SpetoCatalogProduct? existingProduct = product;
+    final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+    final SpetoInventoryItem? inventoryItem = existingProduct == null
+        ? null
+        : _inventoryItems.cast<SpetoInventoryItem?>().firstWhere(
+            (SpetoInventoryItem? item) => item?.id == existingProduct.id,
+            orElse: () => null,
+          );
     final TextEditingController titleController = TextEditingController(
       text: product?.title ?? '',
     );
@@ -1816,49 +1906,125 @@ class _StockShellState extends State<_StockShell> {
           ? '0'
           : existingProduct?.unitPrice.toStringAsFixed(0) ?? '0',
     );
+    final TextEditingController discountedPriceController =
+        TextEditingController(
+          text: isCreate
+              ? '0'
+              : ((existingProduct?.discountedPrice ?? 0) > 0
+                        ? existingProduct!.discountedPrice
+                        : existingProduct?.unitPrice ?? 0)
+                    .toStringAsFixed(0),
+        );
     final TextEditingController categoryController = TextEditingController(
       text: product?.category ?? vendor.cuisine,
     );
-    final TextEditingController skuController = TextEditingController(
-      text: product?.sku ?? '',
-    );
-    final TextEditingController barcodeController = TextEditingController(
-      text: product?.barcode ?? '',
-    );
-    final TextEditingController externalCodeController = TextEditingController(
-      text: product?.externalCode ?? '',
-    );
-    final TextEditingController subtitleController = TextEditingController(
-      text: product?.displaySubtitle ?? '',
-    );
-    final TextEditingController badgeController = TextEditingController(
-      text: product?.displayBadge ?? '',
-    );
-    final TextEditingController orderController = TextEditingController(
-      text: '${product?.displayOrder ?? 0}',
-    );
-    final TextEditingController reorderController = TextEditingController(
-      text: '${product?.reorderLevel ?? 3}',
-    );
-    final TextEditingController keywordController = TextEditingController(
-      text: (product?.searchKeywords ?? const <String>[]).join(', '),
-    );
-    final TextEditingController aliasController = TextEditingController(
-      text: (product?.legacyAliases ?? const <String>[]).join(', '),
-    );
     final TextEditingController onHandController = TextEditingController(
-      text: '0',
+      text: '${inventoryItem?.onHand ?? 0}',
     );
     final TextEditingController sectionLabelController = TextEditingController(
-      text: initialSection?.label ?? '',
+      text: product?.sectionLabel ?? initialSection?.label ?? '',
     );
-    String? selectedSectionId = product?.sectionId.isNotEmpty == true
-        ? existingProduct?.sectionId
-        : initialSection?.id;
-    bool isVisibleInApp = product?.isVisibleInApp ?? true;
-    bool isFeatured = product?.isFeatured ?? false;
-    bool trackStock = product?.trackStock ?? true;
-    bool isArchived = product?.isArchived ?? false;
+    final TextEditingController expiryDateController = TextEditingController(
+      text: _formatProductDateInput(product?.expiryDate ?? ''),
+    );
+    const List<String> unitTypeOptions = <String>['adet', 'kg', 'litre'];
+    String selectedUnitType =
+        unitTypeOptions.contains((product?.unitType ?? '').trim().toLowerCase())
+        ? product!.unitType.trim().toLowerCase()
+        : 'adet';
+
+    Widget buildField({required String label, required Widget child}) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          child,
+        ],
+      );
+    }
+
+    Widget buildTextField({
+      required String label,
+      required TextEditingController controller,
+      String? hintText,
+      TextInputType? keyboardType,
+      int maxLines = 1,
+      String? Function(String?)? validator,
+    }) {
+      return buildField(
+        label: label,
+        child: TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          maxLines: maxLines,
+          decoration: InputDecoration(hintText: hintText),
+          validator: validator,
+        ),
+      );
+    }
+
+    String? requiredValidator(String label, String? value) {
+      if (value == null || value.trim().isEmpty) {
+        return '$label zorunludur';
+      }
+      return null;
+    }
+
+    String? priceValidator(String label, String? value) {
+      final String normalized = value?.trim().replaceAll(',', '.') ?? '';
+      if (normalized.isEmpty) {
+        return '$label zorunludur';
+      }
+      final double? parsed = double.tryParse(normalized);
+      if (parsed == null) {
+        return '$label sayi olmalidir';
+      }
+      if (parsed < 0) {
+        return '$label negatif olamaz';
+      }
+      return null;
+    }
+
+    String? stockValidator(String? value) {
+      final String normalized = value?.trim() ?? '';
+      if (normalized.isEmpty) {
+        return 'Stok Miktarı zorunludur';
+      }
+      final int? parsed = int.tryParse(normalized);
+      if (parsed == null) {
+        return 'Stok Miktarı sayi olmalidir';
+      }
+      if (parsed < 0) {
+        return 'Stok Miktarı negatif olamaz';
+      }
+      return null;
+    }
+
+    String? optionalDateValidator(String? value) {
+      final String normalized = value?.trim() ?? '';
+      if (normalized.isEmpty) {
+        return null;
+      }
+      final Match? match = RegExp(
+        r'^(\d{4})-(\d{2})-(\d{2})$',
+      ).firstMatch(normalized);
+      if (match == null) {
+        return 'Tarih YYYY-AA-GG formatinda olmali';
+      }
+      final DateTime parsed = DateTime(
+        int.parse(match.group(1)!),
+        int.parse(match.group(2)!),
+        int.parse(match.group(3)!),
+      );
+      if (parsed.year != int.parse(match.group(1)!) ||
+          parsed.month != int.parse(match.group(2)!) ||
+          parsed.day != int.parse(match.group(3)!)) {
+        return 'Gecerli bir tarih girin';
+      }
+      return null;
+    }
+
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
@@ -1885,9 +2051,7 @@ class _StockShellState extends State<_StockShell> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
                                 Text(
-                                  isCreate
-                                      ? 'Yeni ürün oluştur'
-                                      : 'Ürünü düzenle',
+                                  isCreate ? 'Yeni Ürün' : 'Ürünü Düzenle',
                                   style: Theme.of(context)
                                       .textTheme
                                       .headlineSmall
@@ -1913,263 +2077,141 @@ class _StockShellState extends State<_StockShell> {
                           child: Column(
                             children: <Widget>[
                               _EditorSection(
-                                title: 'Temel bilgi',
+                                title: 'Ürün Bilgileri',
                                 child: Column(
                                   children: <Widget>[
-                                    DropdownButtonFormField<String>(
-                                      initialValue:
-                                          selectedSectionId != null &&
-                                              vendor.sections.any(
-                                                (SpetoCatalogSection section) =>
-                                                    section.id ==
-                                                    selectedSectionId,
-                                              )
-                                          ? selectedSectionId
-                                          : null,
-                                      items: vendor.sections
-                                          .map(
-                                            (SpetoCatalogSection section) =>
-                                                DropdownMenuItem<String>(
-                                                  value: section.id,
-                                                  child: Text(section.label),
+                                    Form(
+                                      key: formKey,
+                                      child: Column(
+                                        children: <Widget>[
+                                          buildTextField(
+                                            label: 'Ürün Adı',
+                                            controller: titleController,
+                                            validator: (String? value) =>
+                                                requiredValidator(
+                                                  'Ürün Adı',
+                                                  value,
                                                 ),
-                                          )
-                                          .toList(growable: false),
-                                      onChanged: (String? value) {
-                                        setModalState(() {
-                                          selectedSectionId = value;
-                                        });
-                                      },
-                                      decoration: const InputDecoration(
-                                        labelText: 'Kategori / section',
-                                      ),
-                                    ),
-                                    if (vendor.sections.isEmpty ||
-                                        selectedSectionId == null) ...<Widget>[
-                                      const SizedBox(height: 12),
-                                      TextField(
-                                        controller: sectionLabelController,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Yeni kategori adı',
-                                        ),
-                                      ),
-                                    ],
-                                    const SizedBox(height: 12),
-                                    TextField(
-                                      controller: titleController,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Ürün adı',
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    TextField(
-                                      controller: descriptionController,
-                                      maxLines: 3,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Açıklama',
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              _EditorSection(
-                                title: 'Medya ve vitrin',
-                                child: Column(
-                                  children: <Widget>[
-                                    TextField(
-                                      controller: imageController,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Fotoğraf URL',
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Row(
-                                      children: <Widget>[
-                                        Expanded(
-                                          child: TextField(
-                                            controller: subtitleController,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Kısa açıklama',
-                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: TextField(
-                                            controller: badgeController,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Rozet',
-                                            ),
+                                          const SizedBox(height: 12),
+                                          buildTextField(
+                                            label: 'Açıklama',
+                                            controller: descriptionController,
+                                            maxLines: 3,
+                                            validator: (String? value) =>
+                                                requiredValidator(
+                                                  'Açıklama',
+                                                  value,
+                                                ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              _EditorSection(
-                                title: 'Fiyat ve stok',
-                                child: Column(
-                                  children: <Widget>[
-                                    Row(
-                                      children: <Widget>[
-                                        Expanded(
-                                          child: TextField(
-                                            controller: priceController,
-                                            keyboardType: TextInputType.number,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Fiyat',
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: TextField(
+                                          const SizedBox(height: 12),
+                                          buildTextField(
+                                            label: 'Kategori',
                                             controller: categoryController,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Kategori',
-                                            ),
+                                            validator: (String? value) =>
+                                                requiredValidator(
+                                                  'Kategori',
+                                                  value,
+                                                ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Row(
-                                      children: <Widget>[
-                                        Expanded(
-                                          child: TextField(
-                                            controller: orderController,
+                                          const SizedBox(height: 12),
+                                          buildTextField(
+                                            label: 'Alt Kategori',
+                                            controller: sectionLabelController,
+                                          ),
+                                          const SizedBox(height: 12),
+                                          buildTextField(
+                                            label: 'Ürün Görsel URL',
+                                            controller: imageController,
+                                            keyboardType: TextInputType.url,
+                                            validator: (String? value) =>
+                                                requiredValidator(
+                                                  'Ürün Görsel URL',
+                                                  value,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          buildTextField(
+                                            label: 'Satış Fiyatı',
+                                            controller: priceController,
+                                            keyboardType:
+                                                const TextInputType.numberWithOptions(
+                                                  decimal: true,
+                                                ),
+                                            validator: (String? value) =>
+                                                priceValidator(
+                                                  'Satış Fiyatı',
+                                                  value,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          buildTextField(
+                                            label: 'İndirimli Fiyat',
+                                            controller:
+                                                discountedPriceController,
+                                            keyboardType:
+                                                const TextInputType.numberWithOptions(
+                                                  decimal: true,
+                                                ),
+                                            validator: (String? value) =>
+                                                priceValidator(
+                                                  'İndirimli Fiyat',
+                                                  value,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          buildTextField(
+                                            label: 'Stok Miktarı',
+                                            controller: onHandController,
                                             keyboardType: TextInputType.number,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Sıra',
-                                            ),
+                                            validator: stockValidator,
                                           ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: TextField(
-                                            controller: reorderController,
-                                            keyboardType: TextInputType.number,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Kritik stok seviyesi',
-                                            ),
+                                          const SizedBox(height: 12),
+                                          buildField(
+                                            label: 'Birim Türü',
+                                            child:
+                                                DropdownButtonFormField<String>(
+                                                  initialValue:
+                                                      selectedUnitType,
+                                                  items: unitTypeOptions
+                                                      .map(
+                                                        (String option) =>
+                                                            DropdownMenuItem<
+                                                              String
+                                                            >(
+                                                              value: option,
+                                                              child: Text(
+                                                                option,
+                                                              ),
+                                                            ),
+                                                      )
+                                                      .toList(growable: false),
+                                                  onChanged: (String? value) {
+                                                    if (value == null) {
+                                                      return;
+                                                    }
+                                                    setModalState(() {
+                                                      selectedUnitType = value;
+                                                    });
+                                                  },
+                                                  validator: (String? value) =>
+                                                      value == null ||
+                                                          value.trim().isEmpty
+                                                      ? 'Birim Türü zorunludur'
+                                                      : null,
+                                                ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                    if (isCreate) ...<Widget>[
-                                      const SizedBox(height: 12),
-                                      TextField(
-                                        controller: onHandController,
-                                        keyboardType: TextInputType.number,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Başlangıç stok adedi',
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              _EditorSection(
-                                title: 'Entegrasyon kodları',
-                                child: Column(
-                                  children: <Widget>[
-                                    Row(
-                                      children: <Widget>[
-                                        Expanded(
-                                          child: TextField(
-                                            controller: skuController,
-                                            decoration: const InputDecoration(
-                                              labelText: 'SKU',
-                                            ),
+                                          const SizedBox(height: 12),
+                                          buildTextField(
+                                            label: 'Son Tüketim Tarihi',
+                                            controller: expiryDateController,
+                                            hintText: 'YYYY-AA-GG',
+                                            keyboardType:
+                                                TextInputType.datetime,
+                                            validator: optionalDateValidator,
                                           ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: TextField(
-                                            controller: barcodeController,
-                                            decoration: const InputDecoration(
-                                              labelText: 'Barkod',
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 12),
-                                    TextField(
-                                      controller: externalCodeController,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Dış sistem kodu',
+                                        ],
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                              _EditorSection(
-                                title: 'Görünürlük',
-                                child: Column(
-                                  children: <Widget>[
-                                    TextField(
-                                      controller: keywordController,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Arama kelimeleri',
-                                        helperText: 'Virgülle ayır',
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    TextField(
-                                      controller: aliasController,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Eski kimlik / alias',
-                                        helperText: 'Virgülle ayır',
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    SwitchListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      title: const Text(
-                                        'Müşteri uygulamasında görünsün',
-                                      ),
-                                      value: isVisibleInApp,
-                                      onChanged: (bool value) {
-                                        setModalState(() {
-                                          isVisibleInApp = value;
-                                        });
-                                      },
-                                    ),
-                                    SwitchListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      title: const Text('Öne çıkan ürün'),
-                                      value: isFeatured,
-                                      onChanged: (bool value) {
-                                        setModalState(() {
-                                          isFeatured = value;
-                                        });
-                                      },
-                                    ),
-                                    SwitchListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      title: const Text('Stok takibi açık'),
-                                      value: trackStock,
-                                      onChanged: (bool value) {
-                                        setModalState(() {
-                                          trackStock = value;
-                                        });
-                                      },
-                                    ),
-                                    SwitchListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      title: const Text('Arşivlensin'),
-                                      value: isArchived,
-                                      onChanged: (bool value) {
-                                        setModalState(() {
-                                          isArchived = value;
-                                        });
-                                      },
                                     ),
                                   ],
                                 ),
@@ -2187,8 +2229,13 @@ class _StockShellState extends State<_StockShell> {
                           ),
                           const Spacer(),
                           FilledButton(
-                            onPressed: () => Navigator.of(context).pop(true),
-                            child: Text(isCreate ? 'Ürünü oluştur' : 'Kaydet'),
+                            onPressed: () {
+                              if (formKey.currentState?.validate() != true) {
+                                return;
+                              }
+                              Navigator.of(context).pop(true);
+                            },
+                            child: const Text('Kaydet'),
                           ),
                         ],
                       ),
@@ -2206,35 +2253,42 @@ class _StockShellState extends State<_StockShell> {
     }
     final Map<String, Object?> payload = <String, Object?>{
       'vendorId': vendor.vendorId,
-      'catalogSectionId': selectedSectionId ?? '',
       'sectionLabel': sectionLabelController.text.trim(),
       'title': titleController.text.trim(),
       'description': descriptionController.text.trim(),
       'imageUrl': imageController.text.trim(),
-      'unitPrice': double.tryParse(priceController.text) ?? 0,
+      'unitPrice':
+          double.tryParse(priceController.text.trim().replaceAll(',', '.')) ??
+          0,
+      'discountedPrice':
+          double.tryParse(
+            discountedPriceController.text.trim().replaceAll(',', '.'),
+          ) ??
+          0,
       'category': categoryController.text.trim(),
-      'sku': skuController.text.trim(),
-      'barcode': barcodeController.text.trim(),
-      'externalCode': externalCodeController.text.trim(),
-      'displaySubtitle': subtitleController.text.trim(),
-      'displayBadge': badgeController.text.trim(),
-      'displayOrder': int.tryParse(orderController.text) ?? 0,
-      'reorderLevel': int.tryParse(reorderController.text) ?? 0,
-      'isVisibleInApp': isVisibleInApp,
-      'isFeatured': isFeatured,
-      'trackStock': trackStock,
-      'isArchived': isArchived,
-      'searchKeywords': keywordController.text.trim(),
-      'legacyAliases': aliasController.text.trim(),
+      'unitType': selectedUnitType,
+      'expiryDate': expiryDateController.text.trim().isEmpty
+          ? null
+          : expiryDateController.text.trim(),
     };
+    final int targetOnHand = int.tryParse(onHandController.text.trim()) ?? 0;
     if (isCreate) {
-      payload['onHand'] = int.tryParse(onHandController.text) ?? 0;
+      payload['onHand'] = targetOnHand;
     }
     try {
       if (isCreate) {
         await widget.api.createCatalogProduct(payload);
       } else {
         await widget.api.updateCatalogProduct(existingProduct!.id, payload);
+        final int currentOnHand = inventoryItem?.onHand ?? 0;
+        final int quantityDelta = targetOnHand - currentOnHand;
+        if (quantityDelta != 0) {
+          await widget.api.adjustInventoryItem(
+            id: existingProduct.id,
+            quantityDelta: quantityDelta,
+            reason: 'SepetPro İşyeri ürün düzenleme',
+          );
+        }
       }
       await _reload();
       if (mounted) {
@@ -2255,6 +2309,20 @@ class _StockShellState extends State<_StockShell> {
         isError: true,
       );
     }
+  }
+
+  String _formatProductDateInput(String value) {
+    final String normalized = value.trim();
+    if (normalized.isEmpty) {
+      return '';
+    }
+    final DateTime? parsed = DateTime.tryParse(normalized);
+    if (parsed == null) {
+      return normalized;
+    }
+    return '${parsed.year.toString().padLeft(4, '0')}-'
+        '${parsed.month.toString().padLeft(2, '0')}-'
+        '${parsed.day.toString().padLeft(2, '0')}';
   }
 
   Future<void> _editCatalogVendor(SpetoCatalogVendor vendor) async {
@@ -4238,6 +4306,16 @@ class _OrdersPageState extends State<_OrdersPage>
         (_OrderQueueFilter.delivered, 'Tamamlandı'),
         (_OrderQueueFilter.cancelled, 'İptal'),
       ];
+  static const List<(_OrderDateFilter, String)> _dateFilters =
+      <(_OrderDateFilter, String)>[
+        (_OrderDateFilter.today, 'Bugün'),
+        (_OrderDateFilter.yesterday, 'Dün'),
+        (_OrderDateFilter.last7Days, 'Son 7 Gün'),
+        (_OrderDateFilter.last30Days, 'Son 30 Gün'),
+        (_OrderDateFilter.last3Months, 'Son 3 Ay'),
+        (_OrderDateFilter.last1Year, 'Son 1 Yıl'),
+        (_OrderDateFilter.all, 'Tümü'),
+      ];
 
   final TextEditingController _searchController = TextEditingController();
   late final TabController _tabController;
@@ -4319,7 +4397,7 @@ class _OrdersPageState extends State<_OrdersPage>
   bool _matchesBaseFilters(
     SpetoOpsOrder order,
     String normalizedQuery,
-    DateTime today,
+    DateTime now,
   ) {
     if (!_matchesSearch(order, normalizedQuery)) {
       return false;
@@ -4327,11 +4405,8 @@ class _OrdersPageState extends State<_OrdersPage>
     if (_paymentFilter != null && order.paymentMethod != _paymentFilter) {
       return false;
     }
-    if (_dateFilter == _OrderDateFilter.today) {
-      final DateTime? placedAt = _parseOrderPlacedAt(order);
-      if (placedAt == null || !_isSameCalendarDay(placedAt, today)) {
-        return false;
-      }
+    if (!_matchesOrderDateFilter(order, _dateFilter, now)) {
+      return false;
     }
     return true;
   }
@@ -4355,11 +4430,11 @@ class _OrdersPageState extends State<_OrdersPage>
 
   List<SpetoOpsOrder> _filteredOrders(_OrderQueueFilter filter) {
     final String normalizedQuery = _query.trim().toLowerCase();
-    final DateTime today = DateTime.now();
+    final DateTime now = DateTime.now();
     final List<SpetoOpsOrder> filtered = widget.orders.where((
       SpetoOpsOrder order,
     ) {
-      return _matchesBaseFilters(order, normalizedQuery, today) &&
+      return _matchesBaseFilters(order, normalizedQuery, now) &&
           _matchesStatusFilter(order, filter);
     }).toList();
     filtered.sort((SpetoOpsOrder a, SpetoOpsOrder b) {
@@ -4436,183 +4511,177 @@ class _OrdersPageState extends State<_OrdersPage>
     String? selectedPayment = _paymentFilter;
     _OrderQueueFilter selectedStatus = _currentFilter;
 
-    final _OrdersFilterSheetResult?
-    result = await showModalBottomSheet<_OrdersFilterSheetResult>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder:
-              (
-                BuildContext context,
-                void Function(void Function()) setSheetState,
-              ) {
-                return Padding(
-                  padding: EdgeInsets.only(
-                    left: 12,
-                    right: 12,
-                    bottom: MediaQuery.of(context).viewInsets.bottom,
-                  ),
-                  child: SafeArea(
-                    top: false,
-                    child: Container(
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-                      decoration: const BoxDecoration(
-                        color: _panelStrong,
-                        borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(32),
-                        ),
+    final _OrdersFilterSheetResult? result =
+        await showModalBottomSheet<_OrdersFilterSheetResult>(
+          context: context,
+          backgroundColor: Colors.transparent,
+          isScrollControlled: true,
+          builder: (BuildContext context) {
+            return StatefulBuilder(
+              builder:
+                  (
+                    BuildContext context,
+                    void Function(void Function()) setSheetState,
+                  ) {
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        left: 12,
+                        right: 12,
+                        bottom: MediaQuery.of(context).viewInsets.bottom,
                       ),
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Row(
+                      child: SafeArea(
+                        top: false,
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                          decoration: const BoxDecoration(
+                            color: _panelStrong,
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(32),
+                            ),
+                          ),
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
-                                const Expanded(
-                                  child: Text(
-                                    'Filtrele',
-                                    style: TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w800,
-                                      color: _success,
+                                Row(
+                                  children: <Widget>[
+                                    const Expanded(
+                                      child: Text(
+                                        'Filtrele',
+                                        style: TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w800,
+                                          color: _success,
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    if (selectedDateFilter !=
+                                            _OrderDateFilter.all ||
+                                        selectedPayment != null ||
+                                        selectedStatus != _OrderQueueFilter.all)
+                                      TextButton(
+                                        onPressed: () {
+                                          setSheetState(() {
+                                            selectedDateFilter =
+                                                _OrderDateFilter.all;
+                                            selectedPayment = null;
+                                            selectedStatus =
+                                                _OrderQueueFilter.all;
+                                          });
+                                        },
+                                        child: const Text('Temizle'),
+                                      ),
+                                    IconButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(),
+                                      icon: const Icon(Icons.close_rounded),
+                                    ),
+                                  ],
                                 ),
-                                if (selectedDateFilter !=
-                                        _OrderDateFilter.all ||
-                                    selectedPayment != null ||
-                                    selectedStatus != _OrderQueueFilter.all)
-                                  TextButton(
-                                    onPressed: () {
-                                      setSheetState(() {
-                                        selectedDateFilter =
-                                            _OrderDateFilter.all;
-                                        selectedPayment = null;
-                                        selectedStatus = _OrderQueueFilter.all;
-                                      });
-                                    },
-                                    child: const Text('Temizle'),
-                                  ),
-                                IconButton(
-                                  onPressed: () => Navigator.of(context).pop(),
-                                  icon: const Icon(Icons.close_rounded),
+                                const SizedBox(height: 8),
+                                const _OrdersFilterSectionLabel(label: 'Tarih'),
+                                const SizedBox(height: 10),
+                                Column(
+                                  children: _dateFilters
+                                      .map(((_OrderDateFilter, String) entry) {
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 10,
+                                          ),
+                                          child: _OrdersDateFilterTile(
+                                            label: entry.$2,
+                                            selected:
+                                                selectedDateFilter == entry.$1,
+                                            onTap: () {
+                                              setSheetState(() {
+                                                selectedDateFilter = entry.$1;
+                                              });
+                                            },
+                                          ),
+                                        );
+                                      })
+                                      .toList(growable: false),
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            const _OrdersFilterSectionLabel(label: 'Tarih'),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
-                              children: <Widget>[
-                                _OrdersFilterChoiceChip(
-                                  label: 'Tümü',
-                                  selected:
-                                      selectedDateFilter ==
-                                      _OrderDateFilter.all,
-                                  onTap: () {
-                                    setSheetState(() {
-                                      selectedDateFilter = _OrderDateFilter.all;
-                                    });
-                                  },
+                                const SizedBox(height: 18),
+                                const _OrdersFilterSectionLabel(
+                                  label: 'Ödeme Tipi',
                                 ),
-                                _OrdersFilterChoiceChip(
-                                  label: 'Bugün',
-                                  selected:
-                                      selectedDateFilter ==
-                                      _OrderDateFilter.today,
-                                  onTap: () {
-                                    setSheetState(() {
-                                      selectedDateFilter =
-                                          _OrderDateFilter.today;
-                                    });
-                                  },
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 10,
+                                  runSpacing: 10,
+                                  children: <Widget>[
+                                    _OrdersFilterChoiceChip(
+                                      label: 'Tümü',
+                                      selected: selectedPayment == null,
+                                      onTap: () {
+                                        setSheetState(() {
+                                          selectedPayment = null;
+                                        });
+                                      },
+                                    ),
+                                    ..._paymentOptions.map((String method) {
+                                      return _OrdersFilterChoiceChip(
+                                        label: method,
+                                        selected: selectedPayment == method,
+                                        onTap: () {
+                                          setSheetState(() {
+                                            selectedPayment = method;
+                                          });
+                                        },
+                                      );
+                                    }),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 18),
-                            const _OrdersFilterSectionLabel(
-                              label: 'Ödeme Tipi',
-                            ),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 10,
-                              runSpacing: 10,
-                              children: <Widget>[
-                                _OrdersFilterChoiceChip(
-                                  label: 'Tümü',
-                                  selected: selectedPayment == null,
-                                  onTap: () {
-                                    setSheetState(() {
-                                      selectedPayment = null;
-                                    });
-                                  },
-                                ),
-                                ..._paymentOptions.map((String method) {
-                                  return _OrdersFilterChoiceChip(
-                                    label: method,
-                                    selected: selectedPayment == method,
-                                    onTap: () {
-                                      setSheetState(() {
-                                        selectedPayment = method;
-                                      });
-                                    },
+                                const SizedBox(height: 18),
+                                const _OrdersFilterSectionLabel(label: 'Durum'),
+                                const SizedBox(height: 10),
+                                ..._filters.map((
+                                  (_OrderQueueFilter, String) entry,
+                                ) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 10),
+                                    child: _OrdersStatusSheetTile(
+                                      label: entry.$2,
+                                      selected: selectedStatus == entry.$1,
+                                      onTap: () {
+                                        setSheetState(() {
+                                          selectedStatus = entry.$1;
+                                        });
+                                      },
+                                    ),
                                   );
                                 }),
+                                const SizedBox(height: 14),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton(
+                                    onPressed: () {
+                                      Navigator.of(context).pop(
+                                        _OrdersFilterSheetResult(
+                                          dateFilter: selectedDateFilter,
+                                          paymentMethod: selectedPayment,
+                                          statusFilter: selectedStatus,
+                                        ),
+                                      );
+                                    },
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: const Color(0xFFE7F3E8),
+                                      foregroundColor: _success,
+                                    ),
+                                    child: const Text('Sonuçları Göster'),
+                                  ),
+                                ),
                               ],
                             ),
-                            const SizedBox(height: 18),
-                            const _OrdersFilterSectionLabel(label: 'Durum'),
-                            const SizedBox(height: 10),
-                            ..._filters.map((
-                              (_OrderQueueFilter, String) entry,
-                            ) {
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: _OrdersStatusSheetTile(
-                                  label: entry.$2,
-                                  selected: selectedStatus == entry.$1,
-                                  onTap: () {
-                                    setSheetState(() {
-                                      selectedStatus = entry.$1;
-                                    });
-                                  },
-                                ),
-                              );
-                            }),
-                            const SizedBox(height: 14),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton(
-                                onPressed: () {
-                                  Navigator.of(context).pop(
-                                    _OrdersFilterSheetResult(
-                                      dateFilter: selectedDateFilter,
-                                      paymentMethod: selectedPayment,
-                                      statusFilter: selectedStatus,
-                                    ),
-                                  );
-                                },
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFFE7F3E8),
-                                  foregroundColor: _success,
-                                ),
-                                child: const Text('Sonuçları Göster'),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                );
-              },
+                    );
+                  },
+            );
+          },
         );
-      },
-    );
     if (!mounted || result == null) {
       return;
     }
@@ -5330,6 +5399,68 @@ class _OrdersFilterSectionLabel extends StatelessWidget {
         color: _ink,
         fontWeight: FontWeight.w800,
         fontSize: 16,
+      ),
+    );
+  }
+}
+
+class _OrdersDateFilterTile extends StatelessWidget {
+  const _OrdersDateFilterTile({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFFD7EDE2)
+                  : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              Icon(
+                Icons.calendar_today_outlined,
+                color: selected ? _success : const Color(0xFF94A3B8),
+                size: 20,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: selected ? _success : const Color(0xFF334155),
+                    fontSize: 16,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  ),
+                ),
+              ),
+              Icon(
+                selected
+                    ? Icons.check_circle_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                color: selected ? _success : const Color(0xFFCBD5E1),
+                size: 20,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

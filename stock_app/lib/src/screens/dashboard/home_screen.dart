@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../widgets/custom_bottom_nav.dart';
 import 'overview_screen.dart';
 import 'products_screen.dart';
@@ -16,20 +17,53 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = [
-    const OverviewScreen(),
-    const OrdersScreen(),
-    const ProductsScreen(),
-    const CampaignsScreen(),
-    const ProfileScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final List<Widget> screens = <Widget>[
+      OverviewScreen(
+        onOpenOrders: () {
+          setState(() {
+            _currentIndex = 1;
+          });
+        },
+        onOpenProducts: () {
+          setState(() {
+            _currentIndex = 2;
+          });
+        },
+        onOpenCampaigns: () {
+          setState(() {
+            _currentIndex = 3;
+          });
+        },
+      ),
+      const OrdersScreen(),
+      ProductsScreen(
+        onBack: () {
+          setState(() {
+            _currentIndex = 0;
+          });
+        },
+      ),
+      CampaignsScreen(
+        onBack: () {
+          setState(() {
+            _currentIndex = 0;
+          });
+        },
+        onOpenProducts: () {
+          setState(() {
+            _currentIndex = 2;
+          });
+        },
+      ),
+      const ProfileScreen(),
+    ];
+
     return Scaffold(
       body: Stack(
         children: [
-          IndexedStack(index: _currentIndex, children: _screens),
+          IndexedStack(index: _currentIndex, children: screens),
           Positioned(
             left: 0,
             right: 0,

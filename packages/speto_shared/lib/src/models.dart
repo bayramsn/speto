@@ -26,7 +26,7 @@ enum SpetoIntegrationHealth { healthy, warning, failed }
 
 enum SpetoSyncRunStatus { idle, running, success, failed }
 
-enum SpetoStorefrontType { restaurant, market }
+enum SpetoStorefrontType { restaurant, market, otherBusiness }
 
 enum SpetoPayoutStatus { pending, paid, failed }
 
@@ -390,6 +390,42 @@ class SpetoCatalogOperatorAccount {
   }
 }
 
+class SpetoCatalogWorkingDay {
+  const SpetoCatalogWorkingDay({
+    required this.label,
+    required this.shortLabel,
+    required this.isOpen,
+    required this.openTime,
+    required this.closeTime,
+  });
+
+  final String label;
+  final String shortLabel;
+  final bool isOpen;
+  final String openTime;
+  final String closeTime;
+
+  factory SpetoCatalogWorkingDay.fromJson(Map<String, Object?> json) {
+    return SpetoCatalogWorkingDay(
+      label: json['label'] as String? ?? '',
+      shortLabel: json['shortLabel'] as String? ?? '',
+      isOpen: json['isOpen'] as bool? ?? false,
+      openTime: json['openTime'] as String? ?? '',
+      closeTime: json['closeTime'] as String? ?? '',
+    );
+  }
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'label': label,
+      'shortLabel': shortLabel,
+      'isOpen': isOpen,
+      'openTime': openTime,
+      'closeTime': closeTime,
+    };
+  }
+}
+
 class SpetoCatalogVendor {
   const SpetoCatalogVendor({
     required this.id,
@@ -406,6 +442,8 @@ class SpetoCatalogVendor {
     required this.etaLabel,
     required this.promoLabel,
     required this.workingHoursLabel,
+    this.taxNumber = '',
+    this.taxOffice = '',
     required this.minOrderLabel,
     required this.deliveryWindowLabel,
     required this.reviewCountLabel,
@@ -423,6 +461,7 @@ class SpetoCatalogVendor {
     required this.studentFriendly,
     required this.isFeatured,
     required this.isActive,
+    this.workingDays = const <SpetoCatalogWorkingDay>[],
     required this.pickupPoints,
     required this.highlights,
     required this.operatorAccounts,
@@ -444,6 +483,8 @@ class SpetoCatalogVendor {
   final String etaLabel;
   final String promoLabel;
   final String workingHoursLabel;
+  final String taxNumber;
+  final String taxOffice;
   final String minOrderLabel;
   final String deliveryWindowLabel;
   final String reviewCountLabel;
@@ -461,6 +502,7 @@ class SpetoCatalogVendor {
   final bool studentFriendly;
   final bool isFeatured;
   final bool isActive;
+  final List<SpetoCatalogWorkingDay> workingDays;
   final List<SpetoCatalogPickupPoint> pickupPoints;
   final List<SpetoCatalogVendorHighlight> highlights;
   final List<SpetoCatalogOperatorAccount> operatorAccounts;
@@ -487,6 +529,8 @@ class SpetoCatalogVendor {
       etaLabel: json['etaLabel'] as String? ?? '',
       promoLabel: json['promoLabel'] as String? ?? '',
       workingHoursLabel: json['workingHoursLabel'] as String? ?? '',
+      taxNumber: json['taxNumber'] as String? ?? '',
+      taxOffice: json['taxOffice'] as String? ?? '',
       minOrderLabel: json['minOrderLabel'] as String? ?? '',
       deliveryWindowLabel: json['deliveryWindowLabel'] as String? ?? '',
       reviewCountLabel: json['reviewCountLabel'] as String? ?? '',
@@ -504,6 +548,14 @@ class SpetoCatalogVendor {
       studentFriendly: json['studentFriendly'] as bool? ?? false,
       isFeatured: json['isFeatured'] as bool? ?? false,
       isActive: json['isActive'] as bool? ?? true,
+      workingDays:
+          ((json['workingDays'] as List<Object?>?) ?? const <Object?>[])
+              .map(
+                (Object? item) => SpetoCatalogWorkingDay.fromJson(
+                  item! as Map<String, Object?>,
+                ),
+              )
+              .toList(growable: false),
       pickupPoints:
           ((json['pickupPoints'] as List<Object?>?) ?? const <Object?>[])
               .map(
@@ -588,8 +640,12 @@ class SpetoCatalogProduct {
     required this.image,
     required this.imageUrl,
     required this.unitPrice,
+    this.discountedPrice = 0,
+    this.discountedPriceText = '',
     required this.priceText,
     required this.category,
+    this.unitType = 'adet',
+    this.expiryDate = '',
     required this.sku,
     required this.barcode,
     required this.externalCode,
@@ -616,8 +672,12 @@ class SpetoCatalogProduct {
   final String image;
   final String imageUrl;
   final double unitPrice;
+  final double discountedPrice;
+  final String discountedPriceText;
   final String priceText;
   final String category;
+  final String unitType;
+  final String expiryDate;
   final String sku;
   final String barcode;
   final String externalCode;
@@ -645,8 +705,12 @@ class SpetoCatalogProduct {
       image: json['image'] as String? ?? '',
       imageUrl: json['imageUrl'] as String? ?? '',
       unitPrice: (json['unitPrice'] as num?)?.toDouble() ?? 0,
+      discountedPrice: (json['discountedPrice'] as num?)?.toDouble() ?? 0,
+      discountedPriceText: json['discountedPriceText'] as String? ?? '',
       priceText: json['priceText'] as String? ?? '',
       category: json['category'] as String? ?? '',
+      unitType: json['unitType'] as String? ?? 'adet',
+      expiryDate: json['expiryDate'] as String? ?? '',
       sku: json['sku'] as String? ?? '',
       barcode: json['barcode'] as String? ?? '',
       externalCode: json['externalCode'] as String? ?? '',
@@ -1336,6 +1400,10 @@ class SpetoVendorCampaign {
     required this.discountedPrice,
     required this.startsAt,
     required this.endsAt,
+    required this.stockLimit,
+    required this.imageUrl,
+    required this.buyQuantity,
+    required this.payQuantity,
     required this.productIds,
     required this.productTitles,
     required this.storefrontType,
@@ -1353,6 +1421,10 @@ class SpetoVendorCampaign {
   final double discountedPrice;
   final String startsAt;
   final String endsAt;
+  final int stockLimit;
+  final String imageUrl;
+  final int buyQuantity;
+  final int payQuantity;
   final List<String> productIds;
   final List<String> productTitles;
   final SpetoStorefrontType storefrontType;
@@ -1379,6 +1451,10 @@ class SpetoVendorCampaign {
       discountedPrice: (json['discountedPrice'] as num?)?.toDouble() ?? 0,
       startsAt: json['startsAt'] as String? ?? '',
       endsAt: json['endsAt'] as String? ?? '',
+      stockLimit: (json['stockLimit'] as num?)?.toInt() ?? 0,
+      imageUrl: json['imageUrl'] as String? ?? '',
+      buyQuantity: (json['buyQuantity'] as num?)?.toInt() ?? 0,
+      payQuantity: (json['payQuantity'] as num?)?.toInt() ?? 0,
       productIds: ((json['productIds'] as List<Object?>?) ?? const <Object?>[])
           .map((Object? item) => item as String)
           .toList(growable: false),
@@ -1801,6 +1877,10 @@ class SpetoInventoryItem {
     required this.imageUrl,
     required this.category,
     required this.unitPrice,
+    this.discountedPrice = 0,
+    this.discountedPriceText = '',
+    this.unitType = 'adet',
+    this.expiryDate = '',
     required this.sku,
     required this.barcode,
     required this.locationId,
@@ -1822,6 +1902,10 @@ class SpetoInventoryItem {
   final String imageUrl;
   final String category;
   final double unitPrice;
+  final double discountedPrice;
+  final String discountedPriceText;
+  final String unitType;
+  final String expiryDate;
   final String sku;
   final String barcode;
   final String locationId;
@@ -1846,6 +1930,10 @@ class SpetoInventoryItem {
       'imageUrl': imageUrl,
       'category': category,
       'unitPrice': unitPrice,
+      'discountedPrice': discountedPrice,
+      'discountedPriceText': discountedPriceText,
+      'unitType': unitType,
+      'expiryDate': expiryDate,
       'sku': sku,
       'barcode': barcode,
       'locationId': locationId,
@@ -1870,6 +1958,10 @@ class SpetoInventoryItem {
       imageUrl: json['imageUrl'] as String? ?? '',
       category: json['category'] as String? ?? 'General',
       unitPrice: (json['unitPrice'] as num?)?.toDouble() ?? 0,
+      discountedPrice: (json['discountedPrice'] as num?)?.toDouble() ?? 0,
+      discountedPriceText: json['discountedPriceText'] as String? ?? '',
+      unitType: json['unitType'] as String? ?? 'adet',
+      expiryDate: json['expiryDate'] as String? ?? '',
       sku: json['sku'] as String? ?? '',
       barcode: json['barcode'] as String? ?? '',
       locationId: json['locationId'] as String? ?? '',
